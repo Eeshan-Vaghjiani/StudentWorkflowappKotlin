@@ -27,8 +27,6 @@ dependencies {
     
     // React Router
     implementation(npm("react-router-dom", "6.21.1"))
-<<<<<<< Current (Your changes)
-=======
     
     // State Management
     implementation(npm("zustand", "4.4.7"))
@@ -55,5 +53,4 @@ dependencies {
     
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
->>>>>>> Incoming (Background Agent changes)
 }
