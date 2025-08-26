@@ -21,6 +21,11 @@ class TwoFactorAuthenticationService {
         return TOTP.generateBase32Secret()
     }
 
+    fun generateEncryptedSecretKey(): String {
+        val secret = TOTP.generateBase32Secret()
+        return EncryptionUtil.encrypt(secret)
+    }
+
     fun getCurrentOtp(secret: String): String {
         return TOTP.getOTP(secret)
     }
@@ -29,10 +34,31 @@ class TwoFactorAuthenticationService {
         return TOTP.verify(secret, code)
     }
 
+    fun verify(userId: Int, code: String): Boolean {
+        val secret = getDecryptedSecret(userId)
+        return if (secret != null) {
+            TOTP.verify(secret, code)
+        } else {
+            false
+        }
+    }
+
     fun qrCodeUrl(companyName: String, companyEmail: String, secret: String): String {
         val encodedCompanyName = URLEncoder.encode(companyName, "UTF-8")
         val encodedCompanyEmail = URLEncoder.encode(companyEmail, "UTF-8")
         return "otpauth://totp/$encodedCompanyName:$encodedCompanyEmail?secret=$secret&issuer=$encodedCompanyName"
+    }
+
+    fun qrCodeUrl(userId: Int, secret: String): String {
+        return transaction {
+            val user = Users.select { Users.id eq userId }.singleOrNull()
+            if (user != null) {
+                val userEmail = user[Users.email]
+                qrCodeUrl("StudentWorkflowApp", userEmail, secret)
+            } else {
+                qrCodeUrl("StudentWorkflowApp", "user@example.com", secret)
+            }
+        }
     }
 
     fun qrCodeSvg(companyName: String, companyEmail: String, secret: String): String {
@@ -43,6 +69,18 @@ class TwoFactorAuthenticationService {
         MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream)
         val base64Image = Base64.getEncoder().encodeToString(outputStream.toByteArray())
         return "<img src=\"data:image/png;base64,$base64Image\" alt=\"QR Code\"/>"
+    }
+
+    fun qrCodeSvg(userId: Int, secret: String): String {
+        return transaction {
+            val user = Users.select { Users.id eq userId }.singleOrNull()
+            if (user != null) {
+                val userEmail = user[Users.email]
+                qrCodeSvg("StudentWorkflowApp", userEmail, secret)
+            } else {
+                qrCodeSvg("StudentWorkflowApp", "user@example.com", secret)
+            }
+        }
     }
 
     fun enable(userId: Int, secret: String): Boolean {

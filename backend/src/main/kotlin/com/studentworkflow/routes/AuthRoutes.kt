@@ -5,9 +5,7 @@ import com.studentworkflow.models.AuthResponse
 import com.studentworkflow.models.LoginRequest
 import com.studentworkflow.models.RegisterRequest
 import com.studentworkflow.models.TwoFactorVerifyRequest
-import com.studentworkflow.services.JwtService
-import com.studentworkflow.services.TwoFactorAuthenticationService
-import com.studentworkflow.services.UserService
+import com.studentworkflow.services.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -18,7 +16,9 @@ import org.jetbrains.exposed.sql.transactions.transaction
 fun Application.configureAuthRoutes(
     userService: UserService,
     jwtService: JwtService,
-    twoFactorAuthenticationService: TwoFactorAuthenticationService
+    twoFactorAuthenticationService: TwoFactorAuthenticationService,
+    passwordResetService: PasswordResetService,
+    emailService: EmailService
 ) {
     routing {
         route("/api/auth") {
@@ -91,9 +91,13 @@ fun Application.configureAuthRoutes(
                 if (twoFactorAuthenticationService.verify(decryptedSecret, code)) {
                     // Enable 2FA for the user
                     twoFactorAuthenticationService.enable(userId, decryptedSecret)
-                    val user = transaction { userService.findUserByEmail(user.email) } // Re-fetch user to get updated 2FA status
-                    val token = jwtService.generateToken(user.id, user.email)
-                    call.respond(HttpStatusCode.OK, AuthResponse(true, "2FA verified and enabled.", token = token, userId = user.id))
+                    val user = transaction { userService.findUserById(userId) } // Re-fetch user to get updated 2FA status
+                    if (user != null) {
+                        val token = jwtService.generateToken(user.id, user.email)
+                        call.respond(HttpStatusCode.OK, AuthResponse(true, "2FA verified and enabled.", token = token, userId = user.id))
+                    } else {
+                        call.respond(HttpStatusCode.BadRequest, AuthResponse(false, "User not found."))
+                    }
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, AuthResponse(false, "Invalid 2FA code."))
                 }

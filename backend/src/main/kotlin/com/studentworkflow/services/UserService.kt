@@ -3,8 +3,7 @@ package com.studentworkflow.services
 
 import com.studentworkflow.db.Users
 import com.studentworkflow.models.User
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
 import java.time.Instant
@@ -46,6 +45,28 @@ class UserService {
             } else {
                 false
             }
+        }
+    }
+
+    fun findUserById(id: Int): User? {
+        return transaction {
+            Users.select { Users.id eq id }.singleOrNull()?.let {
+                User(
+                    id = it[Users.id].value,
+                    name = it[Users.name],
+                    email = it[Users.email],
+                    createdAt = it[Users.createdAt].toString()
+                )
+            }
+        }
+    }
+
+    fun updatePassword(userId: Int, newPassword: String): Boolean {
+        val hashedPassword = BCrypt.hashpw(newPassword, BCrypt.gensalt())
+        return transaction {
+            Users.update({ Users.id eq userId }) {
+                it[password] = hashedPassword
+            } > 0
         }
     }
 }

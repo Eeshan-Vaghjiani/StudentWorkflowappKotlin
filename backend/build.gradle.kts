@@ -31,4 +31,15 @@ dependencies {
     // JWT Authentication
     implementation("io.ktor:ktor-server-auth-jvm")
     implementation("io.ktor:ktor-server-auth-jwt-jvm")
+    // WebSockets for real-time notifications
+    implementation("io.ktor:ktor-server-websockets-jvm")
+    // JavaMail for email notifications
+    implementation("javax.mail:javax.mail-api:1.6.2")
+    implementation("com.sun.mail:javax.mail:1.6.2")
+    // File upload support
+    implementation("io.ktor:ktor-server-call-logging-jvm")
+    // TOTP and QR Code dependencies
+    implementation("de.taimos:totp:1.0")
+    implementation("com.google.zxing:core:3.5.1")
+    implementation("com.google.zxing:javase:3.5.1")
 }
