@@ -1,44 +1,47 @@
 package com.studentworkflow
 
-import com.studentworkflow.db.DatabaseFactory
-import com.studentworkflow.plugins.configureRouting
-import com.studentworkflow.plugins.configureSecurity
-import com.studentworkflow.plugins.configureSerialization
-import com.studentworkflow.routes.configureAIRoutes
-import com.studentworkflow.routes.configureAuthRoutes
-import com.studentworkflow.services.AIService
-import com.studentworkflow.services.EmailService
-import com.studentworkflow.services.JwtService
-import com.studentworkflow.services.PasswordResetService
-import com.studentworkflow.services.PricingService
-import com.studentworkflow.services.PromptService
-import com.studentworkflow.services.TwoFactorAuthenticationService
-import com.studentworkflow.services.UserService
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8081
-    embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module)
-        .start(wait = true)
+    println("Starting minimal test application on port $port")
+    
+    try {
+        embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module)
+            .start(wait = true)
+    } catch (e: Exception) {
+        println("Failed to start application: ${e.message}")
+        e.printStackTrace()
+    }
 }
 
 fun Application.module() {
-    DatabaseFactory.init()
-    configureSerialization()
-    configureSecurity()
-
-    val promptService = PromptService()
-    val aiService = AIService(promptService)
-    val twoFactorAuthenticationService = TwoFactorAuthenticationService()
-    val pricingService = PricingService(promptService)
-    val userService = UserService()
-    val jwtService = JwtService()
-    val emailService = EmailService()
-    val passwordResetService = PasswordResetService(userService)
-
-    configureRouting()
-    configureAIRoutes(aiService)
-    configureAuthRoutes(userService, jwtService, twoFactorAuthenticationService, passwordResetService, emailService)
+    try {
+        println("Configuring minimal routing...")
+        routing {
+            get("/") {
+                call.respondText("Hello World! Application is working!", ContentType.Text.Plain)
+            }
+            
+            get("/health") {
+                call.respondText("OK", ContentType.Text.Plain)
+            }
+            
+            get("/test") {
+                call.respondText("Test endpoint working!", ContentType.Text.Plain)
+            }
+        }
+        println("Minimal routing configured successfully")
+        
+        println("Application module configured successfully")
+    } catch (e: Exception) {
+        println("Error in module configuration: ${e.message}")
+        e.printStackTrace()
+        throw e
+    }
 }
