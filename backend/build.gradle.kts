@@ -4,6 +4,10 @@ plugins {
     id("io.ktor.plugin")
 }
 
+kotlin {
+    jvmToolchain(21)
+}
+
 application {
     mainClass.set("com.studentworkflow.ApplicationKt")
 }
@@ -15,10 +19,14 @@ dependencies {
     implementation("io.ktor:ktor-server-netty-jvm")
     implementation("io.ktor:ktor-server-content-negotiation-jvm")
     implementation("io.ktor:ktor-serialization-kotlinx-json-jvm")
+    implementation("io.ktor:ktor-client-core-jvm")
+    implementation("io.ktor:ktor-client-cio-jvm")
+    implementation("io.ktor:ktor-client-content-negotiation-jvm")
     // Exposed dependencies
     implementation("org.jetbrains.exposed:exposed-core:0.45.0")
     implementation("org.jetbrains.exposed:exposed-dao:0.45.0")
     implementation("org.jetbrains.exposed:exposed-jdbc:0.45.0")
+    implementation("org.jetbrains.exposed:exposed-java-time:0.45.0")
     // H2 database for local development
     implementation("com.h2database:h2:2.2.224")
     // Logging
@@ -31,6 +39,11 @@ dependencies {
     // JWT Authentication
     implementation("io.ktor:ktor-server-auth-jvm")
     implementation("io.ktor:ktor-server-auth-jwt-jvm")
+    // QR Code generation (for 2FA)
+    implementation("com.google.zxing:core:3.5.2")
+    implementation("com.google.zxing:javase:3.5.2")
+    // TOTP for 2FA
+    implementation("de.taimos:totp:1.0")
     
     // Testing dependencies
     testImplementation("io.ktor:ktor-server-tests-jvm")

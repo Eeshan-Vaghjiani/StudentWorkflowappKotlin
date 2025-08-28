@@ -4,8 +4,8 @@
   "description": "Frontend for Student Workflow App",
   "main": "index.js",
   "scripts": {
-    "build": "gradle build",
-    "dev": "gradle jsBrowserDevelopmentRun"
+  "build": "gradle build",
+  "dev": "gradle jsBrowserDevelopmentRun"
   },
   "dependencies": {
     "react": "^18.2.0",

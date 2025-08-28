@@ -153,15 +153,3 @@ object PasswordResetTokens : Table() {
     val createdAt = timestamp("created_at")
     override val primaryKey = PrimaryKey(email, token)
 }
-
-object PricingPackages : Table() {
-    val id = integer("id").autoIncrement()
-    val name = varchar("name", 255)
-    val description = text("description").nullable()
-    val price = decimal("price", 10, 2)
-    val promptsCount = integer("prompts_count")
-    val isActive = bool("is_active").default(true)
-    val sortOrder = integer("sort_order").default(0)
-    val createdAt = timestamp("created_at")
-    override val primaryKey = PrimaryKey(id)
-}

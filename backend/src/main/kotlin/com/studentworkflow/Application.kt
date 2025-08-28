@@ -1,6 +1,3 @@
-
-
-
 package com.studentworkflow
 
 import com.studentworkflow.db.DatabaseFactory
@@ -22,14 +19,15 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 
 fun main() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module)
+    val port = System.getenv("PORT")?.toIntOrNull() ?: 8081
+    embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module)
         .start(wait = true)
 }
 
 fun Application.module() {
     DatabaseFactory.init()
     configureSerialization()
-    configureSecurity() // Call configureSecurity here
+    configureSecurity()
 
     val promptService = PromptService()
     val aiService = AIService(promptService)
@@ -37,12 +35,10 @@ fun Application.module() {
     val pricingService = PricingService(promptService)
     val userService = UserService()
     val jwtService = JwtService()
-    val emailService = EmailService() // New
-    val passwordResetService = PasswordResetService(userService) // New
+    val emailService = EmailService()
+    val passwordResetService = PasswordResetService(userService)
 
     configureRouting()
     configureAIRoutes(aiService)
-    configureAuthRoutes(userService, jwtService, twoFactorAuthenticationService, passwordResetService, emailService) // Updated
+    configureAuthRoutes(userService, jwtService, twoFactorAuthenticationService, passwordResetService, emailService)
 }
-
-

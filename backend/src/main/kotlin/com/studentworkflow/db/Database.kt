@@ -1,4 +1,3 @@
-
 package com.studentworkflow.db
 
 import org.jetbrains.exposed.sql.Database
@@ -11,8 +10,13 @@ object DatabaseFactory {
         val jdbcURL = "jdbc:h2:file:./build/db"
         val database = Database.connect(jdbcURL, driverClassName)
         transaction(database) {
-            SchemaUtils.drop(Users)
-            SchemaUtils.create(Users, StudyGroups, GroupMemberships, Messages, Tasks, StudySessions, PomodoroSessions, UserSettings, Subscriptions, GoogleCalendars, AIUsageLogs, Notifications, PricingPackages, PasswordResetTokens)
+            // Create tables if they do not exist, without dropping
+            SchemaUtils.createMissingTablesAndColumns(
+                Users, StudyGroups, GroupMemberships, Messages, Tasks, 
+                StudySessions, PomodoroSessions, UserSettings, Subscriptions, 
+                GoogleCalendars, AIUsageLogs, Notifications, PricingPackages, 
+                PasswordResetTokens
+            )
         }
     }
 }

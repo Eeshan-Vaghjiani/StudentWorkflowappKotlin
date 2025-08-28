@@ -1,10 +1,12 @@
 
 plugins {
     kotlin("multiplatform")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.20"
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
+    jvmToolchain(21)
+    
     jvm()
     js(IR) {
         browser()
@@ -13,7 +15,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
             }
         }
         val jvmMain by getting
