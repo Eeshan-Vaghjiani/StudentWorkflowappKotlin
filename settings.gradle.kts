@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "workflow_test"
+rootProject.name = "login and registration"
 include(":app")
  

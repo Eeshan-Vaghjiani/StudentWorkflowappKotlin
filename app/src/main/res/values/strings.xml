@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">workflow_test</string>
+    <string name="app_name">login and registration</string>
+    <string name="login">login</string>
 </resources>

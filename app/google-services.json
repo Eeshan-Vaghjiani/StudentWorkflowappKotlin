@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "52796977485",
+    "project_id": "android-logreg",
+    "storage_bucket": "android-logreg.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52796977485:android:702289c23df108cdbd0704",
+        "android_client_info": {
+          "package_name": "com.example.loginandregistration"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6QouijeF9AqxwEY7JYfFsyvRdAOre6-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

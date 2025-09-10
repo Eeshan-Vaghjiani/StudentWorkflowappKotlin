@@ -1,4 +1,4 @@
-package com.example.workflow_test
+package com.example.loginandregistration
 
 import org.junit.Test
 
