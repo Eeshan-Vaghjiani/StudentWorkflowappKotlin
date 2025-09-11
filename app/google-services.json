@@ -12,7 +12,20 @@
           "package_name": "com.example.loginandregistration"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "52796977485-ilou0bo3ej2aqd93haqoqpkjha6cdotu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.loginandregistration",
+            "certificate_hash": "419132558cb02753dd5f2bb08ff92fab7a38baa0"
+          }
+        },
+        {
+          "client_id": "52796977485-2ckv1qu3dbdqc1dtmptj94s243pb03ir.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB6QouijeF9AqxwEY7JYfFsyvRdAOre6-I"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "52796977485-2ckv1qu3dbdqc1dtmptj94s243pb03ir.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
