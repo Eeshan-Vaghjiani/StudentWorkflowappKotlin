@@ -1,9 +1,13 @@
 package com.example.loginandregistration
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -11,8 +15,10 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuth // Correct import
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.ktx.auth // KTX import for Firebase.auth
+import com.google.firebase.ktx.Firebase // KTX import for Firebase.auth
 
 class Login : AppCompatActivity() {
 
@@ -23,82 +29,77 @@ class Login : AppCompatActivity() {
         private const val TAG = "LoginActivity"
     }
 
+    private val googleSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                if (account != null) {
+                    Log.d(TAG, "firebaseAuthWithGoogle: ${account.id}")
+                    firebaseAuthWithGoogle(account)
+                } else {
+                    Log.w(TAG, "Google sign in failed: Account is null")
+                    Toast.makeText(this, getString(R.string.error_google_signin_failed_no_account), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: ApiException) {
+                Log.w(TAG, "Google sign in failed", e)
+                Toast.makeText(this, getString(R.string.error_google_signin_failed_status, e.statusCode), Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Log.w(TAG, "Google sign in cancelled or failed: resultCode=${result.resultCode}")
+            if (result.resultCode != Activity.RESULT_CANCELED) { // Show message if not just cancelled by user
+                Toast.makeText(this, getString(R.string.error_google_signin_cancelled), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
-        auth = FirebaseAuth.getInstance()
+        auth = Firebase.auth // Using KTX version
 
-        // 🔑 Google Sign In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id)) // from google-services.json
+            .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         val etEmail = findViewById<EditText>(R.id.etEmail)
         val etPassword = findViewById<EditText>(R.id.etPassword)
         val btnLogin = findViewById<Button>(R.id.btnLogin)
         val tvRegister = findViewById<TextView>(R.id.tvRegister)
-        val btnGoogle = findViewById<Button>(R.id.btnGoogleLogin)
+        val btnGoogleLogin = findViewById<Button>(R.id.btnGoogleLogin)
 
-        // Email Login
         btnLogin.setOnClickListener {
             val email = etEmail.text.toString().trim()
             val password = etPassword.text.toString().trim()
 
             if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "⚠ Please enter email and password", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.error_empty_credentials), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             auth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener { task ->
+                .addOnCompleteListener(this) { task ->
                     if (task.isSuccessful) {
-                        Toast.makeText(this, "✅ Login Successful", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, MainActivity::class.java))
-                        finish() // Finish Login activity
+                        Toast.makeText(this, getString(R.string.login_successful), Toast.LENGTH_SHORT).show()
+                        navigateToDashboard() // Changed to navigateToDashboard
                     } else {
-                        Toast.makeText(this, "❌ ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        Log.w(TAG, "signInWithEmail:failure", task.exception)
+                        Toast.makeText(this, getString(R.string.login_failed, task.exception?.message ?: getString(R.string.unknown_error)), Toast.LENGTH_LONG).show()
                     }
                 }
         }
 
-        // Go to Register
         tvRegister.setOnClickListener {
             startActivity(Intent(this, Register::class.java))
         }
 
-        // Google Login
-        btnGoogle.setOnClickListener {
+        btnGoogleLogin.setOnClickListener {
             signInWithGoogle()
-        }
-    }
-
-    // Modern Activity Result API
-    private val googleSignInLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) { // Check if the result is OK
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                if (account != null) {
-                    Log.d(TAG, "firebaseAuthWithGoogle:" + account.id)
-                    firebaseAuthWithGoogle(account)
-                } else {
-                    Log.w(TAG, "Google sign in failed: Account is null")
-                    Toast.makeText(this, "❌ Google sign in failed: No account returned", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: ApiException) {
-                Log.w(TAG, "Google sign in failed", e)
-                Toast.makeText(this, "❌ Google sign in failed: ${e.statusCode}", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-             Log.w(TAG, "Google sign in cancelled or failed: resultCode=${result.resultCode}")
-             // Optionally show a toast if the sign-in was cancelled by the user or failed
-             // Toast.makeText(this, "Google Sign-In was cancelled or failed", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -112,12 +113,28 @@ class Login : AppCompatActivity() {
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
-                    Toast.makeText(this, "✅ Google Login Successful", Toast.LENGTH_SHORT).show()
-                    startActivity(Intent(this, MainActivity::class.java))
-                    finish() // Finish Login activity
+                    Toast.makeText(this, getString(R.string.google_login_successful), Toast.LENGTH_SHORT).show()
+                    navigateToDashboard() // Changed to navigateToDashboard
                 } else {
-                    Toast.makeText(this, "❌ ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                    Log.w(TAG, "signInWithCredential:failure", task.exception)
+                    Toast.makeText(this, getString(R.string.google_login_failed, task.exception?.message ?: getString(R.string.unknown_error)), Toast.LENGTH_LONG).show()
                 }
             }
+    }
+
+    private fun navigateToDashboard() { // Assuming MainActivity is DashboardActivity
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Check if user is signed in (non-null) and update UI accordingly.
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            navigateToDashboard() // Changed to navigateToDashboard if user already logged in
+        }
     }
 }

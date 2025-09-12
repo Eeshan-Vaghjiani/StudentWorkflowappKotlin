@@ -1,4 +1,51 @@
 <resources>
     <string name="app_name">login and registration</string>
-    <string name="login">login</string>
+
+    <!-- Common UI elements -->
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Login</string>
+    <string name="register_button">Register</string>
+    <string name="logout_button">Logout</string>
+    <string name="welcome_message">Welcome, %1$s</string> <!-- For formatting with email/name -->
+    <string name="go_to_register_prompt">Don’t have an account? Register</string>
+    <string name="go_to_login_prompt">Already have an account? Login</string>
+    <string name="login_with_google_button">Login with Google</string>
+
+    <!-- Menu Items -->
+    <string name="menu_home">Home</string>
+    <string name="menu_groups">Groups</string>
+    <string name="menu_tasks">Tasks</string>
+    <string name="menu_calendar">Calendar</string>
+    <string name="menu_chat">Chat</string>
+
+    <!-- Toast messages for menu item selection -->
+    <string name="menu_home_selected">Home selected</string>
+    <string name="menu_groups_selected">Groups selected</string>
+    <string name="menu_tasks_selected">Tasks selected</string>
+    <string name="menu_calendar_selected">Calendar selected</string>
+    <string name="menu_chat_selected">Chat selected</string>
+
+    <!-- Firebase/Google specific -->
+    <string name="default_web_client_id" translatable="false">YOUR_DEFAULT_WEB_CLIENT_ID</string>
+    <!-- IMPORTANT: Replace YOUR_DEFAULT_WEB_CLIENT_ID with your actual ID -->
+
+    <!-- Toast Messages / User Feedback -->
+    <string name="login_successful">Login Successful!</string>
+    <string name="google_login_successful">Google Login Successful!</string>
+    <string name="registration_successful">Registration Successful!</string>
+    <string name="logout_successful">Logged out successfully</string>
+
+    <string name="error_empty_credentials">Please enter email and password.</string>
+    <string name="error_empty_credentials_register">Please fill all fields for registration.</string>
+    <string name="login_failed">Login failed: %1$s</string>
+    <string name="registration_failed">Registration failed: %1$s</string>
+    <string name="google_login_failed">Google login failed: %1$s</string>
+
+    <string name="error_google_signin_failed_no_account">Google Sign-In failed: No account returned.</string>
+    <string name="error_google_signin_failed_status">Google Sign-In failed. Status: %1$s</string>
+    <string name="error_google_signin_cancelled">Google Sign-In cancelled.</string>
+    <string name="error_google_sign_out_failed">Google Sign-Out failed.</string>
+    <string name="unknown_error">An unknown error occurred.</string>
+
 </resources>
