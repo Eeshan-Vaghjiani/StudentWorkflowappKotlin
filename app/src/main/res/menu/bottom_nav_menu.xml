@@ -1,23 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+
     <item
         android:id="@+id/nav_home"
-        android:icon="@drawable/ic_home"
-        android:title="@string/menu_home" />
+        android:title="Home"
+        android:icon="@drawable/ic_home" />
+
     <item
         android:id="@+id/nav_groups"
-        android:icon="@drawable/ic_groups"
-        android:title="@string/menu_groups" />
+        android:title="Groups"
+        android:icon="@drawable/ic_groups" />
+
     <item
         android:id="@+id/nav_tasks"
-        android:icon="@drawable/ic_tasks"
-        android:title="@string/menu_tasks" />
+        android:title="Tasks"
+        android:icon="@drawable/ic_tasks" />
+
     <item
         android:id="@+id/nav_calendar"
-        android:icon="@drawable/ic_calendar"
-        android:title="@string/menu_calendar" />
+        android:title="Calendar"
+        android:icon="@drawable/ic_calendar" />
+
     <item
         android:id="@+id/nav_chat"
-        android:icon="@drawable/ic_chat"
-        android:title="@string/menu_chat" />
+        android:title="Chat"
+        android:icon="@drawable/ic_chat" />
+
 </menu>

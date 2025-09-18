@@ -13,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:hint="@string/email_hint" 
+        android:hint="@string/email_hint"
         android:inputType="textEmailAddress" />
 
     <EditText
@@ -21,7 +21,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:hint="@string/password_hint" 
+        android:hint="@string/password_hint"
         android:inputType="textPassword" />
 
     <Button
@@ -29,25 +29,24 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="@string/login_button" />
+        android:text="@string/login_button_text" />
 
     <Button
         android:id="@+id/btnGoogleLogin"
-        style="?attr/materialButtonOutlinedStyle" 
+        style="?attr/materialButtonOutlinedStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/login_with_google_button"
-        tools:icon="@android:drawable/ic_menu_myplaces" /> 
-        <!-- Consider adding a Google icon drawable -->
+        android:text="@string/login_with_google_button_text"
+        tools:icon="@android:drawable/ic_menu_myplaces" />
 
     <TextView
         android:id="@+id/tvRegister"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:text="@string/go_to_register_prompt"
-        android:textColor="?android:attr/textColorLink" 
+        android:text="@string/register_prompt_text"
+        android:textColor="?android:attr/textColorLink"
         android:clickable="true"
         android:focusable="true" />
 

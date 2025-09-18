@@ -1,13 +1,413 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- fragment_home.xml -->
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center">
+    tools:context=".HomeFragment">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar_layout_home"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Home Screen"
-        android:textSize="24sp" />
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-</RelativeLayout>
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar_home"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="@string/dashboard_title"
+            app:menu="@menu/home_toolbar_menu" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Welcome Section Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:id="@+id/tv_welcome_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Welcome back, John!"
+                        android:textAppearance="?attr/textAppearanceHeadline6" />
+
+                    <TextView
+                        android:id="@+id/tv_welcome_subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/home_welcome_subtitle"
+                        android:textColor="@color/colorTextSecondary"
+                        android:layout_marginBottom="16dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal">
+                            <TextView
+                                android:id="@+id/tv_tasks_due_count"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="5"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/colorPrimaryBlue"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_tasks_due_label"
+                                android:textSize="12sp"
+                                android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal">
+                            <TextView
+                                android:id="@+id/tv_groups_count"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="3"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/colorGreen"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_groups_label"
+                                android:textSize="12sp"
+                                android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center_horizontal">
+                            <TextView
+                                android:id="@+id/tv_sessions_count"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="2"
+                                android:textSize="24sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/colorOrange"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_sessions_label"
+                                android:textSize="12sp"
+                                android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- AI Usage Stats Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp">
+                        <ImageView
+                            android:id="@+id/iv_ai_icon"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_ai_brain"
+                            app:tint="@color/colorPrimaryBlue"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"
+                            android:layout_marginEnd="8dp"
+                            tools:ignore="ContentDescription" />
+                        <TextView
+                            android:layout_toEndOf="@id/iv_ai_icon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/home_ai_prompts_title"
+                            android:textAppearance="?attr/textAppearanceSubtitle1"
+                            android:layout_centerVertical="true"/>
+                        <TextView
+                            android:id="@+id/tv_ai_prompts_left"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="7 left"
+                            android:background="@drawable/badge_warning_background"
+                            android:textColor="@color/colorBadgeWarningText"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:paddingTop="2dp"
+                            android:paddingBottom="2dp"
+                            android:textSize="12sp"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"/>
+                    </RelativeLayout>
+                    <ProgressBar
+                        android:id="@+id/progress_bar_ai_usage"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:progress="30"
+                        android:layout_marginBottom="4dp"/>
+                    <TextView
+                        android:id="@+id/tv_ai_usage_details"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="3/10 prompts used (Trial)"
+                        android:textSize="14sp"
+                        android:textColor="@color/colorTextSecondary"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Quick Actions Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/home_quick_actions_title"
+                        android:textAppearance="?attr/textAppearanceSubtitle1"
+                        android:layout_marginBottom="16dp"/>
+                    <GridLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:columnCount="2"
+                        android:rowCount="2"
+                        android:useDefaultMargins="true">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_new_task_home"
+                            style="@style/Widget.MaterialComponents.Button.Icon"
+                            android:layout_width="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_gravity="fill_horizontal"
+                            android:text="@string/home_new_task_button"
+                            app:icon="@drawable/ic_add_black_24dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_calendar_quick_home"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton.Icon"
+                            android:layout_width="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_gravity="fill_horizontal"
+                            android:text="@string/home_calendar_button"
+                            app:icon="@drawable/ic_calendar" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_groups_quick_home"
+                             style="@style/Widget.MaterialComponents.Button.OutlinedButton.Icon"
+                            android:layout_width="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_gravity="fill_horizontal"
+                            android:text="@string/home_groups_button"
+                            app:icon="@drawable/ic_groups" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_ai_assistant_home"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton.Icon"
+                            android:layout_width="0dp"
+                            android:layout_columnWeight="1"
+                            android:layout_gravity="fill_horizontal"
+                            android:text="@string/home_ai_assistant_button"
+                            app:icon="@drawable/ic_ai_brain" />
+                    </GridLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Upcoming Tasks Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/home_upcoming_tasks_title"
+                            android:textAppearance="?attr/textAppearanceSubtitle1"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"/>
+                        <ImageButton
+                            android:id="@+id/btn_view_all_tasks_home"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/ic_arrow_forward_black_24dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            tools:ignore="ContentDescription" />
+                    </RelativeLayout>
+                    <!-- Item 1 -->
+                    <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp">
+                        <ImageView android:id="@+id/iv_task1_icon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_task_item_file" app:tint="@color/colorPrimaryBlue" android:layout_centerVertical="true" android:layout_marginEnd="16dp" tools:ignore="ContentDescription"/>
+                        <LinearLayout android:layout_toEndOf="@id/iv_task1_icon" android:layout_toStartOf="@+id/tv_task1_priority" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                            <TextView android:id="@+id/tv_task1_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Research Paper Draft" android:textAppearance="?attr/textAppearanceBody1"/>
+                            <TextView android:id="@+id/tv_task1_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Due in 2 hours • Computer Science" android:textAppearance="?attr/textAppearanceCaption" android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                        <TextView android:id="@+id/tv_task1_priority" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="High" android:background="@drawable/badge_priority_high" android:textColor="@color/colorBadgeWarningText" android:paddingHorizontal="8dp" android:paddingVertical="2dp" android:textSize="10sp" android:layout_alignParentEnd="true" android:layout_centerVertical="true"/>
+                    </RelativeLayout>
+                    <!-- Add more task items similarly -->
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+             <!-- Recent Groups Card -->
+             <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                     <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/home_recent_groups_title"
+                            android:textAppearance="?attr/textAppearanceSubtitle1"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"/>
+                        <ImageButton
+                            android:id="@+id/btn_view_all_groups_home"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/ic_arrow_forward_black_24dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            tools:ignore="ContentDescription" />
+                    </RelativeLayout>
+                    <!-- Item 1 -->
+                     <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp">
+                        <ImageView android:id="@+id/iv_group1_icon" android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_groups" app:tint="@color/colorPrimaryBlue" android:layout_centerVertical="true" android:layout_marginEnd="16dp" tools:ignore="ContentDescription"/>
+                        <LinearLayout android:layout_toEndOf="@id/iv_group1_icon" android:layout_toStartOf="@+id/tv_group1_badge" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                            <TextView android:id="@+id/tv_group1_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Computer Science Team" android:textAppearance="?attr/textAppearanceBody1"/>
+                            <TextView android:id="@+id/tv_group1_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="5 members • 3 active assignments" android:textAppearance="?attr/textAppearanceCaption" android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                        <TextView android:id="@+id/tv_group1_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3" android:background="@drawable/badge_neutral_background" android:textColor="@color/colorBadgeNeutralText" android:paddingHorizontal="8dp" android:paddingVertical="2dp" android:textSize="10sp" android:layout_alignParentEnd="true" android:layout_centerVertical="true"/>
+                    </RelativeLayout>
+                    <!-- Add more group items -->
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Today's Schedule Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="8dp"
+                android:layout_marginBottom="16dp">
+                 <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                     <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/home_todays_schedule_title"
+                            android:textAppearance="?attr/textAppearanceSubtitle1"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"/>
+                        <ImageButton
+                            android:id="@+id/btn_view_all_schedule_home"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/ic_arrow_forward_black_24dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            tools:ignore="ContentDescription" />
+                    </RelativeLayout>
+                     <!-- Item 1 -->
+                     <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp">
+                        <ImageView android:id="@+id/iv_schedule1_icon" android:layout_width="32dp" android:layout_height="32dp" android:src="@drawable/ic_schedule_lecture" android:background="@drawable/icon_background_green" android:padding="6dp" app:tint="@android:color/white" android:layout_centerVertical="true" android:layout_marginEnd="16dp" tools:ignore="ContentDescription"/>
+                        <LinearLayout android:layout_toEndOf="@id/iv_schedule1_icon" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                            <TextView android:id="@+id/tv_schedule1_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Computer Science Lecture" android:textAppearance="?attr/textAppearanceBody1"/>
+                            <TextView android:id="@+id/tv_schedule1_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="10:00 AM - 11:30 AM • Room 301" android:textAppearance="?attr/textAppearanceCaption" android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                    </RelativeLayout>
+                     <!-- Item 2 -->
+                     <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp">
+                        <ImageView android:id="@+id/iv_schedule2_icon" android:layout_width="32dp" android:layout_height="32dp" android:src="@drawable/ic_groups" android:background="@drawable/icon_background_orange" android:padding="6dp" app:tint="@android:color/white" android:layout_centerVertical="true" android:layout_marginEnd="16dp" tools:ignore="ContentDescription"/>
+                        <LinearLayout android:layout_toEndOf="@id/iv_schedule2_icon" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                            <TextView android:id="@+id/tv_schedule2_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Study Group Meeting" android:textAppearance="?attr/textAppearanceBody1"/>
+                            <TextView android:id="@+id/tv_schedule2_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="2:00 PM - 3:30 PM • Library" android:textAppearance="?attr/textAppearanceCaption" android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                    </RelativeLayout>
+                     <!-- Item 3 -->
+                     <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp">
+                        <ImageView android:id="@+id/iv_schedule3_icon" android:layout_width="32dp" android:layout_height="32dp" android:src="@drawable/ic_tasks" android:background="@drawable/icon_background_blue" android:padding="6dp" app:tint="@android:color/white" android:layout_centerVertical="true" android:layout_marginEnd="16dp" tools:ignore="ContentDescription"/>
+                        <LinearLayout android:layout_toEndOf="@id/iv_schedule3_icon" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                            <TextView android:id="@+id/tv_schedule3_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Study Session" android:textAppearance="?attr/textAppearanceBody1"/>
+                            <TextView android:id="@+id/tv_schedule3_subtitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="7:00 PM - 9:00 PM • Home" android:textAppearance="?attr/textAppearanceCaption" android:textColor="@color/colorTextSecondary"/>
+                        </LinearLayout>
+                    </RelativeLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

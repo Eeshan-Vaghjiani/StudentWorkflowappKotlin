@@ -2,4 +2,37 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+
+    <!-- Dashboard Specific Colors from HTML Mockup -->
+    <color name="colorPrimaryBlue">#007AFF</color> <!-- Blue for primary actions, stats -->
+    <color name="colorGreen">#34C759</color> <!-- Green for stats, icons -->
+    <color name="colorOrange">#FF9500</color> <!-- Orange for stats, warnings -->
+    <color name="colorTextPrimary">#000000</color> <!-- Or your primary text color -->
+    <color name="colorTextSecondary">#8E8E93</color> <!-- Subdued text color -->
+    <color name="colorBackground">#FFFFFFFF</color> <!-- Or your main background color -->
+    <color name="colorCardBackground">#FFFFFF</color> <!-- Card background -->
+    <color name="colorBadgeWarningText">#FFFFFF</color>
+    <color name="colorBadgeNeutralText">#FFFFFF</color>
+    <color name="colorIconDefaultTint">#8E8E93</color>
+
+
+    <color name="light_gray">#D3D3D3</color>
+    <color name="dark_gray">#A9A9A9</color>
+    <color name="red">#FF0000</color>
+    <color name="colorPrimary">@color/purple_500</color>
+    <color name="colorPrimaryVariant">@color/purple_700</color>
+    <color name="colorOnPrimary">@color/white</color>
+    <color name="colorSecondary">@color/teal_200</color>
+    <color name="colorSecondaryVariant">@color/teal_700</color>
+    <color name="colorOnSecondary">@color/black</color>
+    <color name="statusBarColor">?attr/colorPrimaryVariant</color>
+    <color name="ic_launcher_background">#262626</color>
+    <color name="colorWhite">#FFFFFF</color>
+    <color name="colorBlack">#000000</color>
 </resources>

@@ -1,16 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">login and registration</string>
-
-    <!-- Common UI elements -->
-    <string name="email_hint">Email</string>
-    <string name="password_hint">Password</string>
-    <string name="login_button">Login</string>
-    <string name="register_button">Register</string>
-    <string name="logout_button">Logout</string>
-    <string name="welcome_message">Welcome, %1$s</string> <!-- For formatting with email/name -->
-    <string name="go_to_register_prompt">Don’t have an account? Register</string>
-    <string name="go_to_login_prompt">Already have an account? Login</string>
-    <string name="login_with_google_button">Login with Google</string>
+    <string name="app_name">Login and Registration</string>
 
     <!-- Menu Items -->
     <string name="menu_home">Home</string>
@@ -18,34 +8,77 @@
     <string name="menu_tasks">Tasks</string>
     <string name="menu_calendar">Calendar</string>
     <string name="menu_chat">Chat</string>
+    <string name="menu_profile">Profile</string>
+    <string name="menu_notifications">Notifications</string>
 
-    <!-- Toast messages for menu item selection -->
-    <string name="menu_home_selected">Home selected</string>
-    <string name="menu_groups_selected">Groups selected</string>
-    <string name="menu_tasks_selected">Tasks selected</string>
-    <string name="menu_calendar_selected">Calendar selected</string>
-    <string name="menu_chat_selected">Chat selected</string>
+    <!-- Login Screen -->
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button_text">Login</string>
+    <string name="login_with_google_button_text">Login with Google</string>
+    <string name="register_prompt_text">Don\'t have an account? Register</string>
+    <string name="error_empty_credentials">Please enter email and password</string>
+    <string name="login_successful">Login Successful</string>
+    <string name="login_failed">Login Failed: %1$s</string>
+    <string name="google_signin_failed_api_exception">Google sign in failed: %1$s</string>
+    <string name="google_signin_failed_no_account">Google sign in failed: No account returned</string>
+    <string name="google_signin_cancelled">Google Sign-In was cancelled</string>
+    <string name="firebase_auth_with_google_failed">Firebase Authentication with Google failed: %1$s</string>
 
-    <!-- Firebase/Google specific -->
-    <string name="default_web_client_id" translatable="false">YOUR_DEFAULT_WEB_CLIENT_ID</string>
-    <!-- IMPORTANT: Replace YOUR_DEFAULT_WEB_CLIENT_ID with your actual ID -->
+    <!-- Register Screen -->
+    <string name="register_button_text">Register</string>
+    <string name="login_prompt_text">Already have an account? Login</string>
+    <string name="error_fill_all_fields">Please fill all fields</string>
+    <string name="registration_successful">Registration Successful, logging in...</string>
+    <string name="registration_failed">Registration Failed: %1$s</string>
 
-    <!-- Toast Messages / User Feedback -->
-    <string name="login_successful">Login Successful!</string>
-    <string name="google_login_successful">Google Login Successful!</string>
-    <string name="registration_successful">Registration Successful!</string>
-    <string name="logout_successful">Logged out successfully</string>
+    <!-- Main Activity / Dashboard -->
+    <string name="welcome_message">Welcome, %1$s</string>
+    <string name="logout_button_text">Logout</string>
+    <string name="logged_out_successfully">Logged out successfully</string>
+    <string name="google_sign_out_failed">Google sign out failed</string>
+    <string name="dashboard_title">Dashboard</string>
 
-    <string name="error_empty_credentials">Please enter email and password.</string>
-    <string name="error_empty_credentials_register">Please fill all fields for registration.</string>
-    <string name="login_failed">Login failed: %1$s</string>
-    <string name="registration_failed">Registration failed: %1$s</string>
-    <string name="google_login_failed">Google login failed: %1$s</string>
+    <!-- Home Fragment (Dashboard Content) -->
+    <string name="home_welcome_subtitle">Here\'s what\'s happening today</string>
+    <string name="home_tasks_due_label">Tasks Due</string>
+    <string name="home_groups_label">Groups</string>
+    <string name="home_sessions_label">Sessions</string>
+    <string name="home_ai_prompts_title">AI Prompts Usage</string>
+    <string name="home_ai_prompts_left_template">%1$d left</string>
+    <string name="home_ai_prompts_usage_template">%1$d/%2$d prompts used (Trial)</string>
+    <string name="home_quick_actions_title">Quick Actions</string>
+    <string name="home_new_task_button">New Task</string>
+    <string name="home_calendar_button">Calendar</string>
+    <string name="home_groups_button">Groups</string>
+    <string name="home_ai_assistant_button">AI Assistant</string>
+    <string name="home_upcoming_tasks_title">Upcoming Tasks</string>
+    <string name="home_recent_groups_title">Recent Groups</string>
+    <string name="home_todays_schedule_title">Today\'s Schedule</string>
+    <string name="view_all">View All</string>
 
-    <string name="error_google_signin_failed_no_account">Google Sign-In failed: No account returned.</string>
-    <string name="error_google_signin_failed_status">Google Sign-In failed. Status: %1$s</string>
-    <string name="error_google_signin_cancelled">Google Sign-In cancelled.</string>
-    <string name="error_google_sign_out_failed">Google Sign-Out failed.</string>
-    <string name="unknown_error">An unknown error occurred.</string>
+    <!-- Profile Fragment -->
+    <string name="profile_email_label">Email:</string>
+    <string name="default_web_client_id">YOUR_DEFAULT_WEB_CLIENT_ID</string>x
 
+    <!-- Additional Login/Register Error Messages -->
+    <string name="error_google_signin_failed_no_account">Google sign in failed: No account returned</string>
+    <string name="error_google_signin_failed_status">Google sign in failed: Status error</string>
+    <string name="error_google_signin_cancelled">Google Sign-In was cancelled</string>
+    <string name="google_login_successful">Google Login Successful</string>
+    <string name="google_login_failed">Google Login Failed: %1$s</string>
+    <string name="error_empty_credentials_register">Please fill all registration fields</string>
+
+    <!-- General -->
+    <string name="action_cancelled">Action Cancelled</string>
+    <string name="unknown_error">An unknown error occurred</string>
+    <string name="navigating_to_profile">Navigating to Profile...</string>
+    <string name="navigating_to_notifications">Navigating to Notifications...</string>
+    <string name="button_view_all_tasks_clicked">View all tasks clicked</string>
+    <string name="button_view_all_groups_clicked">View all groups clicked</string>
+    <string name="button_view_all_schedule_clicked">View all schedule clicked</string>
+    <string name="new_task_clicked">New Task Clicked</string>
+    <string name="calendar_quick_action_clicked">Calendar Quick Action Clicked</string>
+    <string name="groups_quick_action_clicked">Groups Quick Action Clicked</string>
+    <string name="ai_assistant_clicked">AI Assistant Clicked</string>
 </resources>
