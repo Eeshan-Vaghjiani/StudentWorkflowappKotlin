@@ -69,6 +69,55 @@
     <string name="google_login_failed">Google Login Failed: %1$s</string>
     <string name="error_empty_credentials_register">Please fill all registration fields</string>
 
+    <!-- Tasks Fragment -->
+    <string name="tasks_title">Tasks</string>
+    <string name="filter_tasks">Filter Tasks</string>
+    <string name="search_tasks">Search Tasks</string>
+    <string name="add_new_task">Add New Task</string>
+    <string name="overdue">Overdue</string>
+    <string name="due_today">Due Today</string>
+    <string name="completed">Completed</string>
+    <string name="categories">Categories</string>
+    <string name="all_tasks">All Tasks</string>
+    <string name="personal">Personal</string>
+    <string name="group">Group</string>
+    <string name="assignments">Assignments</string>
+    <string name="my_tasks">My Tasks</string>
+    <string name="list_view">List View</string>
+    <string name="kanban_view">Kanban View</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="new_task">New Task</string>
+    <string name="ai_assistant">AI Assistant</string>
+    <string name="export">Export</string>
+
+    <!-- Groups Fragment -->
+    <string name="groups_title">Groups</string>
+    <string name="search_groups">Search Groups</string>
+    <string name="join_group">Join Group</string>
+    <string name="my_groups">My Groups</string>
+    <string name="active_assignments">Active Assignments</string>
+    <string name="new_messages">New Messages</string>
+    <string name="create_group">Create Group</string>
+    <string name="group_chat">Group Chat</string>
+    <string name="show_all_groups">Show All Groups</string>
+    <string name="recent_activity">Recent Activity</string>
+    <string name="discover_groups">Discover Groups</string>
+    <string name="show_more_groups">Show More Groups</string>
+    <string name="join">Join</string>
+
+    <!-- Toast Messages -->
+    <string name="filter_clicked">Filter clicked</string>
+    <string name="search_clicked">Search clicked</string>
+    <string name="add_task_clicked">Add task clicked</string>
+    <string name="category_selected">Category selected: %1$s</string>
+    <string name="view_changed">View changed to: %1$s</string>
+    <string name="task_clicked">Task clicked: %1$s</string>
+    <string name="create_group_clicked">Create group clicked</string>
+    <string name="join_group_clicked">Join group clicked</string>
+    <string name="group_clicked">Group clicked: %1$s</string>
+    <string name="activity_clicked">Activity clicked</string>
+    <string name="discover_group_joined">Joined group: %1$s</string>
+
     <!-- General -->
     <string name="action_cancelled">Action Cancelled</string>
     <string name="unknown_error">An unknown error occurred</string>
