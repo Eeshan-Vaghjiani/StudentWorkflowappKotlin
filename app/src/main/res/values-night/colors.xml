@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode Override Colors -->
+    <color name="background_color">#1C1C1E</color>
+    <color name="card_background">#2C2C2E</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8E8E93</color>
+    
+    <!-- Keep the same accent colors -->
+    <color name="primary_color">#007AFF</color>
+    <color name="overdue_color">#FF3B30</color>
+    <color name="due_today_color">#FF9500</color>
+    <color name="completed_color">#34C759</color>
+</resources>

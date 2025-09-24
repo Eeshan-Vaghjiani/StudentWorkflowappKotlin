@@ -118,6 +118,37 @@
     <string name="activity_clicked">Activity clicked</string>
     <string name="discover_group_joined">Joined group: %1$s</string>
 
+    <!-- Task Creation -->
+    <string name="create_task">Create Task</string>
+    <string name="task_title">Task Title</string>
+    <string name="task_description">Description</string>
+    <string name="task_subject">Subject</string>
+    <string name="task_category">Category</string>
+    <string name="task_priority">Priority</string>
+    <string name="due_date">Due Date</string>
+    <string name="select_group">Select Group</string>
+    <string name="task_created_successfully">Task created successfully!</string>
+    <string name="error_creating_task">Error creating task</string>
+
+    <!-- Dialog Strings -->
+    <string name="create_new_group">Create New Group</string>
+    <string name="group_name">Group Name</string>
+    <string name="group_description">Description (Optional)</string>
+    <string name="subject">Subject</string>
+    <string name="privacy_settings">Privacy Settings</string>
+    <string name="public_group">Public - Anyone can join</string>
+    <string name="private_group">Private - Invite only</string>
+    <string name="cancel">Cancel</string>
+    <string name="join_group_description">Enter the 6-digit group code to join</string>
+    <string name="group_code">Group Code</string>
+    <string name="loading">Loading...</string>
+    <string name="error_creating_group">Error creating group</string>
+    <string name="error_joining_group">Error joining group</string>
+    <string name="group_created_successfully">Group created successfully!</string>
+    <string name="joined_group_successfully">Joined group successfully!</string>
+    <string name="invalid_group_code">Invalid group code</string>
+    <string name="fill_required_fields">Please fill in the required fields</string>
+
     <!-- General -->
     <string name="action_cancelled">Action Cancelled</string>
     <string name="unknown_error">An unknown error occurred</string>

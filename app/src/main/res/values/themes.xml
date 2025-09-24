@@ -1,8 +1,19 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.LoginAndRegistration" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <!-- Light theme colors -->
+        <item name="colorPrimary">@color/primary_color</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/primary_color</item>
+        <item name="colorOnSecondary">@android:color/white</item>
+        <item name="android:colorBackground">@color/background_color</item>
+        <item name="colorSurface">@color/card_background</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <item name="android:statusBarColor">@color/background_color</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/background_color</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
     <style name="Theme.LoginAndRegistration" parent="Base.Theme.LoginAndRegistration" />

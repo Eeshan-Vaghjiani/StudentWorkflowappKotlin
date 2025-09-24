@@ -10,15 +10,16 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@color/background_color"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:background="@color/background_color"
             app:title="@string/groups_title"
-            app:titleTextColor="@android:color/white">
+            app:titleTextColor="@color/text_primary">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -33,7 +34,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/search_groups"
                     android:src="@drawable/ic_search"
-                    android:tint="@android:color/white" />
+                    android:tint="@color/text_primary" />
 
                 <ImageButton
                     android:id="@+id/btn_join_group"
@@ -42,11 +43,11 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/join_group"
                     android:src="@drawable/ic_add"
-                    android:tint="@android:color/white" />
+                    android:tint="@color/text_primary" />
 
             </LinearLayout>
 
-        </androidx.appcompat.widget.Toolbar>
+        </com.google.android.material.appbar.MaterialToolbar>
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -67,8 +68,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -84,6 +86,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_my_groups_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="5"
@@ -108,6 +111,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_active_assignments_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="12"
@@ -132,6 +136,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_new_messages_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="3"
@@ -157,8 +162,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -182,6 +188,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_create_group"
+                            style="@style/PrimaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -191,7 +198,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_join_group_action"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
@@ -209,7 +216,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_assignments"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -219,7 +226,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_group_chat"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
@@ -238,8 +245,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -290,8 +298,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -324,8 +333,9 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"

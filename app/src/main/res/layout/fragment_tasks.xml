@@ -10,15 +10,16 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@color/background_color"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-        <androidx.appcompat.widget.Toolbar
+        <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:background="@color/background_color"
             app:title="@string/tasks_title"
-            app:titleTextColor="@android:color/white">
+            app:titleTextColor="@color/text_primary">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -33,7 +34,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/filter_tasks"
                     android:src="@drawable/ic_filter"
-                    android:tint="@android:color/white" />
+                    android:tint="@color/text_primary" />
 
                 <ImageButton
                     android:id="@+id/btn_search"
@@ -42,7 +43,7 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/search_tasks"
                     android:src="@drawable/ic_search"
-                    android:tint="@android:color/white" />
+                    android:tint="@color/text_primary" />
 
                 <ImageButton
                     android:id="@+id/btn_add_task"
@@ -51,11 +52,11 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/add_new_task"
                     android:src="@drawable/ic_add"
-                    android:tint="@android:color/white" />
+                    android:tint="@color/text_primary" />
 
             </LinearLayout>
 
-        </androidx.appcompat.widget.Toolbar>
+        </com.google.android.material.appbar.MaterialToolbar>
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -76,8 +77,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -93,6 +95,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_overdue_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="8"
@@ -117,6 +120,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_due_today_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="12"
@@ -141,6 +145,7 @@
                         android:orientation="vertical">
 
                         <TextView
+                            android:id="@+id/tv_completed_count"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="45"
@@ -166,8 +171,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -191,7 +197,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_all_tasks"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -201,7 +207,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_personal"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
@@ -219,7 +225,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_group"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -229,7 +235,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_assignments"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
@@ -248,8 +254,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -308,8 +315,9 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/card_background"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -333,6 +341,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_new_task"
+                            style="@style/PrimaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -342,7 +351,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_kanban_view_action"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
@@ -360,7 +369,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_ai_assistant"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="8dp"
@@ -370,7 +379,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_export"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            style="@style/SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
