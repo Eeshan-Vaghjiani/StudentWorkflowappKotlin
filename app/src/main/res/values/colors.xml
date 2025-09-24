@@ -36,13 +36,20 @@
     <color name="colorWhite">#FFFFFF</color>
     <color name="colorBlack">#000000</color>
 
-    <!-- Study Planner App Colors -->
-    <color name="primary_color">#007AFF</color>
-    <color name="background_color">#F8F9FA</color>
-    <color name="text_primary">#1D1D1F</color>
-    <color name="text_secondary">#8E8E93</color>
+    <!-- Study Planner App Colors - Matching Homepage -->
+    <color name="primary_color">@color/colorPrimaryBlue</color>
+    <color name="background_color">@color/colorBackground</color>
+    <color name="text_primary">@color/colorTextPrimary</color>
+    <color name="text_secondary">@color/colorTextSecondary</color>
     <color name="overdue_color">#FF3B30</color>
-    <color name="due_today_color">#FF9500</color>
-    <color name="completed_color">#34C759</color>
-    <color name="card_background">#FFFFFF</color>
+    <color name="due_today_color">@color/colorOrange</color>
+    <color name="completed_color">@color/colorGreen</color>
+    <color name="card_background">@color/colorCardBackground</color>
+    
+    <!-- Dark Mode Colors -->
+    <color name="dark_background">#1C1C1E</color>
+    <color name="dark_card_background">#2C2C2E</color>
+    <color name="dark_text_primary">#FFFFFF</color>
+    <color name="dark_text_secondary">#8E8E93</color>
+    <color name="dark_surface">#3A3A3C</color>
 </resources>
