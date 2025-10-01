@@ -1,6 +1,7 @@
 package com.example.loginandregistration
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +21,8 @@ class TasksFragment : Fragment() {
         private lateinit var recyclerTasks: RecyclerView
         private lateinit var taskAdapter: TaskAdapter
         private lateinit var taskRepository: TaskRepository
+        private var currentView: View? = null
+        private var currentFilter: String = "all"
 
         override fun onCreateView(
                 inflater: LayoutInflater,
@@ -27,12 +30,13 @@ class TasksFragment : Fragment() {
                 savedInstanceState: Bundle?
         ): View? {
                 val view = inflater.inflate(R.layout.fragment_tasks, container, false)
+                currentView = view
 
                 taskRepository = TaskRepository()
                 setupViews(view)
                 setupRecyclerView(view)
                 setupClickListeners(view)
-                loadTasksData()
+                setupRealTimeListeners()
 
                 return view
         }
@@ -58,74 +62,86 @@ class TasksFragment : Fragment() {
                 }
         }
 
-        private fun loadTasksData() {
+        private fun setupRealTimeListeners() {
+                // Real-time listener for task statistics
                 lifecycleScope.launch {
                         try {
-                                // Load tasks
-                                val tasks = taskRepository.getUserTasks()
-                                val displayTasks =
-                                        tasks.map { firebaseTask ->
-                                                Task(
-                                                        id = firebaseTask.id.hashCode(),
-                                                        title = firebaseTask.title,
-                                                        subtitle =
-                                                                "${firebaseTask.subject} • ${formatDueDate(firebaseTask.dueDate)}",
-                                                        status =
-                                                                firebaseTask.status
-                                                                        .replaceFirstChar {
-                                                                                it.uppercase()
-                                                                        },
-                                                        iconColor =
-                                                                getStatusColor(firebaseTask.status),
-                                                        statusColor =
-                                                                getStatusColor(firebaseTask.status)
+                                taskRepository.getTaskStatsFlow().collect { stats ->
+                                        currentView?.findViewById<android.widget.TextView>(
+                                                        R.id.tv_overdue_count
                                                 )
-                                        }
-
-                                // Update RecyclerView
-                                taskAdapter =
-                                        TaskAdapter(displayTasks) { task ->
-                                                Toast.makeText(
-                                                                context,
-                                                                getString(
-                                                                        R.string.task_clicked,
-                                                                        task.title
-                                                                ),
-                                                                Toast.LENGTH_SHORT
-                                                        )
-                                                        .show()
-                                        }
-                                recyclerTasks.adapter = taskAdapter
-
-                                // Load and update statistics
-                                val stats = taskRepository.getTaskStats()
-                                view?.findViewById<android.widget.TextView>(R.id.tv_overdue_count)
-                                        ?.text = stats.overdue.toString()
-                                view?.findViewById<android.widget.TextView>(R.id.tv_due_today_count)
-                                        ?.text = stats.dueToday.toString()
-                                view?.findViewById<android.widget.TextView>(R.id.tv_completed_count)
-                                        ?.text = stats.completed.toString()
+                                                ?.text = stats.overdue.toString()
+                                        currentView?.findViewById<android.widget.TextView>(
+                                                        R.id.tv_due_today_count
+                                                )
+                                                ?.text = stats.dueToday.toString()
+                                        currentView?.findViewById<android.widget.TextView>(
+                                                        R.id.tv_completed_count
+                                                )
+                                                ?.text = stats.completed.toString()
+                                }
                         } catch (e: Exception) {
-                                Toast.makeText(context, "Error loading tasks", Toast.LENGTH_SHORT)
-                                        .show()
-                                // Fall back to dummy data
-                                val dummyTasks = getDummyTasks()
-                                taskAdapter =
-                                        TaskAdapter(dummyTasks) { task ->
-                                                Toast.makeText(
-                                                                context,
-                                                                getString(
-                                                                        R.string.task_clicked,
-                                                                        task.title
-                                                                ),
-                                                                Toast.LENGTH_SHORT
-                                                        )
-                                                        .show()
-                                        }
-                                recyclerTasks.adapter = taskAdapter
+                                // Handle error silently
+                        }
+                }
+
+                // Real-time listener for user's tasks
+                lifecycleScope.launch {
+                        try {
+                                taskRepository.getUserTasksFlow().collect { firebaseTasks ->
+                                        updateTasksList(firebaseTasks)
+                                }
+                        } catch (e: Exception) {
+                                // Handle error silently, but don't show dummy data
+                                // Just log the error and continue with empty list
+                                Log.e("TasksFragment", "Error fetching tasks: ${e.message}")
+                                updateTasksList(emptyList())
                         }
                 }
         }
+
+        private fun updateTasksList(firebaseTasks: List<FirebaseTask>) {
+                val filteredTasks =
+                        when (currentFilter) {
+                                "personal" -> firebaseTasks.filter { it.category == "personal" }
+                                "group" -> firebaseTasks.filter { it.category == "group" }
+                                "assignments" ->
+                                        firebaseTasks.filter { it.category == "assignment" }
+                                else -> firebaseTasks
+                        }
+
+                val displayTasks =
+                        filteredTasks.map { firebaseTask ->
+                                Task(
+                                        id = firebaseTask.id.hashCode(),
+                                        title = firebaseTask.title,
+                                        subtitle =
+                                                "${firebaseTask.subject} • ${formatDueDate(firebaseTask.dueDate)}",
+                                        status =
+                                                firebaseTask.status.replaceFirstChar {
+                                                        it.uppercase()
+                                                },
+                                        iconColor = getStatusColor(firebaseTask.status),
+                                        statusColor = getStatusColor(firebaseTask.status)
+                                )
+                        }
+
+                taskAdapter =
+                        TaskAdapter(displayTasks) { task ->
+                                Toast.makeText(
+                                                context,
+                                                getString(
+                                                        R.string.task_clicked,
+                                                        task.title
+                                                ),
+                                                Toast.LENGTH_SHORT
+                                        )
+                                        .show()
+                        }
+                recyclerTasks.adapter = taskAdapter
+        }
+
+        // This is now handled by the updateTasksList method above
 
         private fun setupClickListeners(view: View) {
                 // Header buttons
@@ -153,6 +169,8 @@ class TasksFragment : Fragment() {
 
                 // Category buttons
                 view.findViewById<MaterialButton>(R.id.btn_all_tasks)?.setOnClickListener {
+                        currentFilter = "all"
+                        // No need to fetch tasks manually, the real-time listener will update with the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "All Tasks"),
@@ -162,6 +180,8 @@ class TasksFragment : Fragment() {
                 }
 
                 view.findViewById<MaterialButton>(R.id.btn_personal)?.setOnClickListener {
+                        currentFilter = "personal"
+                        // No need to fetch tasks manually, the real-time listener will update with the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Personal"),
@@ -171,6 +191,8 @@ class TasksFragment : Fragment() {
                 }
 
                 view.findViewById<MaterialButton>(R.id.btn_group)?.setOnClickListener {
+                        currentFilter = "group"
+                        // No need to fetch tasks manually, the real-time listener will update with the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Group"),
@@ -180,6 +202,8 @@ class TasksFragment : Fragment() {
                 }
 
                 view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
+                        currentFilter = "assignments"
+                        // No need to fetch tasks manually, the real-time listener will update with the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Assignments"),
@@ -490,7 +514,7 @@ class TasksFragment : Fragment() {
                                                 )
                                                 .show()
                                         dialog.dismiss()
-                                        loadTasksData() // Refresh the data
+                                        // Data will refresh automatically via real-time listener
                                 } else {
                                         Toast.makeText(
                                                         context,

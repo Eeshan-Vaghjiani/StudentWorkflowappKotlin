@@ -11,4 +11,9 @@
     <color name="overdue_color">#FF3B30</color>
     <color name="due_today_color">#FF9500</color>
     <color name="completed_color">#34C759</color>
+    
+    <!-- Enhanced Group Item Dark Colors -->
+    <color name="admin_badge_color">#FF9500</color>
+    <color name="join_code_background">#3A3A3C</color>
+    <color name="join_code_border">#48484A</color>
 </resources>

@@ -5,6 +5,9 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class TaskRepository {
@@ -169,6 +172,144 @@ class TaskRepository {
             )
         } catch (e: Exception) {
             DashboardTaskStats()
+        }
+    }
+
+    // Real-time listeners for task statistics
+    fun getUserTasksFlow(): Flow<List<FirebaseTask>> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener =
+                tasksCollection
+                        .whereEqualTo("userId", userId)
+                        .orderBy("dueDate", Query.Direction.ASCENDING)
+                        .addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                trySend(emptyList())
+                                return@addSnapshotListener
+                            }
+
+                            val tasks = snapshot?.toObjects(FirebaseTask::class.java) ?: emptyList()
+                            trySend(tasks)
+                        }
+
+        awaitClose { listener.remove() }
+    }
+
+    fun getTaskStatsFlow(): Flow<TaskStats> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(TaskStats())
+            close()
+            return@callbackFlow
+        }
+
+        val listener =
+                tasksCollection.whereEqualTo("userId", userId).addSnapshotListener { snapshot, error
+                    ->
+                    if (error != null) {
+                        trySend(TaskStats())
+                        return@addSnapshotListener
+                    }
+
+                    val tasks = snapshot?.toObjects(FirebaseTask::class.java) ?: emptyList()
+                    val now = Timestamp.now()
+
+                    var overdue = 0
+                    var dueToday = 0
+                    var completed = 0
+
+                    tasks.forEach { task ->
+                        when {
+                            task.status == "completed" -> completed++
+                            task.dueDate != null && task.dueDate!! < now -> overdue++
+                            task.dueDate != null && isSameDay(task.dueDate!!, now) -> dueToday++
+                        }
+                    }
+
+                    trySend(TaskStats(overdue, dueToday, completed))
+                }
+
+        awaitClose { listener.remove() }
+    }
+
+    fun getDashboardTaskStatsFlow(): Flow<DashboardTaskStats> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(DashboardTaskStats())
+            close()
+            return@callbackFlow
+        }
+
+        val listener =
+                tasksCollection.whereEqualTo("userId", userId).addSnapshotListener { snapshot, error
+                    ->
+                    if (error != null) {
+                        trySend(DashboardTaskStats())
+                        return@addSnapshotListener
+                    }
+
+                    val tasks = snapshot?.toObjects(FirebaseTask::class.java) ?: emptyList()
+                    val now = Timestamp.now()
+
+                    var tasksDue = 0
+                    var overdue = 0
+                    var dueToday = 0
+                    var completed = 0
+
+                    tasks.forEach { task ->
+                        when {
+                            task.status == "completed" -> completed++
+                            task.dueDate != null && task.dueDate!! < now -> {
+                                overdue++
+                                tasksDue++
+                            }
+                            task.dueDate != null && isSameDay(task.dueDate!!, now) -> {
+                                dueToday++
+                                tasksDue++
+                            }
+                            task.dueDate != null -> tasksDue++
+                        }
+                    }
+
+                    trySend(DashboardTaskStats(tasksDue, overdue, dueToday, completed))
+                }
+
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun getTasksByCategory(category: String): List<FirebaseTask> {
+        val userId = auth.currentUser?.uid ?: return emptyList()
+        return try {
+            tasksCollection
+                    .whereEqualTo("userId", userId)
+                    .whereEqualTo("category", category)
+                    .orderBy("dueDate", Query.Direction.ASCENDING)
+                    .get()
+                    .await()
+                    .toObjects(FirebaseTask::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getTasksByStatus(status: String): List<FirebaseTask> {
+        val userId = auth.currentUser?.uid ?: return emptyList()
+        return try {
+            tasksCollection
+                    .whereEqualTo("userId", userId)
+                    .whereEqualTo("status", status)
+                    .orderBy("dueDate", Query.Direction.ASCENDING)
+                    .get()
+                    .await()
+                    .toObjects(FirebaseTask::class.java)
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 }
