@@ -26,6 +26,13 @@
         <activity
             android:name=".GroupsActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".GroupsTestActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SimpleGroupsDemo"
+            android:exported="false" />
         <activity
             android:name=".GroupDetailsActivity"
             android:exported="false" /> <!-- Login Activity (Launcher) -->
