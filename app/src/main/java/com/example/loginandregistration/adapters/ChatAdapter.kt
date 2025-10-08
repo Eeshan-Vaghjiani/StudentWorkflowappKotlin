@@ -1,6 +1,5 @@
 package com.example.loginandregistration.adapters
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +12,7 @@ import coil.load
 import coil.transform.CircleCropTransformation
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Chat
+import com.example.loginandregistration.utils.DefaultAvatarGenerator
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -80,13 +80,13 @@ class ChatAdapter(private val currentUserId: String, private val onChatClick: (C
                 profileImageView.visibility = View.GONE
                 avatarTextView.visibility = View.VISIBLE
 
-                // Generate avatar with initials
+                // Generate avatar with initials using DefaultAvatarGenerator
                 val displayName = chat.getDisplayName(currentUserId)
-                val initials = getInitials(displayName)
+                val initials = DefaultAvatarGenerator.getInitials(displayName)
                 avatarTextView.text = initials
 
                 // Generate color based on chat ID for consistency
-                val color = generateColorFromString(chat.chatId)
+                val color = DefaultAvatarGenerator.generateColorFromString(chat.chatId)
                 avatarTextView.setBackgroundColor(color)
             }
 
@@ -127,33 +127,7 @@ class ChatAdapter(private val currentUserId: String, private val onChatClick: (C
             }
         }
 
-        private fun getInitials(name: String): String {
-            val names = name.trim().split(" ")
-            return when {
-                names.size >= 2 -> "${names[0].first()}${names[1].first()}".uppercase()
-                names.isNotEmpty() -> names[0].take(2).uppercase()
-                else -> "?"
-            }
-        }
 
-        private fun generateColorFromString(str: String): Int {
-            // Generate a consistent color based on the string
-            val hash = str.hashCode()
-            val colors =
-                    listOf(
-                            Color.parseColor("#FF6B6B"), // Red
-                            Color.parseColor("#4ECDC4"), // Teal
-                            Color.parseColor("#45B7D1"), // Blue
-                            Color.parseColor("#FFA07A"), // Orange
-                            Color.parseColor("#98D8C8"), // Mint
-                            Color.parseColor("#F7DC6F"), // Yellow
-                            Color.parseColor("#BB8FCE"), // Purple
-                            Color.parseColor("#85C1E2"), // Sky Blue
-                            Color.parseColor("#F8B88B"), // Peach
-                            Color.parseColor("#A8E6CF") // Light Green
-                    )
-            return colors[Math.abs(hash) % colors.size]
-        }
     }
 
     class ChatDiffCallback : DiffUtil.ItemCallback<Chat>() {

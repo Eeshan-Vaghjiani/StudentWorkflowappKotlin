@@ -320,7 +320,11 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Display profile picture in UI
   - _Requirements: 3.8, 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 19. Display profile pictures throughout app
+- [x] 19. Display profile pictures throughout app
+
+
+
+
   - Load profile pictures in ChatAdapter
   - Load profile pictures in MessageAdapter
   - Load profile pictures in MembersAdapter

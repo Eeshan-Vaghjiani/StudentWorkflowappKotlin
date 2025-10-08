@@ -1,6 +1,5 @@
 package com.example.loginandregistration.adapters
 
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +12,7 @@ import coil.load
 import coil.transform.CircleCropTransformation
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.UserInfo
+import com.example.loginandregistration.utils.DefaultAvatarGenerator
 
 class UserSearchAdapter(private val onUserClick: (UserInfo) -> Unit) :
         ListAdapter<UserInfo, UserSearchAdapter.UserViewHolder>(UserDiffCallback()) {
@@ -57,36 +57,17 @@ class UserSearchAdapter(private val onUserClick: (UserInfo) -> Unit) :
                 profileImageView.visibility = View.GONE
                 avatarTextView.visibility = View.VISIBLE
 
-                // Generate avatar with initials
-                val initials = user.getInitials()
+                // Generate avatar with initials using DefaultAvatarGenerator
+                val initials = DefaultAvatarGenerator.getInitials(user.displayName)
                 avatarTextView.text = initials
 
                 // Generate color based on user ID for consistency
-                val color = generateColorFromString(user.userId)
+                val color = DefaultAvatarGenerator.generateColorFromString(user.userId)
                 avatarTextView.setBackgroundColor(color)
             }
 
             // Set click listener
             itemView.setOnClickListener { onUserClick(user) }
-        }
-
-        private fun generateColorFromString(str: String): Int {
-            // Generate a consistent color based on the string
-            val hash = str.hashCode()
-            val colors =
-                    listOf(
-                            Color.parseColor("#FF6B6B"), // Red
-                            Color.parseColor("#4ECDC4"), // Teal
-                            Color.parseColor("#45B7D1"), // Blue
-                            Color.parseColor("#FFA07A"), // Orange
-                            Color.parseColor("#98D8C8"), // Mint
-                            Color.parseColor("#F7DC6F"), // Yellow
-                            Color.parseColor("#BB8FCE"), // Purple
-                            Color.parseColor("#85C1E2"), // Sky Blue
-                            Color.parseColor("#F8B88B"), // Peach
-                            Color.parseColor("#A8E6CF") // Light Green
-                    )
-            return colors[Math.abs(hash) % colors.size]
         }
     }
 

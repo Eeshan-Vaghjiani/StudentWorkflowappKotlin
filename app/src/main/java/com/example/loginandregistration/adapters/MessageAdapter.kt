@@ -1,6 +1,7 @@
 package com.example.loginandregistration.adapters
 
 import android.content.Intent
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,9 +11,11 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import coil.transform.CircleCropTransformation
 import com.example.loginandregistration.ImageViewerActivity
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
+import com.example.loginandregistration.utils.DefaultAvatarGenerator
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -330,17 +333,28 @@ class MessageAdapter(
                 senderNameTextView.visibility = View.VISIBLE
                 senderNameTextView.text = message.senderName
 
-                // Show avatar with initials
-                senderAvatarTextView.text = getInitials(message.senderName)
-                senderAvatarTextView.visibility = View.VISIBLE
-                senderProfileImageView.visibility = View.GONE
-
-                // TODO: Load profile image if available using Coil
-                // if (message.senderImageUrl.isNotEmpty()) {
-                //     senderProfileImageView.load(message.senderImageUrl)
-                //     senderProfileImageView.visibility = View.VISIBLE
-                //     senderAvatarTextView.visibility = View.GONE
-                // }
+                // Load profile image if available, otherwise show avatar with initials
+                if (message.senderImageUrl.isNotEmpty()) {
+                    senderProfileImageView.visibility = View.VISIBLE
+                    senderAvatarTextView.visibility = View.GONE
+                    senderProfileImageView.load(message.senderImageUrl) {
+                        crossfade(true)
+                        transformations(CircleCropTransformation())
+                        placeholder(android.R.drawable.ic_menu_gallery)
+                        error(android.R.drawable.ic_menu_gallery)
+                    }
+                } else {
+                    senderProfileImageView.visibility = View.GONE
+                    senderAvatarTextView.visibility = View.VISIBLE
+                    
+                    // Generate avatar with initials
+                    val initials = DefaultAvatarGenerator.getInitials(message.senderName)
+                    senderAvatarTextView.text = initials
+                    
+                    // Generate consistent color based on sender ID
+                    val color = DefaultAvatarGenerator.generateColorFromString(message.senderId)
+                    senderAvatarTextView.setBackgroundColor(color)
+                }
             } else {
                 senderNameTextView.visibility = View.GONE
                 senderAvatarTextView.visibility = View.INVISIBLE

@@ -4,8 +4,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import coil.transform.CircleCropTransformation
+import com.example.loginandregistration.utils.DefaultAvatarGenerator
 import com.google.android.material.chip.Chip
 
 class MembersAdapter(
@@ -14,6 +18,7 @@ class MembersAdapter(
 ) : RecyclerView.Adapter<MembersAdapter.MemberViewHolder>() {
 
     class MemberViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val profileImageView: ImageView = itemView.findViewById(R.id.profileImageView)
         val memberInitial: TextView = itemView.findViewById(R.id.tv_member_initial)
         val memberName: TextView = itemView.findViewById(R.id.tv_member_name)
         val memberEmail: TextView = itemView.findViewById(R.id.tv_member_email)
@@ -32,8 +37,28 @@ class MembersAdapter(
         holder.memberName.text = member.name
         holder.memberEmail.text = member.email
 
-        // Set member initial
-        holder.memberInitial.text = member.name.firstOrNull()?.toString()?.uppercase() ?: "?"
+        // Load profile image or show avatar with initials
+        if (member.profileImageUrl.isNotEmpty()) {
+            holder.profileImageView.visibility = View.VISIBLE
+            holder.memberInitial.visibility = View.GONE
+            holder.profileImageView.load(member.profileImageUrl) {
+                crossfade(true)
+                transformations(CircleCropTransformation())
+                placeholder(R.drawable.circle_background)
+                error(R.drawable.circle_background)
+            }
+        } else {
+            holder.profileImageView.visibility = View.GONE
+            holder.memberInitial.visibility = View.VISIBLE
+            
+            // Generate avatar with initials using DefaultAvatarGenerator
+            val initials = DefaultAvatarGenerator.getInitials(member.name)
+            holder.memberInitial.text = initials
+            
+            // Generate consistent color based on user ID
+            val color = DefaultAvatarGenerator.generateColorFromString(member.userId)
+            holder.memberInitial.setBackgroundColor(color)
+        }
 
         // Show role
         if (member.isAdmin) {

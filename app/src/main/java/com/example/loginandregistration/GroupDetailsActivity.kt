@@ -154,12 +154,17 @@ class GroupDetailsActivity : AppCompatActivity() {
             try {
                 val memberList =
                         members.map { member ->
+                            // Fetch user profile image from users collection
+                            val firebaseUser = userRepository.getUserById(member.userId)
+                            val profileImageUrl = firebaseUser?.photoUrl ?: ""
+                            
                             Member(
                                     userId = member.userId,
                                     name = member.displayName,
                                     email = member.email,
                                     isAdmin = member.role in listOf("owner", "admin"),
-                                    isOnline = member.isActive
+                                    isOnline = member.isActive,
+                                    profileImageUrl = profileImageUrl
                             )
                         }
 
@@ -421,5 +426,6 @@ data class Member(
         val name: String,
         val email: String,
         val isAdmin: Boolean,
-        val isOnline: Boolean
+        val isOnline: Boolean,
+        val profileImageUrl: String = ""
 )
