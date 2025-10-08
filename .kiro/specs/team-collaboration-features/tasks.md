@@ -288,7 +288,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Handle upload failures with retry option
   - _Requirements: 3.6, 3.7, 3.9_
 
-- [ ] 17. Add image viewer and document download
+- [x] 17. Add image viewer and document download
+
+
+
+
+
   - Create `ImageViewerActivity.kt` for full-screen images
   - Implement pinch-to-zoom for images
   - Add swipe-to-dismiss gesture

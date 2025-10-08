@@ -2,18 +2,25 @@ package com.example.loginandregistration
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.loginandregistration.adapters.MessageAdapter
 import com.example.loginandregistration.databinding.ActivityChatRoomBinding
+import com.example.loginandregistration.models.Message
+import com.example.loginandregistration.repository.StorageRepository
 import com.example.loginandregistration.viewmodels.ChatRoomViewModel
 import com.example.loginandregistration.viewmodels.ChatRoomViewModelFactory
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
+import java.io.File
 
 class ChatRoomActivity : AppCompatActivity() {
 
@@ -28,11 +35,15 @@ class ChatRoomActivity : AppCompatActivity() {
     private val viewModel: ChatRoomViewModel by viewModels { ChatRoomViewModelFactory(application) }
     private var typingTimer: android.os.Handler? = null
     private var isTyping = false
+    private lateinit var storageRepository: StorageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityChatRoomBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Initialize storage repository
+        storageRepository = StorageRepository(context = applicationContext)
 
         // Handle both regular intents and notification intents
         val chatId = intent.getStringExtra(EXTRA_CHAT_ID) ?: intent.getStringExtra("chatId")
@@ -107,6 +118,9 @@ class ChatRoomActivity : AppCompatActivity() {
                                     }
                                     .setNegativeButton("Cancel", null)
                                     .show()
+                        },
+                        onDocumentClick = { message ->
+                            handleDocumentClick(message)
                         }
                 )
 
@@ -426,6 +440,117 @@ class ChatRoomActivity : AppCompatActivity() {
             names.size >= 2 -> "${names[0].first()}${names[1].first()}".uppercase()
             names.isNotEmpty() -> names[0].take(2).uppercase()
             else -> "?"
+        }
+    }
+
+    private fun handleDocumentClick(message: Message) {
+        val documentUrl = message.documentUrl ?: return
+        val documentName = message.documentName ?: "document"
+
+        lifecycleScope.launch {
+            try {
+                // Show progress dialog
+                val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
+                    .setTitle("Downloading Document")
+                    .setMessage("0%")
+                    .setCancelable(false)
+                    .create()
+                progressDialog.show()
+
+                // Create destination file in Downloads folder
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+                val destinationFile = File(downloadsDir, documentName)
+
+                // Download file
+                val result = storageRepository.downloadFile(
+                    url = documentUrl,
+                    destinationFile = destinationFile,
+                    onProgress = { progress ->
+                        runOnUiThread {
+                            progressDialog.setMessage("$progress%")
+                        }
+                    }
+                )
+
+                progressDialog.dismiss()
+
+                result.fold(
+                    onSuccess = { file ->
+                        // Notify media scanner
+                        sendBroadcast(
+                            Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply {
+                                data = android.net.Uri.fromFile(file)
+                            }
+                        )
+
+                        // Try to open the document
+                        openDocument(file)
+                    },
+                    onFailure = { error ->
+                        Snackbar.make(
+                            binding.root,
+                            "Download failed: ${error.message}",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                    }
+                )
+            } catch (e: Exception) {
+                Snackbar.make(
+                    binding.root,
+                    "Error: ${e.message}",
+                    Snackbar.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun openDocument(file: File) {
+        try {
+            // Get MIME type
+            val mimeType = getMimeType(file.name) ?: "*/*"
+
+            // Create content URI using FileProvider
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+
+            // Create intent to open document
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            // Check if there's an app that can handle this intent
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(intent)
+            } else {
+                // No app can open this file type
+                Snackbar.make(
+                    binding.root,
+                    "No app found to open this file type. File saved to Downloads.",
+                    Snackbar.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            Snackbar.make(
+                binding.root,
+                "Cannot open document: ${e.message}. File saved to Downloads.",
+                Snackbar.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun getMimeType(fileName: String): String? {
+        val extension = fileName.substringAfterLast('.', "")
+        return if (extension.isNotEmpty()) {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase())
+        } else {
+            null
         }
     }
 }

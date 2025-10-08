@@ -1,5 +1,6 @@
 package com.example.loginandregistration.adapters
 
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,6 +10,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.example.loginandregistration.ImageViewerActivity
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
 import java.text.SimpleDateFormat
@@ -16,7 +18,8 @@ import java.util.*
 
 class MessageAdapter(
         private val currentUserId: String,
-        private val onRetryMessage: ((Message) -> Unit)? = null
+        private val onRetryMessage: ((Message) -> Unit)? = null,
+        private val onDocumentClick: ((Message) -> Unit)? = null
 ) : ListAdapter<MessageAdapter.MessageItem, RecyclerView.ViewHolder>(MessageDiffCallback()) {
 
     companion object {
@@ -66,8 +69,8 @@ class MessageAdapter(
         when (val item = getItem(position)) {
             is MessageItem.MessageData -> {
                 when (holder) {
-                    is SentMessageViewHolder -> holder.bind(item.message, onRetryMessage)
-                    is ReceivedMessageViewHolder -> holder.bind(item.message, item.showSenderInfo)
+                    is SentMessageViewHolder -> holder.bind(item.message, onRetryMessage, onDocumentClick)
+                    is ReceivedMessageViewHolder -> holder.bind(item.message, item.showSenderInfo, onDocumentClick)
                 }
             }
             is MessageItem.TimestampHeader -> {
@@ -136,7 +139,7 @@ class MessageAdapter(
         private val readReceiptImageView: ImageView =
                 itemView.findViewById(R.id.readReceiptImageView)
 
-        fun bind(message: Message, onRetryMessage: ((Message) -> Unit)?) {
+        fun bind(message: Message, onRetryMessage: ((Message) -> Unit)?, onDocumentClick: ((Message) -> Unit)?) {
             // Handle document messages
             if (message.hasDocument()) {
                 documentContainer.visibility = View.VISIBLE
@@ -151,7 +154,7 @@ class MessageAdapter(
                 
                 // Click to download/open document
                 documentContainer.setOnClickListener {
-                    // TODO: Download and open document in task 17
+                    onDocumentClick?.invoke(message)
                 }
             }
             // Handle image messages
@@ -169,7 +172,10 @@ class MessageAdapter(
                 
                 // Click to view full screen
                 messageImageView.setOnClickListener {
-                    // TODO: Open ImageViewerActivity in task 17
+                    val intent = Intent(itemView.context, ImageViewerActivity::class.java).apply {
+                        putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, message.imageUrl)
+                    }
+                    itemView.context.startActivity(intent)
                 }
             } else {
                 messageImageView.visibility = View.GONE
@@ -273,7 +279,7 @@ class MessageAdapter(
         private val documentSizeTextView: TextView = itemView.findViewById(R.id.documentSizeTextView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
 
-        fun bind(message: Message, showSenderInfo: Boolean) {
+        fun bind(message: Message, showSenderInfo: Boolean, onDocumentClick: ((Message) -> Unit)?) {
             // Handle document messages
             if (message.hasDocument()) {
                 documentContainer.visibility = View.VISIBLE
@@ -288,7 +294,7 @@ class MessageAdapter(
                 
                 // Click to download/open document
                 documentContainer.setOnClickListener {
-                    // TODO: Download and open document in task 17
+                    onDocumentClick?.invoke(message)
                 }
             }
             // Handle image messages
@@ -306,7 +312,10 @@ class MessageAdapter(
                 
                 // Click to view full screen
                 messageImageView.setOnClickListener {
-                    // TODO: Open ImageViewerActivity in task 17
+                    val intent = Intent(itemView.context, ImageViewerActivity::class.java).apply {
+                        putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, message.imageUrl)
+                    }
+                    itemView.context.startActivity(intent)
                 }
             } else {
                 messageImageView.visibility = View.GONE
