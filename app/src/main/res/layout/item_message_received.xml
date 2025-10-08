@@ -58,6 +58,19 @@
             android:orientation="vertical"
             android:padding="12dp">
 
+            <!-- Image message -->
+            <ImageView
+                android:id="@+id/messageImageView"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_marginBottom="4dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="Image message"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                tools:src="@android:drawable/ic_menu_gallery" />
+
+            <!-- Text message -->
             <TextView
                 android:id="@+id/messageTextView"
                 android:layout_width="wrap_content"

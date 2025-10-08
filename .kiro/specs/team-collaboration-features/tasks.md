@@ -248,6 +248,7 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 
 
+
   - Create `AttachmentBottomSheet.kt` dialog
   - Add options: Camera, Gallery, Documents
   - Request CAMERA permission when camera selected
@@ -257,7 +258,11 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Show attachment button in chat input area
   - _Requirements: 3.1, 3.10_
 
-- [ ] 15. Implement image message sending
+- [x] 15. Implement image message sending
+
+
+
+
   - Update `sendImageMessage()` in ChatRepository
   - Compress image before upload
   - Upload to Storage at `chat_images/{chatId}/{timestamp}.jpg`

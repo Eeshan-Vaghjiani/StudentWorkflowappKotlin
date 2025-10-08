@@ -1,6 +1,7 @@
 package com.example.loginandregistration.repository
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.utils.OfflineMessageQueue
@@ -20,6 +21,7 @@ class ChatRepository(
         private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
         private val context: Context? = null
 ) {
+    private val storageRepository: StorageRepository? = context?.let { StorageRepository(storage, auth, it) }
     companion object {
         private const val TAG = "ChatRepository"
         private const val CHATS_COLLECTION = "chats"
@@ -434,6 +436,116 @@ class ChatRepository(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending message", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sends an image message to a chat.
+     * Compresses the image before upload and shows progress.
+     * 
+     * @param chatId ID of the chat
+     * @param imageUri URI of the image to send
+     * @param onProgress Callback for upload progress (0-100)
+     * @return Result with the sent message on success
+     */
+    suspend fun sendImageMessage(
+        chatId: String,
+        imageUri: Uri,
+        onProgress: (Int) -> Unit = {}
+    ): Result<Message> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            if (storageRepository == null) {
+                return Result.failure(Exception("Storage repository not initialized"))
+            }
+
+            Log.d(TAG, "sendImageMessage: Starting image upload for chat $chatId")
+
+            val currentUser = getUserInfo(getCurrentUserId()).getOrNull()
+                ?: return Result.failure(Exception("User not found"))
+
+            // Create message ID first
+            val messageId = firestore
+                .collection(CHATS_COLLECTION)
+                .document(chatId)
+                .collection(MESSAGES_COLLECTION)
+                .document()
+                .id
+
+            // Create temporary message with SENDING status
+            val tempMessage = Message(
+                id = messageId,
+                chatId = chatId,
+                senderId = getCurrentUserId(),
+                senderName = currentUser.displayName,
+                senderImageUrl = currentUser.profileImageUrl,
+                text = "", // Empty text for image messages
+                imageUrl = null, // Will be set after upload
+                timestamp = Date(),
+                readBy = listOf(getCurrentUserId()),
+                status = MessageStatus.SENDING
+            )
+
+            // Queue message for offline support
+            offlineQueue?.queueMessage(tempMessage)
+
+            try {
+                // Upload image to Storage
+                val storagePath = storageRepository.getChatImagePath(chatId)
+                val uploadResult = storageRepository.uploadImage(
+                    uri = imageUri,
+                    path = storagePath,
+                    onProgress = onProgress
+                )
+
+                if (uploadResult.isFailure) {
+                    Log.e(TAG, "sendImageMessage: Image upload failed", uploadResult.exceptionOrNull())
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                        uploadResult.exceptionOrNull() ?: Exception("Image upload failed")
+                    )
+                }
+
+                val imageUrl = uploadResult.getOrThrow()
+                Log.d(TAG, "sendImageMessage: Image uploaded successfully: $imageUrl")
+
+                // Create final message with image URL
+                val message = tempMessage.copy(
+                    imageUrl = imageUrl,
+                    status = MessageStatus.SENT
+                )
+
+                // Save message to Firestore
+                firestore
+                    .collection(CHATS_COLLECTION)
+                    .document(chatId)
+                    .collection(MESSAGES_COLLECTION)
+                    .document(messageId)
+                    .set(message)
+                    .await()
+
+                // Update chat's last message
+                updateChatLastMessage(chatId, "📷 Photo", getCurrentUserId())
+
+                // Remove from queue on success
+                offlineQueue?.removeMessage(messageId)
+
+                // Trigger notifications for recipients
+                triggerNotifications(chatId, message.copy(text = "📷 Photo"))
+
+                Log.d(TAG, "sendImageMessage: Image message sent successfully")
+                Result.success(message)
+            } catch (sendError: Exception) {
+                Log.e(TAG, "sendImageMessage: Error sending image message", sendError)
+                offlineQueue?.markMessageAsFailed(messageId)
+                Result.failure(sendError)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendImageMessage: Unexpected error", e)
             Result.failure(e)
         }
     }

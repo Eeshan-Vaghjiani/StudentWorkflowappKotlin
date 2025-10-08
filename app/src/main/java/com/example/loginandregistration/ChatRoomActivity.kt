@@ -360,11 +360,31 @@ class ChatRoomActivity : AppCompatActivity() {
     }
 
     private fun handleImageSelected(uri: android.net.Uri) {
-        Toast.makeText(this, "Image selected: $uri", Toast.LENGTH_SHORT).show()
-        // TODO: Implement image upload in next task
-        // lifecycleScope.launch {
-        //     viewModel.sendImageMessage(uri)
-        // }
+        lifecycleScope.launch {
+            // Show progress dialog
+            val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
+                .setTitle("Uploading Image")
+                .setMessage("0%")
+                .setCancelable(false)
+                .create()
+            progressDialog.show()
+
+            try {
+                viewModel.sendImageMessage(uri) { progress ->
+                    runOnUiThread {
+                        progressDialog.setMessage("$progress%")
+                    }
+                }
+                progressDialog.dismiss()
+            } catch (e: Exception) {
+                progressDialog.dismiss()
+                Toast.makeText(
+                    this@ChatRoomActivity,
+                    "Failed to send image: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     private fun handleDocumentSelected(uri: android.net.Uri) {

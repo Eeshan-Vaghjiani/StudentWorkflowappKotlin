@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
 import java.text.SimpleDateFormat
@@ -126,11 +127,33 @@ class MessageAdapter(
 
     class SentMessageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
+        private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
         private val readReceiptImageView: ImageView =
                 itemView.findViewById(R.id.readReceiptImageView)
 
         fun bind(message: Message, onRetryMessage: ((Message) -> Unit)?) {
+            // Handle image messages
+            if (message.hasImage()) {
+                messageImageView.visibility = View.VISIBLE
+                messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+                
+                // Load image using Coil
+                messageImageView.load(message.imageUrl) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_report_image)
+                }
+                
+                // Click to view full screen
+                messageImageView.setOnClickListener {
+                    // TODO: Open ImageViewerActivity in task 17
+                }
+            } else {
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility = View.VISIBLE
+            }
+            
             messageTextView.text = message.text
             timestampTextView.text = formatTime(message.timestamp?.time ?: 0)
 
@@ -208,9 +231,31 @@ class MessageAdapter(
                 itemView.findViewById(R.id.senderAvatarTextView)
         private val senderNameTextView: TextView = itemView.findViewById(R.id.senderNameTextView)
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
+        private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
 
         fun bind(message: Message, showSenderInfo: Boolean) {
+            // Handle image messages
+            if (message.hasImage()) {
+                messageImageView.visibility = View.VISIBLE
+                messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+                
+                // Load image using Coil
+                messageImageView.load(message.imageUrl) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_report_image)
+                }
+                
+                // Click to view full screen
+                messageImageView.setOnClickListener {
+                    // TODO: Open ImageViewerActivity in task 17
+                }
+            } else {
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility = View.VISIBLE
+            }
+            
             messageTextView.text = message.text
             timestampTextView.text = formatTime(message.timestamp?.time ?: 0)
 

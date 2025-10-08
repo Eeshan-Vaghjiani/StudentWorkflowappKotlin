@@ -134,6 +134,34 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /**
+     * Sends an image message to the current chat.
+     * 
+     * @param imageUri URI of the image to send
+     * @param onProgress Callback for upload progress (0-100)
+     */
+    suspend fun sendImageMessage(
+        imageUri: android.net.Uri,
+        onProgress: (Int) -> Unit = {}
+    ) {
+        val chatId = currentChatId ?: return
+
+        _isSending.value = true
+
+        try {
+            val result = chatRepository.sendImageMessage(chatId, imageUri, onProgress)
+
+            if (result.isFailure) {
+                _error.value = "Failed to send image: ${result.exceptionOrNull()?.message}"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending image message", e)
+            _error.value = "Failed to send image: ${e.message}"
+        } finally {
+            _isSending.value = false
+        }
+    }
+
     private fun markMessagesAsRead(chatId: String, messageIds: List<String>) {
         viewModelScope.launch {
             try {
