@@ -304,7 +304,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Handle case when no app can open document
   - _Requirements: 3.5, 3.7_
 
-- [ ] 18. Implement profile picture upload
+- [x] 18. Implement profile picture upload
+
+
+
+
+
   - Update `ProfileFragment.kt` with edit button
   - Show options: Take Photo, Choose from Gallery
   - Implement `uploadProfilePicture()` in StorageRepository
