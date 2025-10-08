@@ -1,7 +1,6 @@
 // app/src/main/java/com/example/loginandregistration/GroupsIntegrationExample.kt
 package com.example.loginandregistration
 
-import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
@@ -21,12 +20,13 @@ class GroupsIntegrationExample : AppCompatActivity() {
                     text = "Open New Groups Screen (Compose)"
                     setOnClickListener {
                         // Launch the new Compose-based Groups screen
-                        val intent =
-                                Intent(
-                                        this@GroupsIntegrationExample,
-                                        GroupsComposeActivity::class.java
-                                )
-                        startActivity(intent)
+                        // TODO: Fix GroupsComposeActivity reference
+                        // val intent =
+                        //         Intent(
+                        //                 this@GroupsIntegrationExample,
+                        //                 GroupsComposeActivity::class.java
+                        //         )
+                        // startActivity(intent)
                     }
                 }
 
@@ -36,6 +36,7 @@ class GroupsIntegrationExample : AppCompatActivity() {
 
 /** Extension function to easily launch the Groups screen from any Activity */
 fun android.app.Activity.launchGroupsScreen() {
-    val intent = Intent(this, GroupsComposeActivity::class.java)
-    startActivity(intent)
+    // TODO: Fix GroupsComposeActivity reference
+    // val intent = Intent(this, GroupsComposeActivity::class.java)
+    // startActivity(intent)
 }

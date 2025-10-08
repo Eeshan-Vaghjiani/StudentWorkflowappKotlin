@@ -1,6 +1,8 @@
 package com.example.loginandregistration.repository
 
+import android.content.Context
 import com.example.loginandregistration.models.FirebaseTask
+import com.example.loginandregistration.utils.TaskReminderScheduler
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -10,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-class TaskRepository {
+class TaskRepository(private val context: Context? = null) {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private val tasksCollection = db.collection("tasks")
@@ -39,7 +41,15 @@ class TaskRepository {
                             updatedAt = Timestamp.now()
                     )
             val docRef = tasksCollection.add(taskWithUser).await()
-            docRef.id
+            val taskId = docRef.id
+
+            // Schedule reminder notification if context is available
+            context?.let {
+                val taskWithId = taskWithUser.copy(id = taskId)
+                TaskReminderScheduler.scheduleReminder(it, taskWithId)
+            }
+
+            taskId
         } catch (e: Exception) {
             null
         }
@@ -50,6 +60,27 @@ class TaskRepository {
             val updatesWithTimestamp = updates.toMutableMap()
             updatesWithTimestamp["updatedAt"] = Timestamp.now()
             tasksCollection.document(taskId).update(updatesWithTimestamp).await()
+
+            // If due date or status changed, reschedule reminder
+            context?.let {
+                if (updates.containsKey("dueDate") || updates.containsKey("status")) {
+                    // Fetch updated task to reschedule
+                    val updatedTask =
+                            tasksCollection
+                                    .document(taskId)
+                                    .get()
+                                    .await()
+                                    .toObject(FirebaseTask::class.java)
+                    updatedTask?.let { task ->
+                        if (task.status == "completed") {
+                            TaskReminderScheduler.cancelReminder(it, taskId)
+                        } else {
+                            TaskReminderScheduler.rescheduleReminder(it, task)
+                        }
+                    }
+                }
+            }
+
             true
         } catch (e: Exception) {
             false
@@ -58,6 +89,9 @@ class TaskRepository {
 
     suspend fun deleteTask(taskId: String): Boolean {
         return try {
+            // Cancel reminder before deleting task
+            context?.let { TaskReminderScheduler.cancelReminder(it, taskId) }
+
             tasksCollection.document(taskId).delete().await()
             true
         } catch (e: Exception) {
@@ -122,6 +156,9 @@ class TaskRepository {
 
     suspend fun completeTask(taskId: String): Boolean {
         return try {
+            // Cancel reminder when task is completed
+            context?.let { TaskReminderScheduler.cancelReminder(it, taskId) }
+
             tasksCollection
                     .document(taskId)
                     .update(

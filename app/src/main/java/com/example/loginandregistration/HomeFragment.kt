@@ -76,6 +76,10 @@ class HomeFragment : Fragment() {
                                         (activity as? MainActivity)?.navigateToProfile()
                                         true
                                     }
+                                    R.id.action_debug -> {
+                                        startActivity(android.content.Intent(requireContext(), DebugActivity::class.java))
+                                        true
+                                    }
                                     else -> false
                                 }
                             }

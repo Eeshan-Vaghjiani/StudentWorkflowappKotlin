@@ -14,4 +14,10 @@
         android:icon="@android:drawable/ic_menu_myplaces"
         app:showAsAction="ifRoom" />
 
+    <item
+        android:id="@+id/action_debug"
+        android:title="Debug Tools"
+        android:icon="@android:drawable/ic_menu_info_details"
+        app:showAsAction="never" />
+
 </menu>

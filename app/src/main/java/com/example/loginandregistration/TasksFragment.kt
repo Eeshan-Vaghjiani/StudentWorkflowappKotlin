@@ -32,7 +32,7 @@ class TasksFragment : Fragment() {
                 val view = inflater.inflate(R.layout.fragment_tasks, container, false)
                 currentView = view
 
-                taskRepository = TaskRepository()
+                taskRepository = TaskRepository(requireContext())
                 setupViews(view)
                 setupRecyclerView(view)
                 setupClickListeners(view)
@@ -130,10 +130,7 @@ class TasksFragment : Fragment() {
                         TaskAdapter(displayTasks) { task ->
                                 Toast.makeText(
                                                 context,
-                                                getString(
-                                                        R.string.task_clicked,
-                                                        task.title
-                                                ),
+                                                getString(R.string.task_clicked, task.title),
                                                 Toast.LENGTH_SHORT
                                         )
                                         .show()
@@ -170,7 +167,8 @@ class TasksFragment : Fragment() {
                 // Category buttons
                 view.findViewById<MaterialButton>(R.id.btn_all_tasks)?.setOnClickListener {
                         currentFilter = "all"
-                        // No need to fetch tasks manually, the real-time listener will update with the new filter
+                        // No need to fetch tasks manually, the real-time listener will update with
+                        // the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "All Tasks"),
@@ -181,7 +179,8 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_personal)?.setOnClickListener {
                         currentFilter = "personal"
-                        // No need to fetch tasks manually, the real-time listener will update with the new filter
+                        // No need to fetch tasks manually, the real-time listener will update with
+                        // the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Personal"),
@@ -192,7 +191,8 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_group)?.setOnClickListener {
                         currentFilter = "group"
-                        // No need to fetch tasks manually, the real-time listener will update with the new filter
+                        // No need to fetch tasks manually, the real-time listener will update with
+                        // the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Group"),
@@ -203,7 +203,8 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
                         currentFilter = "assignments"
-                        // No need to fetch tasks manually, the real-time listener will update with the new filter
+                        // No need to fetch tasks manually, the real-time listener will update with
+                        // the new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Assignments"),

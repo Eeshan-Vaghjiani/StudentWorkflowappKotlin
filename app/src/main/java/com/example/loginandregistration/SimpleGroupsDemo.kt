@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.loginandregistration.repository.GroupsRepository
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -160,10 +161,9 @@ class SimpleGroupsDemo : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // Load in parallel (faster)
-                val groupsDeferred = kotlinx.coroutines.async { repository.getMyGroupsCount() }
-                val tasksDeferred =
-                        kotlinx.coroutines.async { repository.getActiveAssignmentsCount() }
-                val messagesDeferred = kotlinx.coroutines.async { repository.getNewMessagesCount() }
+                val groupsDeferred = async { repository.getMyGroupsCount() }
+                val tasksDeferred = async { repository.getActiveAssignmentsCount() }
+                val messagesDeferred = async { repository.getNewMessagesCount() }
 
                 // Wait for all to complete
                 val groupsCount = groupsDeferred.await()
