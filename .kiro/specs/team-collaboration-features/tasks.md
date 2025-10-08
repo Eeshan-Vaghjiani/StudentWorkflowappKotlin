@@ -228,7 +228,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 3: File and Image Sharing
 
-- [ ] 13. Create storage repository and image compression
+- [x] 13. Create storage repository and image compression
+
+
+
+
+
   - Create `repository/StorageRepository.kt`
   - Implement `uploadImage()` with progress callback
   - Implement `uploadDocument()` with progress callback

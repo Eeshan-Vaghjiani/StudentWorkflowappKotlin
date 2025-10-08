@@ -92,6 +92,9 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
     
+    // ExifInterface for image rotation handling
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
