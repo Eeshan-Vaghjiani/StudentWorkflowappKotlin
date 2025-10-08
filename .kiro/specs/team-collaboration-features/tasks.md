@@ -243,7 +243,11 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Save compressed image to cache directory
   - _Requirements: 3.2, 3.3_
 
-- [ ] 14. Add attachment picker to chat
+- [x] 14. Add attachment picker to chat
+
+
+
+
   - Create `AttachmentBottomSheet.kt` dialog
   - Add options: Camera, Gallery, Documents
   - Request CAMERA permission when camera selected

@@ -142,6 +142,10 @@ class ChatRoomActivity : AppCompatActivity() {
     private fun setupMessageInput() {
         binding.sendButton.setOnClickListener { sendMessage() }
 
+        binding.attachmentButton.setOnClickListener {
+            showAttachmentPicker()
+        }
+
         binding.messageEditText.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 sendMessage()
@@ -341,6 +345,34 @@ class ChatRoomActivity : AppCompatActivity() {
             viewModel.updateTypingStatus(false)
         }
         typingTimer?.removeCallbacksAndMessages(null)
+    }
+
+    private fun showAttachmentPicker() {
+        val bottomSheet = AttachmentBottomSheet(
+            onImageSelected = { uri ->
+                handleImageSelected(uri)
+            },
+            onDocumentSelected = { uri ->
+                handleDocumentSelected(uri)
+            }
+        )
+        bottomSheet.show(supportFragmentManager, "AttachmentBottomSheet")
+    }
+
+    private fun handleImageSelected(uri: android.net.Uri) {
+        Toast.makeText(this, "Image selected: $uri", Toast.LENGTH_SHORT).show()
+        // TODO: Implement image upload in next task
+        // lifecycleScope.launch {
+        //     viewModel.sendImageMessage(uri)
+        // }
+    }
+
+    private fun handleDocumentSelected(uri: android.net.Uri) {
+        Toast.makeText(this, "Document selected: $uri", Toast.LENGTH_SHORT).show()
+        // TODO: Implement document upload in next task
+        // lifecycleScope.launch {
+        //     viewModel.sendDocumentMessage(uri)
+        // }
     }
 
     private fun getInitials(name: String): String {
