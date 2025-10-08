@@ -350,7 +350,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 4: Enhanced Calendar View
 
-- [ ] 20. Integrate calendar library and display tasks
+- [x] 20. Integrate calendar library and display tasks
+
+
+
+
+
   - Add Kizitonwose Calendar View to `CalendarFragment.kt`
   - Configure calendar to show current month
   - Create `CalendarViewModel.kt` for data management
@@ -362,7 +367,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Highlight selected date
   - _Requirements: 4.1, 4.2, 4.9_
 
-- [ ] 21. Implement date selection and task filtering
+- [x] 21. Implement date selection and task filtering
+
+
+
+
+
   - Handle date click to select date
   - Display tasks for selected date below calendar
   - Create RecyclerView with TaskAdapter for date tasks
@@ -373,7 +383,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Update calendar dots when filter changes
   - _Requirements: 4.3, 4.4, 4.6, 4.8_
 
-- [ ] 22. Add task details navigation
+- [x] 22. Add task details navigation
+
+
+
+
+
   - Handle task click in calendar task list
   - Navigate to existing TaskDetailsActivity or create new one
   - Pass task ID via intent

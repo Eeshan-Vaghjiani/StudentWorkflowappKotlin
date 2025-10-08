@@ -69,6 +69,9 @@
             android:name=".CalendarActivity"
             android:exported="false" />
         <activity
+            android:name=".TaskDetailsActivity"
+            android:exported="false" />
+        <activity
             android:name=".TasksActivity"
             android:exported="false" />
         <activity

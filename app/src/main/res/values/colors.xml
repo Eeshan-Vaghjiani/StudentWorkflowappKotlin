@@ -57,4 +57,12 @@
     <color name="admin_badge_color">#FF9500</color>
     <color name="join_code_background">#F2F2F7</color>
     <color name="join_code_border">#E5E5EA</color>
+    
+    <!-- Task Priority Colors -->
+    <color name="high_priority_color">#F44336</color>
+    <color name="medium_priority_color">#FF9800</color>
+    <color name="low_priority_color">#4CAF50</color>
+    
+    <!-- Divider Color -->
+    <color name="divider_color">#E5E5EA</color>
 </resources>
