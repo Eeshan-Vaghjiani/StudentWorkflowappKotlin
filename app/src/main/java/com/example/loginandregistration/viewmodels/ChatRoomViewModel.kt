@@ -136,14 +136,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Sends an image message to the current chat.
-     * 
+     *
      * @param imageUri URI of the image to send
      * @param onProgress Callback for upload progress (0-100)
      */
-    suspend fun sendImageMessage(
-        imageUri: android.net.Uri,
-        onProgress: (Int) -> Unit = {}
-    ) {
+    suspend fun sendImageMessage(imageUri: android.net.Uri, onProgress: (Int) -> Unit = {}) {
         val chatId = currentChatId ?: return
 
         _isSending.value = true
@@ -164,14 +161,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
     /**
      * Sends a document message to the current chat.
-     * 
+     *
      * @param documentUri URI of the document to send
      * @param onProgress Callback for upload progress (0-100)
      */
-    suspend fun sendDocumentMessage(
-        documentUri: android.net.Uri,
-        onProgress: (Int) -> Unit = {}
-    ) {
+    suspend fun sendDocumentMessage(documentUri: android.net.Uri, onProgress: (Int) -> Unit = {}) {
         val chatId = currentChatId ?: return
 
         _isSending.value = true
@@ -203,12 +197,14 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     /** Mark all messages in the current chat as read (called when opening from notification) */
     suspend fun markAllMessagesAsRead() {
         val chatId = currentChatId ?: return
-        
+
         try {
-            val unreadMessages = _messages.value.filter { message ->
-                !message.isReadBy(getCurrentUserId()) && !message.isFromUser(getCurrentUserId())
-            }
-            
+            val unreadMessages =
+                    _messages.value.filter { message ->
+                        !message.isReadBy(getCurrentUserId()) &&
+                                !message.isFromUser(getCurrentUserId())
+                    }
+
             if (unreadMessages.isNotEmpty()) {
                 markMessagesAsRead(chatId, unreadMessages.map { it.id })
             }
@@ -314,6 +310,34 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     fun getQueuedMessages(): List<Message> {
         val chatId = currentChatId ?: return emptyList()
         return chatRepository.getQueuedMessagesForChat(chatId)
+    }
+
+    /**
+     * Deletes a message from the current chat. Only the sender can delete their own messages.
+     *
+     * @param message Message to delete
+     * @return Result indicating success or failure
+     */
+    suspend fun deleteMessage(message: Message): Result<Unit> {
+        val chatId = currentChatId ?: return Result.failure(Exception("No chat loaded"))
+
+        return try {
+            val result = chatRepository.deleteMessage(chatId, message)
+
+            if (result.isSuccess) {
+                // Remove message from local state immediately for better UX
+                _messages.value = _messages.value.filter { it.id != message.id }
+                Log.d(TAG, "Message deleted successfully")
+            } else {
+                _error.value = "Failed to delete message: ${result.exceptionOrNull()?.message}"
+            }
+
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting message", e)
+            _error.value = "Failed to delete message: ${e.message}"
+            Result.failure(e)
+        }
     }
 
     override fun onCleared() {

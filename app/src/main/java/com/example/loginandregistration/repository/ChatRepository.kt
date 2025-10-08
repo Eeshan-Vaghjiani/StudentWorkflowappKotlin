@@ -21,7 +21,8 @@ class ChatRepository(
         private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
         private val context: Context? = null
 ) {
-    private val storageRepository: StorageRepository? = context?.let { StorageRepository(storage, auth, it) }
+    private val storageRepository: StorageRepository? =
+            context?.let { StorageRepository(storage, auth, it) }
     companion object {
         private const val TAG = "ChatRepository"
         private const val CHATS_COLLECTION = "chats"
@@ -54,7 +55,10 @@ class ChatRepository(
                                 Log.e(TAG, "Error listening to chats: ${error.message}", error)
                                 // If it's an index error, log specific message
                                 if (error.message?.contains("index", ignoreCase = true) == true) {
-                                    Log.e(TAG, "FIRESTORE INDEX REQUIRED: Create a composite index for 'chats' collection with fields: participants (array-contains) and lastMessageTime (descending)")
+                                    Log.e(
+                                            TAG,
+                                            "FIRESTORE INDEX REQUIRED: Create a composite index for 'chats' collection with fields: participants (array-contains) and lastMessageTime (descending)"
+                                    )
                                 }
                                 // Still try to send empty list rather than failing completely
                                 trySend(emptyList())
@@ -67,23 +71,35 @@ class ChatRepository(
                                 return@addSnapshotListener
                             }
 
-                            Log.d(TAG, "getUserChats: Received ${snapshot.documents.size} chat documents")
+                            Log.d(
+                                    TAG,
+                                    "getUserChats: Received ${snapshot.documents.size} chat documents"
+                            )
 
                             val chats =
-                                    snapshot.documents.mapNotNull { doc ->
-                                        try {
-                                            val chat = doc.toObject(Chat::class.java)
-                                            if (chat != null) {
-                                                Log.d(TAG, "Parsed chat: ${chat.chatId}, type: ${chat.type}, participants: ${chat.participants.size}")
+                                    snapshot.documents
+                                            .mapNotNull { doc ->
+                                                try {
+                                                    val chat = doc.toObject(Chat::class.java)
+                                                    if (chat != null) {
+                                                        Log.d(
+                                                                TAG,
+                                                                "Parsed chat: ${chat.chatId}, type: ${chat.type}, participants: ${chat.participants.size}"
+                                                        )
+                                                    }
+                                                    chat
+                                                } catch (e: Exception) {
+                                                    Log.e(
+                                                            TAG,
+                                                            "Error parsing chat document ${doc.id}",
+                                                            e
+                                                    )
+                                                    null
+                                                }
                                             }
-                                            chat
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error parsing chat document ${doc.id}", e)
-                                            null
-                                        }
-                                    }
-                                    // Sort manually by lastMessageTime since we can't use orderBy without index
-                                    .sortedByDescending { it.lastMessageTime }
+                                            // Sort manually by lastMessageTime since we can't use
+                                            // orderBy without index
+                                            .sortedByDescending { it.lastMessageTime }
 
                             Log.d(TAG, "getUserChats: Sending ${chats.size} chats to UI")
                             trySend(chats)
@@ -96,28 +112,29 @@ class ChatRepository(
     }
 
     /**
-     * Creates a user document in Firestore from UserInfo.
-     * This is used when a user is found in search but doesn't have a Firestore document yet.
+     * Creates a user document in Firestore from UserInfo. This is used when a user is found in
+     * search but doesn't have a Firestore document yet.
      */
     private suspend fun createUserDocument(userInfo: UserInfo): Result<Unit> {
         return try {
             Log.d(TAG, "createUserDocument: Creating document for ${userInfo.displayName}")
-            
-            val userDoc = mapOf(
-                "uid" to userInfo.userId,
-                "email" to userInfo.email,
-                "displayName" to userInfo.displayName,
-                "photoUrl" to userInfo.profileImageUrl,
-                "isOnline" to userInfo.online,
-                "lastActive" to (userInfo.lastSeen ?: Date())
+
+            val userDoc =
+                    mapOf(
+                            "uid" to userInfo.userId,
+                            "email" to userInfo.email,
+                            "displayName" to userInfo.displayName,
+                            "photoUrl" to userInfo.profileImageUrl,
+                            "isOnline" to userInfo.online,
+                            "lastActive" to (userInfo.lastSeen ?: Date())
+                    )
+
+            firestore.collection(USERS_COLLECTION).document(userInfo.userId).set(userDoc).await()
+
+            Log.d(
+                    TAG,
+                    "createUserDocument: Successfully created document for ${userInfo.displayName}"
             )
-            
-            firestore.collection(USERS_COLLECTION)
-                .document(userInfo.userId)
-                .set(userDoc)
-                .await()
-            
-            Log.d(TAG, "createUserDocument: Successfully created document for ${userInfo.displayName}")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "createUserDocument: Error creating user document", e)
@@ -125,7 +142,10 @@ class ChatRepository(
         }
     }
 
-    suspend fun getOrCreateDirectChat(otherUserId: String, otherUserInfo: UserInfo? = null): Result<Chat> {
+    suspend fun getOrCreateDirectChat(
+            otherUserId: String,
+            otherUserInfo: UserInfo? = null
+    ): Result<Chat> {
         return try {
             if (getCurrentUserId().isEmpty()) {
                 return Result.failure(Exception("User not authenticated"))
@@ -155,36 +175,39 @@ class ChatRepository(
             }
 
             Log.d(TAG, "Fetching user info for otherUserId: $otherUserId")
-            
+
             // If UserInfo was provided (from search results), try to create the document first
             if (otherUserInfo != null) {
                 Log.d(TAG, "UserInfo provided, attempting to create user document if needed")
                 createUserDocument(otherUserInfo)
             }
-            
+
             val otherUserResult = getUserInfo(otherUserId)
             if (otherUserResult.isFailure) {
                 Log.e(
                         TAG,
                         "Failed to get other user info: ${otherUserResult.exceptionOrNull()?.message}"
                 )
-                
+
                 // If we have UserInfo from search, use it directly
                 if (otherUserInfo != null) {
                     Log.d(TAG, "Using UserInfo from search results: ${otherUserInfo.displayName}")
                 } else {
                     return Result.failure(
-                            Exception("Cannot create chat: The other user needs to log into the app at least once to create their profile. Please ask them to open the app and sign in.")
+                            Exception(
+                                    "Cannot create chat: The other user needs to log into the app at least once to create their profile. Please ask them to open the app and sign in."
+                            )
                     )
                 }
             }
-            
-            val otherUser = if (otherUserResult.isSuccess) {
-                otherUserResult.getOrThrow()
-            } else {
-                otherUserInfo!! // We know it's not null because we checked above
-            }
-            
+
+            val otherUser =
+                    if (otherUserResult.isSuccess) {
+                        otherUserResult.getOrThrow()
+                    } else {
+                        otherUserInfo!! // We know it's not null because we checked above
+                    }
+
             Log.d(TAG, "Other user found: ${otherUser.displayName}")
 
             Log.d(TAG, "Fetching user info for currentUserId: ${getCurrentUserId()}")
@@ -260,7 +283,10 @@ class ChatRepository(
             val groupDoc = firestore.collection("groups").document(groupId).get().await()
 
             if (!groupDoc.exists()) {
-                Log.e(TAG, "getOrCreateGroupChat: Group document does not exist for groupId: $groupId")
+                Log.e(
+                        TAG,
+                        "getOrCreateGroupChat: Group document does not exist for groupId: $groupId"
+                )
                 return Result.failure(Exception("Group not found"))
             }
 
@@ -303,8 +329,8 @@ class ChatRepository(
     }
 
     /**
-     * Auto-creates chats for all groups the user is a member of.
-     * This should be called when the user opens the Chat tab or logs in.
+     * Auto-creates chats for all groups the user is a member of. This should be called when the
+     * user opens the Chat tab or logs in.
      */
     suspend fun ensureGroupChatsExist(): Result<Int> {
         return try {
@@ -315,11 +341,12 @@ class ChatRepository(
             Log.d(TAG, "ensureGroupChatsExist: Fetching user's groups")
 
             // Get all groups where user is a member
-            val groupsSnapshot = firestore
-                .collection("groups")
-                .whereArrayContains("members", getCurrentUserId())
-                .get()
-                .await()
+            val groupsSnapshot =
+                    firestore
+                            .collection("groups")
+                            .whereArrayContains("members", getCurrentUserId())
+                            .get()
+                            .await()
 
             Log.d(TAG, "ensureGroupChatsExist: Found ${groupsSnapshot.documents.size} groups")
 
@@ -327,17 +354,18 @@ class ChatRepository(
             for (groupDoc in groupsSnapshot.documents) {
                 val groupId = groupDoc.id
                 val groupName = groupDoc.getString("name") ?: "Group"
-                
+
                 Log.d(TAG, "ensureGroupChatsExist: Checking group '$groupName' ($groupId)")
 
                 // Check if chat already exists for this group
-                val existingChat = firestore
-                    .collection(CHATS_COLLECTION)
-                    .whereEqualTo("type", ChatType.GROUP.name)
-                    .whereEqualTo("groupId", groupId)
-                    .limit(1)
-                    .get()
-                    .await()
+                val existingChat =
+                        firestore
+                                .collection(CHATS_COLLECTION)
+                                .whereEqualTo("type", ChatType.GROUP.name)
+                                .whereEqualTo("groupId", groupId)
+                                .limit(1)
+                                .get()
+                                .await()
 
                 if (existingChat.isEmpty) {
                     // Create chat for this group
@@ -345,9 +373,15 @@ class ChatRepository(
                     val result = getOrCreateGroupChat(groupId)
                     if (result.isSuccess) {
                         createdCount++
-                        Log.d(TAG, "ensureGroupChatsExist: Successfully created chat for group '$groupName'")
+                        Log.d(
+                                TAG,
+                                "ensureGroupChatsExist: Successfully created chat for group '$groupName'"
+                        )
                     } else {
-                        Log.e(TAG, "ensureGroupChatsExist: Failed to create chat for group '$groupName': ${result.exceptionOrNull()?.message}")
+                        Log.e(
+                                TAG,
+                                "ensureGroupChatsExist: Failed to create chat for group '$groupName': ${result.exceptionOrNull()?.message}"
+                        )
                     }
                 } else {
                     Log.d(TAG, "ensureGroupChatsExist: Chat already exists for group '$groupName'")
@@ -441,18 +475,17 @@ class ChatRepository(
     }
 
     /**
-     * Sends an image message to a chat.
-     * Compresses the image before upload and shows progress.
-     * 
+     * Sends an image message to a chat. Compresses the image before upload and shows progress.
+     *
      * @param chatId ID of the chat
      * @param imageUri URI of the image to send
      * @param onProgress Callback for upload progress (0-100)
      * @return Result with the sent message on success
      */
     suspend fun sendImageMessage(
-        chatId: String,
-        imageUri: Uri,
-        onProgress: (Int) -> Unit = {}
+            chatId: String,
+            imageUri: Uri,
+            onProgress: (Int) -> Unit = {}
     ): Result<Message> {
         return try {
             if (getCurrentUserId().isEmpty()) {
@@ -465,30 +498,33 @@ class ChatRepository(
 
             Log.d(TAG, "sendImageMessage: Starting image upload for chat $chatId")
 
-            val currentUser = getUserInfo(getCurrentUserId()).getOrNull()
-                ?: return Result.failure(Exception("User not found"))
+            val currentUser =
+                    getUserInfo(getCurrentUserId()).getOrNull()
+                            ?: return Result.failure(Exception("User not found"))
 
             // Create message ID first
-            val messageId = firestore
-                .collection(CHATS_COLLECTION)
-                .document(chatId)
-                .collection(MESSAGES_COLLECTION)
-                .document()
-                .id
+            val messageId =
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .collection(MESSAGES_COLLECTION)
+                            .document()
+                            .id
 
             // Create temporary message with SENDING status
-            val tempMessage = Message(
-                id = messageId,
-                chatId = chatId,
-                senderId = getCurrentUserId(),
-                senderName = currentUser.displayName,
-                senderImageUrl = currentUser.profileImageUrl,
-                text = "", // Empty text for image messages
-                imageUrl = null, // Will be set after upload
-                timestamp = Date(),
-                readBy = listOf(getCurrentUserId()),
-                status = MessageStatus.SENDING
-            )
+            val tempMessage =
+                    Message(
+                            id = messageId,
+                            chatId = chatId,
+                            senderId = getCurrentUserId(),
+                            senderName = currentUser.displayName,
+                            senderImageUrl = currentUser.profileImageUrl,
+                            text = "", // Empty text for image messages
+                            imageUrl = null, // Will be set after upload
+                            timestamp = Date(),
+                            readBy = listOf(getCurrentUserId()),
+                            status = MessageStatus.SENDING
+                    )
 
             // Queue message for offline support
             offlineQueue?.queueMessage(tempMessage)
@@ -496,17 +532,22 @@ class ChatRepository(
             try {
                 // Upload image to Storage
                 val storagePath = storageRepository.getChatImagePath(chatId)
-                val uploadResult = storageRepository.uploadImage(
-                    uri = imageUri,
-                    path = storagePath,
-                    onProgress = onProgress
-                )
+                val uploadResult =
+                        storageRepository.uploadImage(
+                                uri = imageUri,
+                                path = storagePath,
+                                onProgress = onProgress
+                        )
 
                 if (uploadResult.isFailure) {
-                    Log.e(TAG, "sendImageMessage: Image upload failed", uploadResult.exceptionOrNull())
+                    Log.e(
+                            TAG,
+                            "sendImageMessage: Image upload failed",
+                            uploadResult.exceptionOrNull()
+                    )
                     offlineQueue?.markMessageAsFailed(messageId)
                     return Result.failure(
-                        uploadResult.exceptionOrNull() ?: Exception("Image upload failed")
+                            uploadResult.exceptionOrNull() ?: Exception("Image upload failed")
                     )
                 }
 
@@ -514,19 +555,16 @@ class ChatRepository(
                 Log.d(TAG, "sendImageMessage: Image uploaded successfully: $imageUrl")
 
                 // Create final message with image URL
-                val message = tempMessage.copy(
-                    imageUrl = imageUrl,
-                    status = MessageStatus.SENT
-                )
+                val message = tempMessage.copy(imageUrl = imageUrl, status = MessageStatus.SENT)
 
                 // Save message to Firestore
                 firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .collection(MESSAGES_COLLECTION)
-                    .document(messageId)
-                    .set(message)
-                    .await()
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(MESSAGES_COLLECTION)
+                        .document(messageId)
+                        .set(message)
+                        .await()
 
                 // Update chat's last message
                 updateChatLastMessage(chatId, "📷 Photo", getCurrentUserId())
@@ -551,18 +589,17 @@ class ChatRepository(
     }
 
     /**
-     * Sends a document message to a chat.
-     * Uploads the document and shows progress.
-     * 
+     * Sends a document message to a chat. Uploads the document and shows progress.
+     *
      * @param chatId ID of the chat
      * @param documentUri URI of the document to send
      * @param onProgress Callback for upload progress (0-100)
      * @return Result with the sent message on success
      */
     suspend fun sendDocumentMessage(
-        chatId: String,
-        documentUri: Uri,
-        onProgress: (Int) -> Unit = {}
+            chatId: String,
+            documentUri: Uri,
+            onProgress: (Int) -> Unit = {}
     ): Result<Message> {
         return try {
             if (getCurrentUserId().isEmpty()) {
@@ -575,8 +612,9 @@ class ChatRepository(
 
             Log.d(TAG, "sendDocumentMessage: Starting document upload for chat $chatId")
 
-            val currentUser = getUserInfo(getCurrentUserId()).getOrNull()
-                ?: return Result.failure(Exception("User not found"))
+            val currentUser =
+                    getUserInfo(getCurrentUserId()).getOrNull()
+                            ?: return Result.failure(Exception("User not found"))
 
             // Get file info from URI
             val fileInfo = storageRepository.getFileInfoFromUri(documentUri)
@@ -586,28 +624,30 @@ class ChatRepository(
             Log.d(TAG, "sendDocumentMessage: Document name: $fileName, size: ${fileSize / 1024}KB")
 
             // Create message ID first
-            val messageId = firestore
-                .collection(CHATS_COLLECTION)
-                .document(chatId)
-                .collection(MESSAGES_COLLECTION)
-                .document()
-                .id
+            val messageId =
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .collection(MESSAGES_COLLECTION)
+                            .document()
+                            .id
 
             // Create temporary message with SENDING status
-            val tempMessage = Message(
-                id = messageId,
-                chatId = chatId,
-                senderId = getCurrentUserId(),
-                senderName = currentUser.displayName,
-                senderImageUrl = currentUser.profileImageUrl,
-                text = "", // Empty text for document messages
-                documentUrl = null, // Will be set after upload
-                documentName = fileName,
-                documentSize = fileSize,
-                timestamp = Date(),
-                readBy = listOf(getCurrentUserId()),
-                status = MessageStatus.SENDING
-            )
+            val tempMessage =
+                    Message(
+                            id = messageId,
+                            chatId = chatId,
+                            senderId = getCurrentUserId(),
+                            senderName = currentUser.displayName,
+                            senderImageUrl = currentUser.profileImageUrl,
+                            text = "", // Empty text for document messages
+                            documentUrl = null, // Will be set after upload
+                            documentName = fileName,
+                            documentSize = fileSize,
+                            timestamp = Date(),
+                            readBy = listOf(getCurrentUserId()),
+                            status = MessageStatus.SENDING
+                    )
 
             // Queue message for offline support
             offlineQueue?.queueMessage(tempMessage)
@@ -615,17 +655,22 @@ class ChatRepository(
             try {
                 // Upload document to Storage
                 val storagePath = storageRepository.getChatDocumentPath(chatId)
-                val uploadResult = storageRepository.uploadDocument(
-                    uri = documentUri,
-                    path = storagePath,
-                    onProgress = onProgress
-                )
+                val uploadResult =
+                        storageRepository.uploadDocument(
+                                uri = documentUri,
+                                path = storagePath,
+                                onProgress = onProgress
+                        )
 
                 if (uploadResult.isFailure) {
-                    Log.e(TAG, "sendDocumentMessage: Document upload failed", uploadResult.exceptionOrNull())
+                    Log.e(
+                            TAG,
+                            "sendDocumentMessage: Document upload failed",
+                            uploadResult.exceptionOrNull()
+                    )
                     offlineQueue?.markMessageAsFailed(messageId)
                     return Result.failure(
-                        uploadResult.exceptionOrNull() ?: Exception("Document upload failed")
+                            uploadResult.exceptionOrNull() ?: Exception("Document upload failed")
                     )
                 }
 
@@ -633,19 +678,17 @@ class ChatRepository(
                 Log.d(TAG, "sendDocumentMessage: Document uploaded successfully: $documentUrl")
 
                 // Create final message with document URL
-                val message = tempMessage.copy(
-                    documentUrl = documentUrl,
-                    status = MessageStatus.SENT
-                )
+                val message =
+                        tempMessage.copy(documentUrl = documentUrl, status = MessageStatus.SENT)
 
                 // Save message to Firestore
                 firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .collection(MESSAGES_COLLECTION)
-                    .document(messageId)
-                    .set(message)
-                    .await()
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(MESSAGES_COLLECTION)
+                        .document(messageId)
+                        .set(message)
+                        .await()
 
                 // Update chat's last message
                 updateChatLastMessage(chatId, "📄 $fileName", getCurrentUserId())
@@ -865,7 +908,10 @@ class ChatRepository(
                             .get()
                             .await()
 
-            Log.d(TAG, "searchUsers: Found ${nameResults.size()} by name, ${emailResults.size()} by email")
+            Log.d(
+                    TAG,
+                    "searchUsers: Found ${nameResults.size()} by name, ${emailResults.size()} by email"
+            )
 
             val users = mutableSetOf<UserInfo>()
 
@@ -873,22 +919,29 @@ class ChatRepository(
             nameResults.documents.forEach { doc ->
                 try {
                     val userId = doc.id
-                    val displayName = doc.getString("displayName") ?: doc.getString("display_name") ?: "Unknown"
+                    val displayName =
+                            doc.getString("displayName")
+                                    ?: doc.getString("display_name") ?: "Unknown"
                     val email = doc.getString("email") ?: ""
-                    val profileImageUrl = doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val profileImageUrl =
+                            doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
                     val online = doc.getBoolean("isOnline") ?: doc.getBoolean("online") ?: false
                     val lastSeen = doc.getDate("lastActive") ?: doc.getDate("lastSeen")
-                    
-                    val userInfo = UserInfo(
-                        userId = userId,
-                        displayName = displayName,
-                        email = email,
-                        profileImageUrl = profileImageUrl,
-                        online = online,
-                        lastSeen = lastSeen
-                    )
+
+                    val userInfo =
+                            UserInfo(
+                                    userId = userId,
+                                    displayName = displayName,
+                                    email = email,
+                                    profileImageUrl = profileImageUrl,
+                                    online = online,
+                                    lastSeen = lastSeen
+                            )
                     users.add(userInfo)
-                    Log.d(TAG, "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})")
+                    Log.d(
+                            TAG,
+                            "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
                 }
@@ -899,30 +952,40 @@ class ChatRepository(
                     val userId = doc.id
                     // Skip if already added
                     if (users.any { it.userId == userId }) return@forEach
-                    
-                    val displayName = doc.getString("displayName") ?: doc.getString("display_name") ?: "Unknown"
+
+                    val displayName =
+                            doc.getString("displayName")
+                                    ?: doc.getString("display_name") ?: "Unknown"
                     val email = doc.getString("email") ?: ""
-                    val profileImageUrl = doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val profileImageUrl =
+                            doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
                     val online = doc.getBoolean("isOnline") ?: doc.getBoolean("online") ?: false
                     val lastSeen = doc.getDate("lastActive") ?: doc.getDate("lastSeen")
-                    
-                    val userInfo = UserInfo(
-                        userId = userId,
-                        displayName = displayName,
-                        email = email,
-                        profileImageUrl = profileImageUrl,
-                        online = online,
-                        lastSeen = lastSeen
-                    )
+
+                    val userInfo =
+                            UserInfo(
+                                    userId = userId,
+                                    displayName = displayName,
+                                    email = email,
+                                    profileImageUrl = profileImageUrl,
+                                    online = online,
+                                    lastSeen = lastSeen
+                            )
                     users.add(userInfo)
-                    Log.d(TAG, "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})")
+                    Log.d(
+                            TAG,
+                            "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
                 }
             }
 
             val filteredUsers = users.filter { it.userId != getCurrentUserId() }
-            Log.d(TAG, "searchUsers: Returning ${filteredUsers.size} users (filtered out current user)")
+            Log.d(
+                    TAG,
+                    "searchUsers: Returning ${filteredUsers.size} users (filtered out current user)"
+            )
 
             Result.success(filteredUsers.toList())
         } catch (e: Exception) {
@@ -938,34 +1001,39 @@ class ChatRepository(
 
             if (!doc.exists()) {
                 Log.e(TAG, "getUserInfo: User document does not exist for userId: $userId")
-                Log.e(TAG, "getUserInfo: Make sure the user has logged in at least once to create their profile")
-                return Result.failure(Exception("User not found: Invalid document reference. Document ID: $userId"))
+                Log.e(
+                        TAG,
+                        "getUserInfo: Make sure the user has logged in at least once to create their profile"
+                )
+                return Result.failure(
+                        Exception(
+                                "User not found: Invalid document reference. Document ID: $userId"
+                        )
+                )
             }
 
             Log.d(TAG, "getUserInfo: User document found. Fields: ${doc.data?.keys}")
 
-            // Handle both field name variations (displayName vs display_name, photoUrl vs profileImageUrl, etc.)
-            val displayName = doc.getString("displayName") 
-                ?: doc.getString("display_name")
-                ?: doc.getString("name")
-                ?: "Unknown User"
-            
+            // Handle both field name variations (displayName vs display_name, photoUrl vs
+            // profileImageUrl, etc.)
+            val displayName =
+                    doc.getString("displayName")
+                            ?: doc.getString("display_name") ?: doc.getString("name")
+                                    ?: "Unknown User"
+
             val email = doc.getString("email") ?: ""
-            
-            val profileImageUrl = doc.getString("profileImageUrl")
-                ?: doc.getString("photoUrl")
-                ?: doc.getString("photo_url")
-                ?: doc.getString("profile_image_url")
-                ?: ""
-            
-            val online = doc.getBoolean("online") 
-                ?: doc.getBoolean("isOnline")
-                ?: false
-            
-            val lastSeen = doc.getDate("lastSeen") 
-                ?: doc.getDate("lastActive")
-                ?: doc.getDate("last_active")
-                ?: doc.getTimestamp("lastActive")?.toDate()
+
+            val profileImageUrl =
+                    doc.getString("profileImageUrl")
+                            ?: doc.getString("photoUrl") ?: doc.getString("photo_url")
+                                    ?: doc.getString("profile_image_url") ?: ""
+
+            val online = doc.getBoolean("online") ?: doc.getBoolean("isOnline") ?: false
+
+            val lastSeen =
+                    doc.getDate("lastSeen")
+                            ?: doc.getDate("lastActive") ?: doc.getDate("last_active")
+                                    ?: doc.getTimestamp("lastActive")?.toDate()
 
             val userInfo =
                     UserInfo(
@@ -1138,6 +1206,81 @@ class ChatRepository(
         } catch (e: Exception) {
             // Don't fail the message send if notification fails
             Log.e(TAG, "Error triggering notifications", e)
+        }
+    }
+
+    /**
+     * Deletes a message from a chat. Only the sender can delete their own messages.
+     *
+     * @param chatId ID of the chat
+     * @param message Message to delete
+     * @return Result indicating success or failure
+     */
+    suspend fun deleteMessage(chatId: String, message: Message): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            // Verify that the current user is the sender
+            if (message.senderId != getCurrentUserId()) {
+                return Result.failure(Exception("You can only delete your own messages"))
+            }
+
+            Log.d(TAG, "deleteMessage: Deleting message ${message.id} from chat $chatId")
+
+            // Delete the message document
+            firestore
+                    .collection(CHATS_COLLECTION)
+                    .document(chatId)
+                    .collection(MESSAGES_COLLECTION)
+                    .document(message.id)
+                    .delete()
+                    .await()
+
+            // If this was the last message, update the chat's last message
+            val chatDoc = firestore.collection(CHATS_COLLECTION).document(chatId).get().await()
+
+            val lastMessageId = chatDoc.getString("lastMessageId")
+            if (lastMessageId == message.id) {
+                // Get the new last message
+                val lastMessageSnapshot =
+                        firestore
+                                .collection(CHATS_COLLECTION)
+                                .document(chatId)
+                                .collection(MESSAGES_COLLECTION)
+                                .orderBy("timestamp", Query.Direction.DESCENDING)
+                                .limit(1)
+                                .get()
+                                .await()
+
+                if (!lastMessageSnapshot.isEmpty) {
+                    val newLastMessage =
+                            lastMessageSnapshot.documents.first().toObject(Message::class.java)
+                    if (newLastMessage != null) {
+                        updateChatLastMessage(chatId, newLastMessage.text, newLastMessage.senderId)
+                    }
+                } else {
+                    // No more messages, clear last message
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .update(
+                                    mapOf(
+                                            "lastMessage" to "",
+                                            "lastMessageTime" to Date(),
+                                            "lastMessageSenderId" to ""
+                                    )
+                            )
+                            .await()
+                }
+            }
+
+            Log.d(TAG, "deleteMessage: Message deleted successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "deleteMessage: Error deleting message", e)
+            Result.failure(e)
         }
     }
 }

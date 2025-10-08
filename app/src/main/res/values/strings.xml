@@ -169,4 +169,9 @@
     <string name="chat_error_load_messages">Failed to load messages</string>
     <string name="chat_error_send_message">Failed to send message</string>
     <string name="chat_message_empty">Message cannot be empty</string>
+    <string name="message_status">Message status indicator</string>
+    
+    <!-- Connection Status -->
+    <string name="no_internet_connection">No internet connection</string>
+    <string name="connecting">Connecting...</string>
 </resources>

@@ -65,4 +65,8 @@
     
     <!-- Divider Color -->
     <color name="divider_color">#E5E5EA</color>
+    
+    <!-- Connection Status Colors -->
+    <color name="colorError">#FF3B30</color>
+    <color name="colorWarning">#FF9500</color>
 </resources>

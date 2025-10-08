@@ -104,15 +104,11 @@
                 android:textSize="12sp"
                 tools:text="2:30 PM" />
 
-            <ImageView
-                android:id="@+id/readReceiptImageView"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:layout_marginStart="4dp"
-                android:contentDescription="Read receipt"
-                android:src="@drawable/ic_check"
-                android:visibility="visible"
-                tools:tint="@color/white" />
+            <com.example.loginandregistration.views.MessageStatusView
+                android:id="@+id/messageStatusView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

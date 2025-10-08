@@ -413,7 +413,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 5: Message Rich Content
 
-- [ ] 23. Implement link detection and clickable URLs
+- [x] 23. Implement link detection and clickable URLs
+
+
+
+
+
   - Create `utils/LinkifyHelper.kt`
   - Detect URLs in message text using regex
   - Make URLs clickable in TextViews
@@ -421,8 +426,18 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Highlight URLs with different color
   - Handle various URL formats (http, https, www)
   - _Requirements: 6.1, 6.2_
+- [x] 24. Add message status indicators
 
-- [ ] 24. Add message status indicators
+
+
+
+
+
+
+
+
+- [x] 24. Add message status indicators
+
   - Create `MessageStatusView.kt` custom view
   - Show clock icon for "Sending" status
   - Show single checkmark for "Sent" status
@@ -432,7 +447,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Update status in real-time as messages are delivered/read
   - _Requirements: 6.6, 6.7, 6.8_
 
-- [ ] 25. Implement message grouping and layout improvements
+- [x] 25. Implement message grouping and layout improvements
+
+
+
+
+
   - Create `MessageGrouper.kt` utility
   - Group consecutive messages from same sender
   - Show sender name and picture only for first message in group
@@ -443,7 +463,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Add tail indicator pointing to sender
   - _Requirements: 6.4, 6.5, 6.9_
 
-- [ ] 26. Add long-press context menu for messages
+- [x] 26. Add long-press context menu for messages
+
+
+
+
+
   - Implement long-press listener on message items
   - Show context menu with options: Copy, Delete, Forward
   - Implement copy text to clipboard
@@ -466,14 +491,23 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 6: Offline Support
 
-- [ ] 27. Enable Firestore offline persistence
+- [x] 27. Enable Firestore offline persistence
+
+
+
+
   - Create `FirestoreConfig.kt` configuration class
   - Enable offline persistence in Application class or MainActivity
   - Set cache size to unlimited or appropriate size
   - Test that data loads from cache when offline
   - _Requirements: 7.1, 7.2_
 
-- [ ] 28. Implement offline message queue
+- [x] 28. Implement offline message queue
+
+
+
+
+
   - Create `OfflineMessageQueue.kt` using SharedPreferences
   - Queue messages when send fails due to no connection
   - Show "Sending..." status for queued messages
@@ -483,7 +517,10 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Allow manual retry for failed messages
   - _Requirements: 7.3, 7.4_
 
-- [ ] 29. Add connection status indicator
+- [-] 29. Add connection status indicator
+
+
+
   - Create connection status banner at top of screen
   - Show "No internet connection" when offline
   - Show "Connecting..." when reconnecting

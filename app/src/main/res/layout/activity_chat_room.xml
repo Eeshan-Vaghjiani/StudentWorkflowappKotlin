@@ -79,6 +79,15 @@
         </LinearLayout>
     </com.google.android.material.appbar.MaterialToolbar>
 
+    <!-- Connection Status Banner -->
+    <com.example.loginandregistration.views.ConnectionStatusView
+        android:id="@+id/connectionStatusView"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
+
     <!-- Load More Progress Bar -->
     <ProgressBar
         android:id="@+id/loadMoreProgressBar"
@@ -89,7 +98,7 @@
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintTop_toBottomOf="@id/connectionStatusView"
         tools:visibility="visible" />
 
     <!-- Messages RecyclerView -->
@@ -103,7 +112,7 @@
         app:layout_constraintBottom_toTopOf="@id/typingIndicatorLayout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintTop_toBottomOf="@id/connectionStatusView"
         tools:listitem="@layout/item_message_received" />
 
     <!-- Typing Indicator -->
