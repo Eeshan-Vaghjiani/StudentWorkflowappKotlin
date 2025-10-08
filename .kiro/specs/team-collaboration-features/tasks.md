@@ -263,6 +263,7 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 
 
+
   - Update `sendImageMessage()` in ChatRepository
   - Compress image before upload
   - Upload to Storage at `chat_images/{chatId}/{timestamp}.jpg`
@@ -272,7 +273,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Handle upload failures with retry option
   - _Requirements: 3.2, 3.3, 3.4, 3.9_
 
-- [ ] 16. Implement document message sending
+- [x] 16. Implement document message sending
+
+
+
+
+
   - Update `sendDocumentMessage()` in ChatRepository
   - Get file name and size from URI
   - Upload to Storage at `chat_documents/{chatId}/{filename}`

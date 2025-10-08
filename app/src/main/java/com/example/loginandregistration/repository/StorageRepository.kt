@@ -377,6 +377,15 @@ class StorageRepository(
     }
 
     /**
+     * Public method to get file information from URI.
+     * Returns (fileName, fileSize)
+     */
+    fun getFileInfoFromUri(uri: Uri): Pair<String, Long> {
+        val fileInfo = getFileInfo(uri)
+        return Pair(fileInfo.first, fileInfo.second)
+    }
+
+    /**
      * Gets MIME type from file extension.
      */
     private fun getMimeTypeFromExtension(fileName: String): String? {

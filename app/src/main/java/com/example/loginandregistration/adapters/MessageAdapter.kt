@@ -128,14 +128,36 @@ class MessageAdapter(
     class SentMessageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
         private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
+        private val documentContainer: View = itemView.findViewById(R.id.documentContainer)
+        private val documentIconImageView: ImageView = itemView.findViewById(R.id.documentIconImageView)
+        private val documentNameTextView: TextView = itemView.findViewById(R.id.documentNameTextView)
+        private val documentSizeTextView: TextView = itemView.findViewById(R.id.documentSizeTextView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
         private val readReceiptImageView: ImageView =
                 itemView.findViewById(R.id.readReceiptImageView)
 
         fun bind(message: Message, onRetryMessage: ((Message) -> Unit)?) {
+            // Handle document messages
+            if (message.hasDocument()) {
+                documentContainer.visibility = View.VISIBLE
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+                
+                documentNameTextView.text = message.documentName ?: "Document"
+                documentSizeTextView.text = message.getFormattedFileSize()
+                
+                // Set icon based on file type
+                documentIconImageView.setImageResource(getDocumentIcon(message.documentName ?: ""))
+                
+                // Click to download/open document
+                documentContainer.setOnClickListener {
+                    // TODO: Download and open document in task 17
+                }
+            }
             // Handle image messages
-            if (message.hasImage()) {
+            else if (message.hasImage()) {
                 messageImageView.visibility = View.VISIBLE
+                documentContainer.visibility = View.GONE
                 messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
                 
                 // Load image using Coil
@@ -151,6 +173,7 @@ class MessageAdapter(
                 }
             } else {
                 messageImageView.visibility = View.GONE
+                documentContainer.visibility = View.GONE
                 messageTextView.visibility = View.VISIBLE
             }
             
@@ -167,6 +190,18 @@ class MessageAdapter(
             } else {
                 itemView.setOnClickListener(null)
                 itemView.isClickable = false
+            }
+        }
+        
+        private fun getDocumentIcon(fileName: String): Int {
+            return when (fileName.substringAfterLast('.', "").lowercase()) {
+                "pdf" -> android.R.drawable.ic_menu_save
+                "doc", "docx" -> android.R.drawable.ic_menu_edit
+                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
+                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
+                "zip", "rar" -> android.R.drawable.ic_menu_upload
+                "txt" -> android.R.drawable.ic_menu_edit
+                else -> android.R.drawable.ic_menu_save
             }
         }
 
@@ -232,12 +267,34 @@ class MessageAdapter(
         private val senderNameTextView: TextView = itemView.findViewById(R.id.senderNameTextView)
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
         private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
+        private val documentContainer: View = itemView.findViewById(R.id.documentContainer)
+        private val documentIconImageView: ImageView = itemView.findViewById(R.id.documentIconImageView)
+        private val documentNameTextView: TextView = itemView.findViewById(R.id.documentNameTextView)
+        private val documentSizeTextView: TextView = itemView.findViewById(R.id.documentSizeTextView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
 
         fun bind(message: Message, showSenderInfo: Boolean) {
+            // Handle document messages
+            if (message.hasDocument()) {
+                documentContainer.visibility = View.VISIBLE
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+                
+                documentNameTextView.text = message.documentName ?: "Document"
+                documentSizeTextView.text = message.getFormattedFileSize()
+                
+                // Set icon based on file type
+                documentIconImageView.setImageResource(getDocumentIcon(message.documentName ?: ""))
+                
+                // Click to download/open document
+                documentContainer.setOnClickListener {
+                    // TODO: Download and open document in task 17
+                }
+            }
             // Handle image messages
-            if (message.hasImage()) {
+            else if (message.hasImage()) {
                 messageImageView.visibility = View.VISIBLE
+                documentContainer.visibility = View.GONE
                 messageTextView.visibility = if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
                 
                 // Load image using Coil
@@ -253,6 +310,7 @@ class MessageAdapter(
                 }
             } else {
                 messageImageView.visibility = View.GONE
+                documentContainer.visibility = View.GONE
                 messageTextView.visibility = View.VISIBLE
             }
             
@@ -278,6 +336,18 @@ class MessageAdapter(
                 senderNameTextView.visibility = View.GONE
                 senderAvatarTextView.visibility = View.INVISIBLE
                 senderProfileImageView.visibility = View.INVISIBLE
+            }
+        }
+        
+        private fun getDocumentIcon(fileName: String): Int {
+            return when (fileName.substringAfterLast('.', "").lowercase()) {
+                "pdf" -> android.R.drawable.ic_menu_save
+                "doc", "docx" -> android.R.drawable.ic_menu_edit
+                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
+                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
+                "zip", "rar" -> android.R.drawable.ic_menu_upload
+                "txt" -> android.R.drawable.ic_menu_edit
+                else -> android.R.drawable.ic_menu_save
             }
         }
 

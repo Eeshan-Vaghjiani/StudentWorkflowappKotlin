@@ -162,6 +162,34 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /**
+     * Sends a document message to the current chat.
+     * 
+     * @param documentUri URI of the document to send
+     * @param onProgress Callback for upload progress (0-100)
+     */
+    suspend fun sendDocumentMessage(
+        documentUri: android.net.Uri,
+        onProgress: (Int) -> Unit = {}
+    ) {
+        val chatId = currentChatId ?: return
+
+        _isSending.value = true
+
+        try {
+            val result = chatRepository.sendDocumentMessage(chatId, documentUri, onProgress)
+
+            if (result.isFailure) {
+                _error.value = "Failed to send document: ${result.exceptionOrNull()?.message}"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending document message", e)
+            _error.value = "Failed to send document: ${e.message}"
+        } finally {
+            _isSending.value = false
+        }
+    }
+
     private fun markMessagesAsRead(chatId: String, messageIds: List<String>) {
         viewModelScope.launch {
             try {

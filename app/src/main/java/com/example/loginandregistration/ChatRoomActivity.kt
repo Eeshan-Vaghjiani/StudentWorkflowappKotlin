@@ -388,11 +388,36 @@ class ChatRoomActivity : AppCompatActivity() {
     }
 
     private fun handleDocumentSelected(uri: android.net.Uri) {
-        Toast.makeText(this, "Document selected: $uri", Toast.LENGTH_SHORT).show()
-        // TODO: Implement document upload in next task
-        // lifecycleScope.launch {
-        //     viewModel.sendDocumentMessage(uri)
-        // }
+        lifecycleScope.launch {
+            // Show progress dialog
+            val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
+                .setTitle("Uploading Document")
+                .setMessage("0%")
+                .setCancelable(false)
+                .create()
+            progressDialog.show()
+
+            try {
+                viewModel.sendDocumentMessage(uri) { progress ->
+                    runOnUiThread {
+                        progressDialog.setMessage("$progress%")
+                    }
+                }
+                progressDialog.dismiss()
+                Toast.makeText(
+                    this@ChatRoomActivity,
+                    "Document sent successfully",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                progressDialog.dismiss()
+                Toast.makeText(
+                    this@ChatRoomActivity,
+                    "Failed to send document: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     private fun getInitials(name: String): String {

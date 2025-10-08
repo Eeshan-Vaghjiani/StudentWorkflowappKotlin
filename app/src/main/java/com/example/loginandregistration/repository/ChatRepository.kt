@@ -550,6 +550,125 @@ class ChatRepository(
         }
     }
 
+    /**
+     * Sends a document message to a chat.
+     * Uploads the document and shows progress.
+     * 
+     * @param chatId ID of the chat
+     * @param documentUri URI of the document to send
+     * @param onProgress Callback for upload progress (0-100)
+     * @return Result with the sent message on success
+     */
+    suspend fun sendDocumentMessage(
+        chatId: String,
+        documentUri: Uri,
+        onProgress: (Int) -> Unit = {}
+    ): Result<Message> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            if (storageRepository == null) {
+                return Result.failure(Exception("Storage repository not initialized"))
+            }
+
+            Log.d(TAG, "sendDocumentMessage: Starting document upload for chat $chatId")
+
+            val currentUser = getUserInfo(getCurrentUserId()).getOrNull()
+                ?: return Result.failure(Exception("User not found"))
+
+            // Get file info from URI
+            val fileInfo = storageRepository.getFileInfoFromUri(documentUri)
+            val fileName = fileInfo.first
+            val fileSize = fileInfo.second
+
+            Log.d(TAG, "sendDocumentMessage: Document name: $fileName, size: ${fileSize / 1024}KB")
+
+            // Create message ID first
+            val messageId = firestore
+                .collection(CHATS_COLLECTION)
+                .document(chatId)
+                .collection(MESSAGES_COLLECTION)
+                .document()
+                .id
+
+            // Create temporary message with SENDING status
+            val tempMessage = Message(
+                id = messageId,
+                chatId = chatId,
+                senderId = getCurrentUserId(),
+                senderName = currentUser.displayName,
+                senderImageUrl = currentUser.profileImageUrl,
+                text = "", // Empty text for document messages
+                documentUrl = null, // Will be set after upload
+                documentName = fileName,
+                documentSize = fileSize,
+                timestamp = Date(),
+                readBy = listOf(getCurrentUserId()),
+                status = MessageStatus.SENDING
+            )
+
+            // Queue message for offline support
+            offlineQueue?.queueMessage(tempMessage)
+
+            try {
+                // Upload document to Storage
+                val storagePath = storageRepository.getChatDocumentPath(chatId)
+                val uploadResult = storageRepository.uploadDocument(
+                    uri = documentUri,
+                    path = storagePath,
+                    onProgress = onProgress
+                )
+
+                if (uploadResult.isFailure) {
+                    Log.e(TAG, "sendDocumentMessage: Document upload failed", uploadResult.exceptionOrNull())
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                        uploadResult.exceptionOrNull() ?: Exception("Document upload failed")
+                    )
+                }
+
+                val documentUrl = uploadResult.getOrThrow()
+                Log.d(TAG, "sendDocumentMessage: Document uploaded successfully: $documentUrl")
+
+                // Create final message with document URL
+                val message = tempMessage.copy(
+                    documentUrl = documentUrl,
+                    status = MessageStatus.SENT
+                )
+
+                // Save message to Firestore
+                firestore
+                    .collection(CHATS_COLLECTION)
+                    .document(chatId)
+                    .collection(MESSAGES_COLLECTION)
+                    .document(messageId)
+                    .set(message)
+                    .await()
+
+                // Update chat's last message
+                updateChatLastMessage(chatId, "📄 $fileName", getCurrentUserId())
+
+                // Remove from queue on success
+                offlineQueue?.removeMessage(messageId)
+
+                // Trigger notifications for recipients
+                triggerNotifications(chatId, message.copy(text = "📄 $fileName"))
+
+                Log.d(TAG, "sendDocumentMessage: Document message sent successfully")
+                Result.success(message)
+            } catch (sendError: Exception) {
+                Log.e(TAG, "sendDocumentMessage: Error sending document message", sendError)
+                offlineQueue?.markMessageAsFailed(messageId)
+                Result.failure(sendError)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendDocumentMessage: Unexpected error", e)
+            Result.failure(e)
+        }
+    }
+
     fun getChatMessages(chatId: String, limit: Int = 50): Flow<List<Message>> = callbackFlow {
         val listener =
                 firestore
