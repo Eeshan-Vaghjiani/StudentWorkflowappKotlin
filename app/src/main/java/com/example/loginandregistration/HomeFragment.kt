@@ -12,6 +12,7 @@ import com.example.loginandregistration.databinding.FragmentHomeBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment() {
@@ -75,6 +76,10 @@ class HomeFragment : Fragment() {
                                         (activity as? MainActivity)?.navigateToProfile()
                                         true
                                     }
+                                    R.id.action_debug -> {
+                                        startActivity(android.content.Intent(requireContext(), DebugActivity::class.java))
+                                        true
+                                    }
                                     else -> false
                                 }
                             }
@@ -98,31 +103,55 @@ class HomeFragment : Fragment() {
     }
 
     private fun loadDashboardData() {
+        // Initialize UI with placeholder values
+        binding.tvTasksDueCount.text = "0"
+        binding.tvGroupsCount.text = "0"
+        binding.tvSessionsCount.text = "0"
+        
+        // AI usage - keep static for now
+        binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 7)
+        binding.progressBarAiUsage.progress = 30
+        binding.tvAiUsageDetails.text =
+                getString(R.string.home_ai_prompts_usage_template, 3, 10)
+
+        // Set up real-time listeners for continuous updates
+        setupRealTimeListeners()
+    }
+
+    private fun setupRealTimeListeners() {
+        // Set up real-time listener for tasks using Flow
         lifecycleScope.launch {
             try {
-                // Load task statistics
                 val taskRepository = com.example.loginandregistration.repository.TaskRepository()
-                val taskStats = taskRepository.getDashboardTaskStats()
-
-                // Load group statistics
-                val groupRepository = com.example.loginandregistration.repository.GroupRepository()
-                val groupStats = groupRepository.getDashboardStats()
-
-                // Update UI with real data
-                binding.tvTasksDueCount.text = taskStats.tasksDue.toString()
-                binding.tvGroupsCount.text = groupStats.groupsCount.toString()
-                binding.tvSessionsCount.text = "2" // Keep static for now
-
-                // AI usage - keep static for now
-                binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 7)
-                binding.progressBarAiUsage.progress = 30
-                binding.tvAiUsageDetails.text =
-                        getString(R.string.home_ai_prompts_usage_template, 3, 10)
+                taskRepository.getDashboardTaskStatsFlow().collect { taskStats ->
+                    binding.tvTasksDueCount.text = taskStats.tasksDue.toString()
+                }
             } catch (e: Exception) {
-                // Fallback to static data if Firebase fails
-                binding.tvTasksDueCount.text = "0"
-                binding.tvGroupsCount.text = "0"
-                binding.tvSessionsCount.text = "0"
+                // Handle error silently
+            }
+        }
+
+        // Set up real-time listener for groups using Flow
+        lifecycleScope.launch {
+            try {
+                val groupRepository = com.example.loginandregistration.repository.GroupRepository()
+                groupRepository.getGroupStatsFlow().collect { groupStats ->
+                    binding.tvGroupsCount.text = groupStats.myGroups.toString()
+                }
+            } catch (e: Exception) {
+                // Handle error silently
+            }
+        }
+        
+        // Set up real-time listener for study sessions using Flow
+        lifecycleScope.launch {
+            try {
+                val sessionRepository = com.example.loginandregistration.repository.SessionRepository()
+                sessionRepository.getSessionStatsFlow().collect { sessionStats ->
+                    binding.tvSessionsCount.text = sessionStats.totalSessions.toString()
+                }
+            } catch (e: Exception) {
+                // Handle error silently
             }
         }
     }

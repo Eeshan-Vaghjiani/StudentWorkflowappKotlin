@@ -161,4 +161,12 @@
     <string name="calendar_quick_action_clicked">Calendar Quick Action Clicked</string>
     <string name="groups_quick_action_clicked">Groups Quick Action Clicked</string>
     <string name="ai_assistant_clicked">AI Assistant Clicked</string>
+    
+    <!-- Chat Room -->
+    <string name="send_message">Send message</string>
+    <string name="type_message_hint">Type a message...</string>
+    <string name="chat_error_no_id">Error: Chat ID not provided</string>
+    <string name="chat_error_load_messages">Failed to load messages</string>
+    <string name="chat_error_send_message">Failed to send message</string>
+    <string name="chat_message_empty">Message cannot be empty</string>
 </resources>

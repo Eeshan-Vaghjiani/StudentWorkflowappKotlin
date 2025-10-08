@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users can read and write their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Groups collection rules
+    match /groups/{groupId} {
+      // Anyone can read public groups for discovery
+      allow read: if request.auth != null && 
+        (resource.data.privacy == 'public' || 
+         request.auth.uid in resource.data.memberIds);
+      
+      // Only authenticated users can create groups
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.owner &&
+        request.auth.uid in request.resource.data.memberIds;
+      
+      // Only group owners and admins can update group details
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.owner ||
+         (request.auth.uid in resource.data.memberIds && 
+          isGroupAdmin(request.auth.uid, resource.data.members)));
+      
+      // Only group owners can delete groups
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.owner;
+    }
+    
+    // Tasks collection rules
+    match /tasks/{taskId} {
+      // Users can read their own tasks or tasks assigned to them
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.userId ||
+         request.auth.uid in resource.data.assignedTo);
+      
+      // Users can create tasks for themselves
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      
+      // Users can update their own tasks or tasks assigned to them
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.userId ||
+         request.auth.uid in resource.data.assignedTo);
+      
+      // Users can delete their own tasks
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Group activities collection rules
+    match /group_activities/{activityId} {
+      // Members can read activities from their groups
+      allow read: if request.auth != null && 
+        isGroupMember(request.auth.uid, resource.data.groupId);
+      
+      // Group members can create activities
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId &&
+        isGroupMember(request.auth.uid, request.resource.data.groupId);
+      
+      // Only activity creators can update their activities
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      
+      // Only activity creators or group admins can delete activities
+      allow delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId ||
+         isGroupAdmin(request.auth.uid, resource.data.groupId));
+    }
+    
+    // Helper functions
+    function isGroupMember(userId, groupId) {
+      return userId in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+    }
+    
+    function isGroupAdmin(userId, members) {
+      return members != null && 
+        members.hasAny([userId]) && 
+        members.where('userId', '==', userId)[0].role in ['owner', 'admin'];
+    }
+    
+    function isGroupAdminById(userId, groupId) {
+      let group = get(/databases/$(database)/documents/groups/$(groupId)).data;
+      return userId == group.owner || 
+        (group.members != null && 
+         group.members.hasAny([userId]) && 
+         group.members.where('userId', '==', userId)[0].role in ['owner', 'admin']);
+    }
+  }
+}

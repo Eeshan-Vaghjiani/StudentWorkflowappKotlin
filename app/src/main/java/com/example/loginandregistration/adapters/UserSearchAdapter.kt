@@ -1,0 +1,102 @@
+package com.example.loginandregistration.adapters
+
+import android.graphics.Color
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import coil.transform.CircleCropTransformation
+import com.example.loginandregistration.R
+import com.example.loginandregistration.models.UserInfo
+
+class UserSearchAdapter(private val onUserClick: (UserInfo) -> Unit) :
+        ListAdapter<UserInfo, UserSearchAdapter.UserViewHolder>(UserDiffCallback()) {
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
+        val view =
+                LayoutInflater.from(parent.context)
+                        .inflate(R.layout.item_user_search, parent, false)
+        return UserViewHolder(view, onUserClick)
+    }
+
+    override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+
+    class UserViewHolder(itemView: View, private val onUserClick: (UserInfo) -> Unit) :
+            RecyclerView.ViewHolder(itemView) {
+
+        private val profileImageView: ImageView = itemView.findViewById(R.id.profileImageView)
+        private val avatarTextView: TextView = itemView.findViewById(R.id.avatarTextView)
+        private val userNameTextView: TextView = itemView.findViewById(R.id.userNameTextView)
+        private val userEmailTextView: TextView = itemView.findViewById(R.id.userEmailTextView)
+
+        fun bind(user: UserInfo) {
+            // Set user name
+            userNameTextView.text = user.displayName
+
+            // Set user email
+            userEmailTextView.text = user.email
+
+            // Set profile image or avatar
+            if (user.profileImageUrl.isNotEmpty()) {
+                profileImageView.visibility = View.VISIBLE
+                avatarTextView.visibility = View.GONE
+                profileImageView.load(user.profileImageUrl) {
+                    crossfade(true)
+                    transformations(CircleCropTransformation())
+                    placeholder(R.drawable.circle_background)
+                    error(R.drawable.circle_background)
+                }
+            } else {
+                profileImageView.visibility = View.GONE
+                avatarTextView.visibility = View.VISIBLE
+
+                // Generate avatar with initials
+                val initials = user.getInitials()
+                avatarTextView.text = initials
+
+                // Generate color based on user ID for consistency
+                val color = generateColorFromString(user.userId)
+                avatarTextView.setBackgroundColor(color)
+            }
+
+            // Set click listener
+            itemView.setOnClickListener { onUserClick(user) }
+        }
+
+        private fun generateColorFromString(str: String): Int {
+            // Generate a consistent color based on the string
+            val hash = str.hashCode()
+            val colors =
+                    listOf(
+                            Color.parseColor("#FF6B6B"), // Red
+                            Color.parseColor("#4ECDC4"), // Teal
+                            Color.parseColor("#45B7D1"), // Blue
+                            Color.parseColor("#FFA07A"), // Orange
+                            Color.parseColor("#98D8C8"), // Mint
+                            Color.parseColor("#F7DC6F"), // Yellow
+                            Color.parseColor("#BB8FCE"), // Purple
+                            Color.parseColor("#85C1E2"), // Sky Blue
+                            Color.parseColor("#F8B88B"), // Peach
+                            Color.parseColor("#A8E6CF") // Light Green
+                    )
+            return colors[Math.abs(hash) % colors.size]
+        }
+    }
+
+    class UserDiffCallback : DiffUtil.ItemCallback<UserInfo>() {
+        override fun areItemsTheSame(oldItem: UserInfo, newItem: UserInfo): Boolean {
+            return oldItem.userId == newItem.userId
+        }
+
+        override fun areContentsTheSame(oldItem: UserInfo, newItem: UserInfo): Boolean {
+            return oldItem == newItem
+        }
+    }
+}

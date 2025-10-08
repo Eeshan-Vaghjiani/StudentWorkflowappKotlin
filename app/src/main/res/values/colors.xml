@@ -52,4 +52,9 @@
     <color name="dark_text_primary">#FFFFFF</color>
     <color name="dark_text_secondary">#8E8E93</color>
     <color name="dark_surface">#3A3A3C</color>
+    
+    <!-- Enhanced Group Item Colors -->
+    <color name="admin_badge_color">#FF9500</color>
+    <color name="join_code_background">#F2F2F7</color>
+    <color name="join_code_border">#E5E5EA</color>
 </resources>

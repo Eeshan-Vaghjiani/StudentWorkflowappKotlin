@@ -89,6 +89,15 @@ class GroupDetailsActivity : AppCompatActivity() {
                         .show()
             }
         }
+
+        binding.btnEditGroup.setOnClickListener {
+            if (isUserAdmin) {
+                showEditGroupDialog()
+            } else {
+                Toast.makeText(this, "Only admins can edit group details", Toast.LENGTH_SHORT)
+                        .show()
+            }
+        }
     }
 
     private fun loadGroupDetails() {
@@ -341,6 +350,69 @@ class GroupDetailsActivity : AppCompatActivity() {
                         .show()
             }
         }
+    }
+
+    private fun showEditGroupDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_create_group, null)
+        val dialog = AlertDialog.Builder(this).setView(dialogView).create()
+
+        val etGroupName = dialogView.findViewById<TextInputEditText>(R.id.et_group_name)
+        val etGroupDescription =
+                dialogView.findViewById<TextInputEditText>(R.id.et_group_description)
+        val etGroupSubject = dialogView.findViewById<TextInputEditText>(R.id.et_group_subject)
+        val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btn_cancel)
+        val btnCreate = dialogView.findViewById<MaterialButton>(R.id.btn_create)
+
+        // Pre-fill with current values
+        etGroupName.setText(binding.tvGroupName.text)
+        etGroupDescription.setText(binding.tvGroupDescription.text)
+        etGroupSubject.setText(binding.tvGroupSubject.text.toString().replace("Subject: ", ""))
+
+        // Change button text to "Update"
+        btnCreate.text = "Update"
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        btnCreate.setOnClickListener {
+            val name = etGroupName.text.toString().trim()
+            val description = etGroupDescription.text.toString().trim()
+            val subject = etGroupSubject.text.toString().trim()
+
+            if (name.isEmpty()) {
+                Toast.makeText(this, "Group name is required", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            lifecycleScope.launch {
+                val success =
+                        groupRepository.updateGroupDetails(
+                                groupId,
+                                name,
+                                description,
+                                subject,
+                                "public" // TODO: Add privacy selection
+                        )
+                if (success) {
+                    Toast.makeText(
+                                    this@GroupDetailsActivity,
+                                    "Group updated successfully",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                    dialog.dismiss()
+                    loadGroupDetails() // Refresh
+                } else {
+                    Toast.makeText(
+                                    this@GroupDetailsActivity,
+                                    "Failed to update group",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                }
+            }
+        }
+
+        dialog.show()
     }
 }
 

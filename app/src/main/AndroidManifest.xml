@@ -3,6 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Required for Firebase/Google login -->
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Media Access (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- Legacy Storage (Android 12 and below) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    
+    <!-- Vibration for notifications -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- Camera (optional, for taking photos in chat) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.permission.CAMERA" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -14,9 +32,24 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LoginAndRegistration"
         tools:targetApi="31">
+        
+        <!-- Firebase Cloud Messaging Service -->
+        <service
+            android:name=".services.MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        
         <activity
             android:name=".ChatActivity"
             android:exported="false" />
+        <activity
+            android:name=".ChatRoomActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".CalendarActivity"
             android:exported="false" />
@@ -26,9 +59,20 @@
         <activity
             android:name=".GroupsActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".GroupsTestActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SimpleGroupsDemo"
+            android:exported="false" />
         <activity
             android:name=".GroupDetailsActivity"
-            android:exported="false" /> <!-- Login Activity (Launcher) -->
+            android:exported="false" />
+        <activity
+            android:name=".DebugActivity"
+            android:exported="false"
+            android:label="Debug Tools" /> <!-- Login Activity (Launcher) -->
         <activity
             android:name=".Login"
             android:exported="true">
@@ -43,7 +87,8 @@
             android:exported="false" /> <!-- Main Activity (Dashboard) -->
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:launchMode="singleTop" />
     </application>
 
 </manifest>
