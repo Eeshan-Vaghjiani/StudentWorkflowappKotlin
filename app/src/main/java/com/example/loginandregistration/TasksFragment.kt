@@ -11,8 +11,10 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.TaskRepository
+import com.example.loginandregistration.utils.ThemeUtils
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 
@@ -21,6 +23,7 @@ class TasksFragment : Fragment() {
         private lateinit var recyclerTasks: RecyclerView
         private lateinit var taskAdapter: TaskAdapter
         private lateinit var taskRepository: TaskRepository
+        private lateinit var swipeRefreshLayout: SwipeRefreshLayout
         private var currentView: View? = null
         private var currentFilter: String = "all"
 
@@ -43,6 +46,10 @@ class TasksFragment : Fragment() {
 
         private fun setupViews(view: View) {
                 recyclerTasks = view.findViewById(R.id.recycler_tasks)
+                swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
+
+                // Setup swipe refresh
+                swipeRefreshLayout.setOnRefreshListener { refreshData() }
         }
 
         private fun setupRecyclerView(view: View) {
@@ -79,9 +86,13 @@ class TasksFragment : Fragment() {
                                                         R.id.tv_completed_count
                                                 )
                                                 ?.text = stats.completed.toString()
+
+                                        // Hide refresh indicator when data loads
+                                        swipeRefreshLayout.isRefreshing = false
                                 }
                         } catch (e: Exception) {
                                 // Handle error silently
+                                swipeRefreshLayout.isRefreshing = false
                         }
                 }
 
@@ -90,12 +101,43 @@ class TasksFragment : Fragment() {
                         try {
                                 taskRepository.getUserTasksFlow().collect { firebaseTasks ->
                                         updateTasksList(firebaseTasks)
+                                        // Hide refresh indicator when data loads
+                                        swipeRefreshLayout.isRefreshing = false
                                 }
                         } catch (e: Exception) {
                                 // Handle error silently, but don't show dummy data
                                 // Just log the error and continue with empty list
                                 Log.e("TasksFragment", "Error fetching tasks: ${e.message}")
                                 updateTasksList(emptyList())
+                                swipeRefreshLayout.isRefreshing = false
+                        }
+                }
+        }
+
+        private fun refreshData() {
+                // Show loading indicator
+                swipeRefreshLayout.isRefreshing = true
+
+                // The real-time listeners will automatically update the data
+                // and hide the refresh indicator when complete
+                lifecycleScope.launch {
+                        try {
+                                // Force a refresh by re-fetching data
+                                // The Flow listeners will pick up the changes
+                                taskRepository.getUserTasksFlow().collect { firebaseTasks ->
+                                        updateTasksList(firebaseTasks)
+                                        swipeRefreshLayout.isRefreshing = false
+                                        return@collect // Only collect once for refresh
+                                }
+                        } catch (e: Exception) {
+                                Log.e("TasksFragment", "Error refreshing tasks: ${e.message}")
+                                Toast.makeText(
+                                                context,
+                                                "Error refreshing tasks",
+                                                Toast.LENGTH_SHORT
+                                        )
+                                        .show()
+                                swipeRefreshLayout.isRefreshing = false
                         }
                 }
         }
@@ -261,12 +303,7 @@ class TasksFragment : Fragment() {
         }
 
         private fun getStatusColor(status: String): String {
-                return when (status.lowercase()) {
-                        "completed" -> "#34C759"
-                        "overdue" -> "#FF3B30"
-                        "pending" -> "#FF9500"
-                        else -> "#007AFF"
-                }
+                return ThemeUtils.getStatusColorHex(requireContext(), status)
         }
 
         private fun formatDueDate(dueDate: com.google.firebase.Timestamp?): String {

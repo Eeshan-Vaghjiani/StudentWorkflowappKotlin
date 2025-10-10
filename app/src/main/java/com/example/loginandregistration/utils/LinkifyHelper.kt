@@ -10,6 +10,8 @@ import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.view.View
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import com.example.loginandregistration.R
 import java.util.regex.Pattern
 
 /** Helper class for detecting and making URLs clickable in TextViews */
@@ -66,7 +68,7 @@ object LinkifyHelper {
         }
 
         val spannableString = SpannableString(text)
-        val color = linkColor ?: Color.parseColor("#2196F3") // Material Blue
+        val color = linkColor ?: ContextCompat.getColor(textView.context, R.color.primary_color)
 
         links.forEach { link ->
             val clickableSpan =

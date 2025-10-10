@@ -2,93 +2,178 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Users can read and write their own user document
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Check if user is a member of a group
+    function isMember(groupId) {
+      return isAuthenticated() && 
+        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+    }
+    
+    // Check if user is a group admin
+    function isGroupAdmin(groupId) {
+      let group = get(/databases/$(database)/documents/groups/$(groupId)).data;
+      return isAuthenticated() && 
+        request.auth.uid in group.admins;
+    }
+    
+    // Check if user is a participant in a chat
+    function isParticipant(chatId) {
+      return isAuthenticated() && 
+        request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
+    
+    // Check if user is assigned to a task
+    function isAssignedTo(taskData) {
+      return isAuthenticated() && 
+        (isOwner(taskData.createdBy) || request.auth.uid in taskData.assignedTo);
+    }
+    
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Any authenticated user can read user profiles (for search, chat, etc.)
+      allow read: if isAuthenticated();
+      
+      // Users can only write to their own document
+      allow write: if isAuthenticated() && isOwner(userId);
     }
     
-    // Groups collection rules
+    // ============================================
+    // GROUPS COLLECTION
+    // ============================================
+    
     match /groups/{groupId} {
-      // Anyone can read public groups for discovery
-      allow read: if request.auth != null && 
-        (resource.data.privacy == 'public' || 
-         request.auth.uid in resource.data.memberIds);
+      // Members can read group data, or anyone can read public groups
+      allow read: if isAuthenticated() && 
+        (isMember(groupId) || resource.data.isPublic == true);
       
-      // Only authenticated users can create groups
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.owner &&
-        request.auth.uid in request.resource.data.memberIds;
+      // Any authenticated user can create a group
+      allow create: if isAuthenticated();
       
-      // Only group owners and admins can update group details
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.owner ||
-         (request.auth.uid in resource.data.memberIds && 
-          isGroupAdmin(request.auth.uid, resource.data.members)));
+      // Only admins can update group details
+      allow update: if isAuthenticated() && 
+        (isGroupAdmin(groupId) || isOwner(resource.data.createdBy));
       
-      // Only group owners can delete groups
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.owner;
+      // Only admins can delete groups
+      allow delete: if isAuthenticated() && 
+        (isGroupAdmin(groupId) || isOwner(resource.data.createdBy));
     }
     
-    // Tasks collection rules
+    // ============================================
+    // TASKS COLLECTION
+    // ============================================
+    
     match /tasks/{taskId} {
-      // Users can read their own tasks or tasks assigned to them
-      allow read: if request.auth != null && 
-        (request.auth.uid == resource.data.userId ||
+      // Users can read tasks they created or are assigned to
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.createdBy) || 
          request.auth.uid in resource.data.assignedTo);
       
-      // Users can create tasks for themselves
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.userId;
+      // Any authenticated user can create tasks
+      allow create: if isAuthenticated();
       
-      // Users can update their own tasks or tasks assigned to them
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.userId ||
+      // Only task creator or assigned users can update
+      allow update: if isAuthenticated() && 
+        (isOwner(resource.data.createdBy) || 
          request.auth.uid in resource.data.assignedTo);
       
-      // Users can delete their own tasks
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+      // Only task creator can delete
+      allow delete: if isAuthenticated() && 
+        isOwner(resource.data.createdBy);
     }
     
-    // Group activities collection rules
+    // ============================================
+    // CHATS COLLECTION
+    // ============================================
+    
+    match /chats/{chatId} {
+      // Only participants can read chat metadata
+      allow read: if isParticipant(chatId);
+      
+      // Only participants can create/update chat (for typing status, etc.)
+      allow write: if isParticipant(chatId);
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Only participants can read messages
+        allow read: if isParticipant(chatId);
+        
+        // Only participants can create messages
+        allow create: if isAuthenticated() && isParticipant(chatId);
+        
+        // Only message sender can update their own messages (for editing, status updates)
+        allow update: if isAuthenticated() && 
+          isOwner(resource.data.senderId);
+        
+        // Only message sender can delete their own messages
+        allow delete: if isAuthenticated() && 
+          isOwner(resource.data.senderId);
+      }
+    }
+    
+    // ============================================
+    // TYPING STATUS COLLECTION
+    // ============================================
+    
+    match /typing_status/{chatId} {
+      // Participants can read typing status
+      allow read: if isParticipant(chatId);
+      
+      // Participants can update their own typing status
+      allow write: if isAuthenticated() && isParticipant(chatId);
+    }
+    
+    // ============================================
+    // NOTIFICATIONS COLLECTION
+    // ============================================
+    
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && 
+        isOwner(resource.data.userId);
+      
+      // System can create notifications (via Cloud Functions)
+      // Users can update their own notifications (mark as read)
+      allow write: if isAuthenticated() && 
+        isOwner(request.resource.data.userId);
+    }
+    
+    // ============================================
+    // GROUP ACTIVITIES COLLECTION
+    // ============================================
+    
     match /group_activities/{activityId} {
       // Members can read activities from their groups
-      allow read: if request.auth != null && 
-        isGroupMember(request.auth.uid, resource.data.groupId);
+      allow read: if isAuthenticated() && 
+        isMember(resource.data.groupId);
       
       // Group members can create activities
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.userId &&
-        isGroupMember(request.auth.uid, request.resource.data.groupId);
+      allow create: if isAuthenticated() && 
+        isMember(request.resource.data.groupId);
       
       // Only activity creators can update their activities
-      allow update: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+      allow update: if isAuthenticated() && 
+        isOwner(resource.data.userId);
       
       // Only activity creators or group admins can delete activities
-      allow delete: if request.auth != null && 
-        (request.auth.uid == resource.data.userId ||
-         isGroupAdmin(request.auth.uid, resource.data.groupId));
-    }
-    
-    // Helper functions
-    function isGroupMember(userId, groupId) {
-      return userId in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
-    }
-    
-    function isGroupAdmin(userId, members) {
-      return members != null && 
-        members.hasAny([userId]) && 
-        members.where('userId', '==', userId)[0].role in ['owner', 'admin'];
-    }
-    
-    function isGroupAdminById(userId, groupId) {
-      let group = get(/databases/$(database)/documents/groups/$(groupId)).data;
-      return userId == group.owner || 
-        (group.members != null && 
-         group.members.hasAny([userId]) && 
-         group.members.where('userId', '==', userId)[0].role in ['owner', 'admin']);
+      allow delete: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || 
+         isGroupAdmin(resource.data.groupId));
     }
   }
 }

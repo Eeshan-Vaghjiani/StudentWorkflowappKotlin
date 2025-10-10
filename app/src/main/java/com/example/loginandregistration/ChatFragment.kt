@@ -7,7 +7,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -35,7 +34,8 @@ class ChatFragment : Fragment() {
     private lateinit var chatTabLayout: TabLayout
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var chatsRecyclerView: RecyclerView
-    private lateinit var emptyStateLayout: LinearLayout
+    private lateinit var skeletonRecyclerView: RecyclerView
+    private lateinit var emptyStateView: com.example.loginandregistration.views.EmptyStateView
     private lateinit var fabNewChat: FloatingActionButton
 
     override fun onCreateView(
@@ -74,7 +74,10 @@ class ChatFragment : Fragment() {
                     android.util.Log.d("ChatFragment", "Created $count group chats")
                 }
             } else {
-                android.util.Log.e("ChatFragment", "Failed to ensure group chats: ${result.exceptionOrNull()?.message}")
+                android.util.Log.e(
+                        "ChatFragment",
+                        "Failed to ensure group chats: ${result.exceptionOrNull()?.message}"
+                )
             }
         }
     }
@@ -84,8 +87,22 @@ class ChatFragment : Fragment() {
         chatTabLayout = view.findViewById(R.id.chatTabLayout)
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
         chatsRecyclerView = view.findViewById(R.id.chatsRecyclerView)
-        emptyStateLayout = view.findViewById(R.id.emptyStateLayout)
+        skeletonRecyclerView = view.findViewById(R.id.skeletonRecyclerView)
+        emptyStateView = view.findViewById(R.id.emptyStateView)
         fabNewChat = view.findViewById(R.id.fabNewChat)
+
+        // Setup skeleton loader
+        setupSkeletonLoader()
+    }
+
+    private fun setupSkeletonLoader() {
+        skeletonRecyclerView.apply {
+            layoutManager = LinearLayoutManager(requireContext())
+            adapter =
+                    com.example.loginandregistration.utils.SkeletonLoaderHelper
+                            .createSkeletonAdapter(R.layout.item_chat_skeleton, 5)
+            setHasFixedSize(true)
+        }
     }
 
     private fun setupRecyclerView() {
@@ -154,10 +171,15 @@ class ChatFragment : Fragment() {
 
                 // Show/hide empty state
                 if (chats.isEmpty()) {
-                    emptyStateLayout.visibility = View.VISIBLE
+                    emptyStateView.visibility = View.VISIBLE
+                    emptyStateView.showNoChats {
+                        // Open user search dialog when action button clicked
+                        val dialog = UserSearchDialog.newInstance()
+                        dialog.show(parentFragmentManager, UserSearchDialog.TAG)
+                    }
                     chatsRecyclerView.visibility = View.GONE
                 } else {
-                    emptyStateLayout.visibility = View.GONE
+                    emptyStateView.visibility = View.GONE
                     chatsRecyclerView.visibility = View.VISIBLE
                 }
             }
@@ -165,7 +187,22 @@ class ChatFragment : Fragment() {
 
         // Observe loading state
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isLoading.collect { isLoading -> swipeRefreshLayout.isRefreshing = isLoading }
+            viewModel.isLoading.collect { isLoading ->
+                swipeRefreshLayout.isRefreshing = isLoading
+
+                // Show skeleton loader on initial load, hide on subsequent refreshes
+                if (isLoading && chatAdapter.itemCount == 0) {
+                    com.example.loginandregistration.utils.SkeletonLoaderHelper.showSkeleton(
+                            skeletonRecyclerView,
+                            chatsRecyclerView
+                    )
+                } else if (!isLoading) {
+                    com.example.loginandregistration.utils.SkeletonLoaderHelper.showContent(
+                            skeletonRecyclerView,
+                            chatsRecyclerView
+                    )
+                }
+            }
         }
 
         // Observe errors

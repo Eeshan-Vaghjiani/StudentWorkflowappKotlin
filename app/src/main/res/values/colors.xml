@@ -69,4 +69,8 @@
     <!-- Connection Status Colors -->
     <color name="colorError">#FF3B30</color>
     <color name="colorWarning">#FF9500</color>
+    
+    <!-- Skeleton Loader Colors -->
+    <color name="skeleton_base">#E0E0E0</color>
+    <color name="skeleton_shimmer">#F5F5F5</color>
 </resources>

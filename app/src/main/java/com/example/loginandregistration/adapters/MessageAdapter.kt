@@ -14,6 +14,7 @@ import coil.transform.CircleCropTransformation
 import com.example.loginandregistration.ImageViewerActivity
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
+import com.example.loginandregistration.utils.AnimationUtils
 import com.example.loginandregistration.utils.DefaultAvatarGenerator
 import com.example.loginandregistration.utils.LinkifyHelper
 import com.example.loginandregistration.utils.MessageGrouper
@@ -84,6 +85,8 @@ class MessageAdapter(
                                     onMessageLongClick
                             )
                 }
+                // Add fade-in animation for new messages
+                AnimationUtils.fadeIn(holder.itemView, duration = 200)
             }
             is MessageGrouper.MessageItem.TimestampHeader -> {
                 (holder as TimestampHeaderViewHolder).bind(item.timestamp)

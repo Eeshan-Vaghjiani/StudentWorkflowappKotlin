@@ -1,6 +1,5 @@
 package com.example.loginandregistration
 
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.ProgressBar
@@ -8,14 +7,16 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.loginandregistration.models.FirebaseTask
 import com.example.loginandregistration.repository.TaskRepository
+import com.example.loginandregistration.utils.ThemeUtils
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 class TaskDetailsActivity : AppCompatActivity() {
 
@@ -48,7 +49,7 @@ class TaskDetailsActivity : AppCompatActivity() {
 
         initializeViews()
         setupToolbar()
-        
+
         taskRepository = TaskRepository(this)
         taskId = intent.getStringExtra(EXTRA_TASK_ID)
 
@@ -83,14 +84,12 @@ class TaskDetailsActivity : AppCompatActivity() {
     private fun setupToolbar() {
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        toolbar.setNavigationOnClickListener {
-            finish()
-        }
+        toolbar.setNavigationOnClickListener { finish() }
     }
 
     private fun loadTaskDetails() {
         showLoading(true)
-        
+
         lifecycleScope.launch {
             try {
                 // Fetch task from Firestore
@@ -100,19 +99,17 @@ class TaskDetailsActivity : AppCompatActivity() {
                 if (currentTask != null) {
                     displayTaskDetails(currentTask!!)
                 } else {
-                    Toast.makeText(
-                        this@TaskDetailsActivity,
-                        "Task not found",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this@TaskDetailsActivity, "Task not found", Toast.LENGTH_SHORT)
+                            .show()
                     finish()
                 }
             } catch (e: Exception) {
                 Toast.makeText(
-                    this@TaskDetailsActivity,
-                    "Error loading task: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                                this@TaskDetailsActivity,
+                                "Error loading task: ${e.message}",
+                                Toast.LENGTH_SHORT
+                        )
+                        .show()
                 finish()
             } finally {
                 showLoading(false)
@@ -123,29 +120,29 @@ class TaskDetailsActivity : AppCompatActivity() {
     private fun displayTaskDetails(task: FirebaseTask) {
         // Title and Status
         tvTaskTitle.text = task.title
-        
+
         // Status with icon and color
         when (task.status.lowercase()) {
             "completed" -> {
                 tvTaskStatus.text = "✓ Completed"
-                tvTaskStatus.setTextColor(Color.parseColor("#4CAF50"))
+                tvTaskStatus.setTextColor(ThemeUtils.getStatusColor(this, "completed"))
                 btnMarkComplete.visibility = View.GONE
             }
             "pending" -> {
                 tvTaskStatus.text = "○ Pending"
-                tvTaskStatus.setTextColor(Color.parseColor("#FF9800"))
+                tvTaskStatus.setTextColor(ThemeUtils.getStatusColor(this, "pending"))
                 btnMarkComplete.visibility = View.VISIBLE
                 btnMarkComplete.text = "Mark as Complete"
             }
             "overdue" -> {
                 tvTaskStatus.text = "! Overdue"
-                tvTaskStatus.setTextColor(Color.parseColor("#F44336"))
+                tvTaskStatus.setTextColor(ThemeUtils.getStatusColor(this, "overdue"))
                 btnMarkComplete.visibility = View.VISIBLE
                 btnMarkComplete.text = "Mark as Complete"
             }
             else -> {
                 tvTaskStatus.text = task.status.replaceFirstChar { it.uppercase() }
-                tvTaskStatus.setTextColor(Color.parseColor("#9E9E9E"))
+                tvTaskStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
                 btnMarkComplete.visibility = View.VISIBLE
             }
         }
@@ -155,7 +152,7 @@ class TaskDetailsActivity : AppCompatActivity() {
             tvTaskDescription.text = task.description
         } else {
             tvTaskDescription.text = "No description provided"
-            tvTaskDescription.setTextColor(Color.parseColor("#9E9E9E"))
+            tvTaskDescription.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
 
         // Category
@@ -164,13 +161,8 @@ class TaskDetailsActivity : AppCompatActivity() {
         // Priority with color
         val priorityText = task.priority.replaceFirstChar { it.uppercase() }
         tvTaskPriority.text = priorityText
-        
-        val priorityColor = when (task.priority.lowercase()) {
-            "high" -> Color.parseColor("#F44336")
-            "medium" -> Color.parseColor("#FF9800")
-            "low" -> Color.parseColor("#4CAF50")
-            else -> Color.parseColor("#9E9E9E")
-        }
+
+        val priorityColor = ThemeUtils.getPriorityColor(this, task.priority)
         priorityIndicator.setBackgroundColor(priorityColor)
         tvTaskPriority.setTextColor(priorityColor)
 
@@ -194,64 +186,57 @@ class TaskDetailsActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        btnMarkComplete.setOnClickListener {
-            showMarkCompleteDialog()
-        }
+        btnMarkComplete.setOnClickListener { showMarkCompleteDialog() }
 
         btnEditTask.setOnClickListener {
             // TODO: Navigate to edit task screen
             Toast.makeText(this, "Edit functionality coming soon", Toast.LENGTH_SHORT).show()
         }
 
-        btnDeleteTask.setOnClickListener {
-            showDeleteConfirmationDialog()
-        }
+        btnDeleteTask.setOnClickListener { showDeleteConfirmationDialog() }
     }
 
     private fun showMarkCompleteDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Mark Task as Complete")
-            .setMessage("Are you sure you want to mark this task as complete?")
-            .setPositiveButton("Complete") { _, _ ->
-                markTaskAsComplete()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+                .setTitle("Mark Task as Complete")
+                .setMessage("Are you sure you want to mark this task as complete?")
+                .setPositiveButton("Complete") { _, _ -> markTaskAsComplete() }
+                .setNegativeButton("Cancel", null)
+                .show()
     }
 
     private fun markTaskAsComplete() {
         val taskId = this.taskId ?: return
-        
+
         showLoading(true)
         lifecycleScope.launch {
             try {
                 val success = taskRepository.completeTask(taskId)
-                
+
                 if (success) {
                     Toast.makeText(
-                        this@TaskDetailsActivity,
-                        "Task marked as complete",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    
+                                    this@TaskDetailsActivity,
+                                    "Task marked as complete",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+
                     // Reload task details to update UI
                     loadTaskDetails()
-                    
+
                     // Set result to notify calendar to refresh
                     setResult(RESULT_OK)
                 } else {
                     Toast.makeText(
-                        this@TaskDetailsActivity,
-                        "Failed to update task",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                                    this@TaskDetailsActivity,
+                                    "Failed to update task",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(
-                    this@TaskDetailsActivity,
-                    "Error: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(this@TaskDetailsActivity, "Error: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
             } finally {
                 showLoading(false)
             }
@@ -260,46 +245,45 @@ class TaskDetailsActivity : AppCompatActivity() {
 
     private fun showDeleteConfirmationDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Delete Task")
-            .setMessage("Are you sure you want to delete this task? This action cannot be undone.")
-            .setPositiveButton("Delete") { _, _ ->
-                deleteTask()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+                .setTitle("Delete Task")
+                .setMessage(
+                        "Are you sure you want to delete this task? This action cannot be undone."
+                )
+                .setPositiveButton("Delete") { _, _ -> deleteTask() }
+                .setNegativeButton("Cancel", null)
+                .show()
     }
 
     private fun deleteTask() {
         val taskId = this.taskId ?: return
-        
+
         showLoading(true)
         lifecycleScope.launch {
             try {
                 val success = taskRepository.deleteTask(taskId)
-                
+
                 if (success) {
                     Toast.makeText(
-                        this@TaskDetailsActivity,
-                        "Task deleted successfully",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    
+                                    this@TaskDetailsActivity,
+                                    "Task deleted successfully",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+
                     // Set result to notify calendar to refresh
                     setResult(RESULT_OK)
                     finish()
                 } else {
                     Toast.makeText(
-                        this@TaskDetailsActivity,
-                        "Failed to delete task",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                                    this@TaskDetailsActivity,
+                                    "Failed to delete task",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(
-                    this@TaskDetailsActivity,
-                    "Error: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(this@TaskDetailsActivity, "Error: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
             } finally {
                 showLoading(false)
             }

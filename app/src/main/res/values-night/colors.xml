@@ -1,19 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Dark Mode Override Colors -->
+    
+    <!-- Background Colors -->
     <color name="background_color">#1C1C1E</color>
     <color name="card_background">#2C2C2E</color>
+    <color name="dark_surface">#3A3A3C</color>
+    
+    <!-- Text Colors -->
     <color name="text_primary">#FFFFFF</color>
     <color name="text_secondary">#8E8E93</color>
+    <color name="dark_text_primary">#FFFFFF</color>
+    <color name="dark_text_secondary">#8E8E93</color>
     
-    <!-- Keep the same accent colors -->
-    <color name="primary_color">#007AFF</color>
-    <color name="overdue_color">#FF3B30</color>
-    <color name="due_today_color">#FF9500</color>
-    <color name="completed_color">#34C759</color>
+    <!-- Primary Colors (Keep bright for visibility) -->
+    <color name="primary_color">#0A84FF</color> <!-- Slightly brighter blue for dark mode -->
+    <color name="colorPrimaryBlue">#0A84FF</color>
+    
+    <!-- Status Colors (Keep vibrant) -->
+    <color name="overdue_color">#FF453A</color> <!-- Brighter red for dark mode -->
+    <color name="due_today_color">#FF9F0A</color> <!-- Brighter orange for dark mode -->
+    <color name="completed_color">#32D74B</color> <!-- Brighter green for dark mode -->
+    <color name="colorGreen">#32D74B</color>
+    <color name="colorOrange">#FF9F0A</color>
+    
+    <!-- Task Priority Colors (Adjusted for dark mode) -->
+    <color name="high_priority_color">#FF453A</color>
+    <color name="medium_priority_color">#FF9F0A</color>
+    <color name="low_priority_color">#32D74B</color>
     
     <!-- Enhanced Group Item Dark Colors -->
-    <color name="admin_badge_color">#FF9500</color>
+    <color name="admin_badge_color">#FF9F0A</color>
     <color name="join_code_background">#3A3A3C</color>
     <color name="join_code_border">#48484A</color>
+    
+    <!-- Divider Color -->
+    <color name="divider_color">#48484A</color>
+    
+    <!-- Connection Status Colors -->
+    <color name="colorError">#FF453A</color>
+    <color name="colorWarning">#FF9F0A</color>
+    
+    <!-- Skeleton Loader Colors (Dark Mode) -->
+    <color name="skeleton_base">#2C2C2E</color>
+    <color name="skeleton_shimmer">#3A3A3C</color>
+    
+    <!-- Dashboard Colors -->
+    <color name="colorTextPrimary">#FFFFFF</color>
+    <color name="colorTextSecondary">#8E8E93</color>
+    <color name="colorBackground">#1C1C1E</color>
+    <color name="colorCardBackground">#2C2C2E</color>
+    <color name="colorIconDefaultTint">#8E8E93</color>
+    
+    <!-- Badge Colors -->
+    <color name="colorBadgeWarningText">#FFFFFF</color>
+    <color name="colorBadgeNeutralText">#FFFFFF</color>
+    
+    <!-- Gray Colors (Adjusted for dark mode) -->
+    <color name="light_gray">#3A3A3C</color> <!-- Darker gray for dark mode -->
+    <color name="dark_gray">#636366</color> <!-- Lighter gray for dark mode -->
+    
+    <!-- Keep white and black as is -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="colorWhite">#FFFFFF</color>
+    <color name="colorBlack">#000000</color>
 </resources>

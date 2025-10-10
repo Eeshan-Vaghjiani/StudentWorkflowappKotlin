@@ -16,6 +16,7 @@ import com.example.loginandregistration.adapters.MessageAdapter
 import com.example.loginandregistration.databinding.ActivityChatRoomBinding
 import com.example.loginandregistration.models.Message
 import com.example.loginandregistration.repository.StorageRepository
+import com.example.loginandregistration.utils.AnimationUtils
 import com.example.loginandregistration.utils.ConnectionMonitor
 import com.example.loginandregistration.viewmodels.ChatRoomViewModel
 import com.example.loginandregistration.viewmodels.ChatRoomViewModelFactory
@@ -163,9 +164,15 @@ class ChatRoomActivity : AppCompatActivity() {
     }
 
     private fun setupMessageInput() {
-        binding.sendButton.setOnClickListener { sendMessage() }
+        binding.sendButton.setOnClickListener {
+            AnimationUtils.buttonPress(it)
+            sendMessage()
+        }
 
-        binding.attachmentButton.setOnClickListener { showAttachmentPicker() }
+        binding.attachmentButton.setOnClickListener {
+            AnimationUtils.buttonPress(it)
+            showAttachmentPicker()
+        }
 
         binding.messageEditText.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
@@ -259,8 +266,10 @@ class ChatRoomActivity : AppCompatActivity() {
                         isFirstLoad -> {
                             binding.messagesRecyclerView.postDelayed(
                                     {
-                                        binding.messagesRecyclerView.scrollToPosition(
-                                                messageAdapter.itemCount - 1
+                                        AnimationUtils.smoothScrollToPosition(
+                                                binding.messagesRecyclerView,
+                                                messageAdapter.itemCount - 1,
+                                                smooth = false
                                         )
                                     },
                                     100
@@ -272,8 +281,8 @@ class ChatRoomActivity : AppCompatActivity() {
                                 firstVisiblePosition >= previousMessageCount - 5 -> {
                             binding.messagesRecyclerView.postDelayed(
                                     {
-                                        binding.messagesRecyclerView.smoothScrollToPosition(
-                                                messageAdapter.itemCount - 1
+                                        AnimationUtils.smoothScrollToBottom(
+                                                binding.messagesRecyclerView
                                         )
                                     },
                                     100

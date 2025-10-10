@@ -1,18 +1,44 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Base application theme for Dark Mode -->
     <style name="Base.Theme.LoginAndRegistration" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Dark theme colors -->
+        <!-- Primary colors -->
         <item name="colorPrimary">@color/primary_color</item>
         <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorPrimaryVariant">@color/primary_color</item>
+        
+        <!-- Secondary colors -->
         <item name="colorSecondary">@color/primary_color</item>
         <item name="colorOnSecondary">@android:color/white</item>
+        
+        <!-- Background colors -->
         <item name="android:colorBackground">@color/background_color</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        
+        <!-- Surface colors -->
         <item name="colorSurface">@color/card_background</item>
         <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorOnBackground">@color/text_primary</item>
+        
+        <!-- Error colors -->
+        <item name="colorError">@color/colorError</item>
+        <item name="colorOnError">@android:color/white</item>
+        
+        <!-- Status bar -->
         <item name="android:statusBarColor">@color/background_color</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        
+        <!-- Navigation bar -->
         <item name="android:navigationBarColor">@color/background_color</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        
+        <!-- Text appearance -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        
+        <!-- Material components -->
+        <item name="materialCardViewStyle">@style/Widget.Material3.CardView.Elevated</item>
+        <item name="textInputStyle">@style/Widget.Material3.TextInputLayout.OutlinedBox</item>
+        
+        <!-- Divider color -->
+        <item name="android:listDivider">@color/divider_color</item>
     </style>
 </resources>

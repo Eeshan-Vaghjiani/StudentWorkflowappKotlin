@@ -228,19 +228,19 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 3: File and Image Sharing
 
-- [x] 13. Create storage repository and image compression
+- [x] 13. Create image compression and base64 encoding (NO FIREBASE STORAGE)
 
 
 
 
 
-  - Create `repository/StorageRepository.kt`
-  - Implement `uploadImage()` with progress callback
-  - Implement `uploadDocument()` with progress callback
   - Create `utils/ImageCompressor.kt`
-  - Compress images to max 1920x1080, 80% quality
+  - Compress images to max 800x800, 70% quality for smaller size
   - Resize images while maintaining aspect ratio
-  - Save compressed image to cache directory
+  - Create `utils/Base64Helper.kt` for encoding/decoding
+  - Implement `encodeImageToBase64()` for storing in Firestore
+  - Implement `decodeBase64ToImage()` for displaying images
+  - Keep compressed images under 1MB for Firestore limits
   - _Requirements: 3.2, 3.3_
 
 - [x] 14. Add attachment picker to chat
@@ -258,53 +258,52 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Show attachment button in chat input area
   - _Requirements: 3.1, 3.10_
 
-- [x] 15. Implement image message sending
+- [x] 15. Implement image message sending (BASE64 IN FIRESTORE)
 
 
 
 
 
   - Update `sendImageMessage()` in ChatRepository
-  - Compress image before upload
-  - Upload to Storage at `chat_images/{chatId}/{timestamp}.jpg`
-  - Show progress indicator during upload
-  - Save message with imageUrl to Firestore
-  - Display image thumbnail in chat
-  - Handle upload failures with retry option
+  - Compress image before encoding
+  - Encode image to base64 string
+  - Show progress indicator during compression
+  - Save message with base64ImageData field to Firestore
+  - Display image from base64 in chat
+  - Handle encoding failures with retry option
   - _Requirements: 3.2, 3.3, 3.4, 3.9_
 
-- [x] 16. Implement document message sending
+- [x] 16. Implement document message sending (EXTERNAL LINKS ONLY)
 
 
 
 
 
   - Update `sendDocumentMessage()` in ChatRepository
-  - Get file name and size from URI
-  - Upload to Storage at `chat_documents/{chatId}/{filename}`
-  - Show progress indicator during upload
-  - Save message with documentUrl, name, size to Firestore
-  - Display document with icon, name, size in chat
-  - Handle upload failures with retry option
+  - For now, only support sharing document URLs/links
+  - Save message with documentUrl, name to Firestore
+  - Display document link with icon and name in chat
+  - User can paste links to Google Drive, Dropbox, etc.
+  - Show message: "Share document links (Google Drive, Dropbox, etc.)"
+  - Handle validation of URLs
   - _Requirements: 3.6, 3.7, 3.9_
 
-- [x] 17. Add image viewer and document download
+- [x] 17. Add image viewer and document link opening
 
 
 
 
 
   - Create `ImageViewerActivity.kt` for full-screen images
+  - Load image from base64 data
   - Implement pinch-to-zoom for images
   - Add swipe-to-dismiss gesture
-  - Implement `downloadFile()` in StorageRepository
-  - Download documents to Downloads folder
-  - Show download progress
-  - Open document with appropriate app using Intent
-  - Handle case when no app can open document
+  - For document links, open URL in browser using Intent
+  - Show toast: "Opening link in browser"
+  - Handle case when no browser available
   - _Requirements: 3.5, 3.7_
 
-- [x] 18. Implement profile picture upload
+- [x] 18. Implement profile picture upload (BASE64 IN FIRESTORE)
 
 
 
@@ -312,12 +311,11 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
   - Update `ProfileFragment.kt` with edit button
   - Show options: Take Photo, Choose from Gallery
-  - Implement `uploadProfilePicture()` in StorageRepository
   - Crop image to square using library or custom cropper
-  - Compress to under 500KB
-  - Upload to `profile_images/{userId}/{timestamp}.jpg`
-  - Update user document with profileImageUrl
-  - Display profile picture in UI
+  - Compress to under 200KB for Firestore
+  - Encode to base64 string
+  - Update user document with profileImageBase64 field
+  - Display profile picture from base64 in UI
   - _Requirements: 3.8, 5.1, 5.2, 5.3, 5.4, 5.5_
 
 - [x] 19. Display profile pictures throughout app
@@ -517,7 +515,9 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Allow manual retry for failed messages
   - _Requirements: 7.3, 7.4_
 
-- [-] 29. Add connection status indicator
+- [x] 29. Add connection status indicator
+
+
 
 
 
@@ -529,13 +529,18 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Animate banner slide in/out
   - _Requirements: 7.5_
 
-- [ ] 30. Implement offline image caching
-  - Configure Coil with disk cache
-  - Set cache size to 50MB
-  - Cache profile pictures automatically
-  - Cache chat images when viewed
-  - Display cached images when offline
-  - Show placeholder if image not cached
+- [x] 30. Implement offline image caching (BASE64 ALREADY CACHED)
+
+
+
+
+
+  - Since images are stored as base64 in Firestore
+  - They are automatically cached with Firestore offline persistence
+  - Configure Coil for decoded bitmap caching in memory
+  - Set memory cache to 25% of available memory
+  - Display cached images when offline from Firestore cache
+  - Show placeholder only if data not yet loaded
   - _Requirements: 7.6, 7.7_
 
 **✅ Checkpoint 6: Test Offline Support**
@@ -551,7 +556,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 7: User Experience Enhancements
 
-- [ ] 31. Add skeleton loaders for loading states
+- [x] 31. Add skeleton loaders for loading states
+
+
+
+
+
   - Create `SkeletonLoader.kt` custom view with shimmer effect
   - Add skeleton layout for chat list items
   - Add skeleton layout for message list items
@@ -560,7 +570,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Fade out skeleton and fade in actual content
   - _Requirements: 8.1_
 
-- [ ] 32. Create empty state views
+- [x] 32. Create empty state views
+
+
+
+
+
   - Create `EmptyStateView.kt` custom view
   - Add empty state for "No chats yet"
   - Add empty state for "No messages"
@@ -570,7 +585,8 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Show appropriate empty state based on context
   - _Requirements: 8.2_
 
-- [ ] 33. Implement swipe-to-refresh
+- [x] 33. Implement swipe-to-refresh
+
   - Add SwipeRefreshLayout to ChatFragment
   - Add SwipeRefreshLayout to TasksFragment
   - Add SwipeRefreshLayout to GroupsFragment
@@ -579,7 +595,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Hide indicator when refresh completes
   - _Requirements: 8.6_
 
-- [ ] 34. Add animations and transitions
+- [x] 34. Add animations and transitions
+
+
+
+
+
   - Create `AnimationUtils.kt` with common animations
   - Add fade-in animation for new messages
   - Add slide-up animation for bottom sheets
@@ -589,7 +610,11 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Add ripple effect for clickable items
   - _Requirements: 8.3, 8.5_
 
-- [ ] 35. Implement error handling with user feedback
+- [x] 35. Implement error handling with user feedback
+
+
+
+
   - Create `ErrorHandler.kt` utility class
   - Show Snackbar for network errors with retry button
   - Show dialog for permission errors with settings button
@@ -598,7 +623,13 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Provide helpful error messages (not technical jargon)
   - _Requirements: 8.4_
 
-- [ ]* 36. Add dark mode support
+- [x] 36. Add dark mode support
+
+
+
+
+
+
   - Create night theme in `values-night/themes.xml`
   - Define dark colors for all UI elements
   - Test all screens in dark mode
@@ -619,7 +650,12 @@ This implementation plan breaks down each feature into discrete, testable tasks.
 
 ## Phase 8: Security and Privacy
 
-- [ ] 37. Implement Firestore security rules
+- [x] 37. Implement Firestore security rules
+
+
+
+
+
   - Create `firestore.rules` file in project root
   - Add authentication check for all operations
   - Add user ownership rules for users collection
@@ -630,17 +666,30 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Deploy rules to Firebase Console
   - _Requirements: 9.1, 9.2, 9.3, 9.6_
 
-- [ ] 38. Implement Storage security rules
-  - Create `storage.rules` file in project root
-  - Add authentication check for all operations
-  - Add file size limits (images: 5MB, documents: 10MB)
-  - Add user ownership rules for profile_images
-  - Add participant rules for chat_images and chat_documents
-  - Validate file types if needed
-  - Deploy rules to Firebase Console
+- [x] 38. ~~Implement Storage security rules~~ (NOT USING FIREBASE STORAGE)
+
+
+
+
+
+
+
+
+
+  - NOT NEEDED - We're using base64 in Firestore instead
+  - Images stored directly in Firestore documents
+  - Security handled by Firestore rules (Task 37)
+  - Document links are external URLs (Google Drive, etc.)
+  - Validate base64 data size in app before saving
+  - Limit images to 1MB encoded size
   - _Requirements: 9.4, 9.5_
 
-- [ ] 39. Configure ProGuard for release builds
+- [x] 39. Configure ProGuard for release builds
+
+
+
+
+
   - Update `proguard-rules.pro` file
   - Add keep rules for Firebase classes
   - Add keep rules for data model classes
@@ -650,7 +699,8 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Test release build to ensure no crashes
   - _Requirements: 9.7_
 
-- [ ]* 40. Add input validation and sanitization
+- [ ] 40. Add input validation and sanitization
+
   - Validate message text length (max 5000 characters)
   - Validate file sizes before upload
   - Sanitize user input to prevent injection
@@ -708,7 +758,8 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Test with Android Profiler
   - _Requirements: 10.6, 10.7_
 
-- [ ]* 45. Add memory management and cache clearing
+- [ ] 45. Add memory management and cache clearing
+
   - Monitor memory usage with Profiler
   - Clear image cache when memory is low
   - Implement cache size limits
@@ -747,6 +798,7 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Fix critical bugs first
   - Test fixes thoroughly
   - Regression test to ensure no new bugs introduced
+  - check if all the stats in the app are loading properly from the database 
 
 - [ ] 48. Prepare app for release
   - Update app icon (replace default icon)
@@ -757,14 +809,14 @@ This implementation plan breaks down each feature into discrete, testable tasks.
   - Test signed build on device
   - Prepare screenshots for Play Store
 
-- [ ]* 49. Write unit tests for critical functionality
+- [ ] 49. Write unit tests for critical functionality
   - Test repository methods
   - Test ViewModel logic
   - Test utility functions
   - Test data model conversions
   - Aim for >70% code coverage on business logic
 
-- [ ]* 50. Create user documentation
+- [ ] 50. Create user documentation
   - Write README with setup instructions
   - Document Firebase configuration steps
   - Create user guide with screenshots

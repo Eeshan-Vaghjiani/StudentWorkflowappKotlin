@@ -1,7 +1,6 @@
 package com.example.loginandregistration
 
 import android.Manifest
-import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -13,15 +12,17 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.example.loginandregistration.databinding.BottomSheetAttachmentBinding
+import com.example.loginandregistration.utils.AnimationUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 
 class AttachmentBottomSheet(
-    private val onImageSelected: (Uri) -> Unit,
-    private val onDocumentSelected: (Uri) -> Unit
+        private val onImageSelected: (Uri) -> Unit,
+        private val onDocumentSelected: (Uri) -> Unit
 ) : BottomSheetDialogFragment() {
 
     private var _binding: BottomSheetAttachmentBinding? = null
-    private val binding get() = _binding!!
+    private val binding
+        get() = _binding!!
 
     private lateinit var cameraPermissionLauncher: ActivityResultLauncher<String>
     private lateinit var imagePermissionLauncher: ActivityResultLauncher<String>
@@ -35,68 +36,69 @@ class AttachmentBottomSheet(
         super.onCreate(savedInstanceState)
 
         // Camera permission launcher
-        cameraPermissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            if (isGranted) {
-                openCamera()
-            } else {
-                showPermissionDeniedMessage("Camera permission is required to take photos")
-            }
-        }
+        cameraPermissionLauncher =
+                registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted
+                    ->
+                    if (isGranted) {
+                        openCamera()
+                    } else {
+                        showPermissionDeniedMessage("Camera permission is required to take photos")
+                    }
+                }
 
         // Image permission launcher (for Android 13+)
-        imagePermissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            if (isGranted) {
-                openGallery()
-            } else {
-                showPermissionDeniedMessage("Storage permission is required to access photos")
-            }
-        }
+        imagePermissionLauncher =
+                registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted
+                    ->
+                    if (isGranted) {
+                        openGallery()
+                    } else {
+                        showPermissionDeniedMessage(
+                                "Storage permission is required to access photos"
+                        )
+                    }
+                }
 
         // Take picture launcher
-        takePictureLauncher = registerForActivityResult(
-            ActivityResultContracts.TakePicture()
-        ) { success ->
-            if (success && pendingCameraUri != null) {
-                onImageSelected(pendingCameraUri!!)
-                dismiss()
-            }
-            pendingCameraUri = null
-        }
+        takePictureLauncher =
+                registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+                    if (success && pendingCameraUri != null) {
+                        onImageSelected(pendingCameraUri!!)
+                        dismiss()
+                    }
+                    pendingCameraUri = null
+                }
 
         // Pick image launcher
-        pickImageLauncher = registerForActivityResult(
-            ActivityResultContracts.GetContent()
-        ) { uri ->
-            uri?.let {
-                onImageSelected(it)
-                dismiss()
-            }
-        }
+        pickImageLauncher =
+                registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                    uri?.let {
+                        onImageSelected(it)
+                        dismiss()
+                    }
+                }
 
         // Pick document launcher
-        pickDocumentLauncher = registerForActivityResult(
-            ActivityResultContracts.OpenDocument()
-        ) { uri ->
-            uri?.let {
-                // Grant persistable URI permission
-                requireContext().contentResolver.takePersistableUriPermission(
-                    it,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                onDocumentSelected(it)
-                dismiss()
-            }
-        }
+        pickDocumentLauncher =
+                registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    uri?.let {
+                        // Grant persistable URI permission
+                        requireContext()
+                                .contentResolver
+                                .takePersistableUriPermission(
+                                        it,
+                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                        onDocumentSelected(it)
+                        dismiss()
+                    }
+                }
     }
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
     ): View {
         _binding = BottomSheetAttachmentBinding.inflate(inflater, container, false)
         return binding.root
@@ -105,15 +107,21 @@ class AttachmentBottomSheet(
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Add slide-up animation for bottom sheet content
+        AnimationUtils.slideUp(binding.root, duration = 250)
+
         binding.cameraOption.setOnClickListener {
+            AnimationUtils.buttonPress(it)
             handleCameraClick()
         }
 
         binding.galleryOption.setOnClickListener {
+            AnimationUtils.buttonPress(it)
             handleGalleryClick()
         }
 
         binding.documentOption.setOnClickListener {
+            AnimationUtils.buttonPress(it)
             handleDocumentClick()
         }
     }
@@ -123,9 +131,9 @@ class AttachmentBottomSheet(
             hasCameraPermission() -> openCamera()
             shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> {
                 showPermissionRationale(
-                    "Camera permission is needed to take photos",
-                    Manifest.permission.CAMERA,
-                    cameraPermissionLauncher
+                        "Camera permission is needed to take photos",
+                        Manifest.permission.CAMERA,
+                        cameraPermissionLauncher
                 )
             }
             else -> cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -139,9 +147,9 @@ class AttachmentBottomSheet(
                 hasImagePermission() -> openGallery()
                 shouldShowRequestPermissionRationale(Manifest.permission.READ_MEDIA_IMAGES) -> {
                     showPermissionRationale(
-                        "Storage permission is needed to access photos",
-                        Manifest.permission.READ_MEDIA_IMAGES,
-                        imagePermissionLauncher
+                            "Storage permission is needed to access photos",
+                            Manifest.permission.READ_MEDIA_IMAGES,
+                            imagePermissionLauncher
                     )
                 }
                 else -> imagePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
@@ -152,9 +160,9 @@ class AttachmentBottomSheet(
                 hasLegacyStoragePermission() -> openGallery()
                 shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE) -> {
                     showPermissionRationale(
-                        "Storage permission is needed to access photos",
-                        Manifest.permission.READ_EXTERNAL_STORAGE,
-                        imagePermissionLauncher
+                            "Storage permission is needed to access photos",
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            imagePermissionLauncher
                     )
                 }
                 else -> imagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -171,19 +179,21 @@ class AttachmentBottomSheet(
         try {
             // Create a temporary file for the photo
             val photoFile = createImageFile()
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                requireContext(),
-                "${requireContext().packageName}.fileprovider",
-                photoFile
-            )
+            val uri =
+                    androidx.core.content.FileProvider.getUriForFile(
+                            requireContext(),
+                            "${requireContext().packageName}.fileprovider",
+                            photoFile
+                    )
             pendingCameraUri = uri
             takePictureLauncher.launch(uri)
         } catch (e: Exception) {
             android.widget.Toast.makeText(
-                requireContext(),
-                "Error opening camera: ${e.message}",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
+                            requireContext(),
+                            "Error opening camera: ${e.message}",
+                            android.widget.Toast.LENGTH_SHORT
+                    )
+                    .show()
         }
     }
 
@@ -193,43 +203,39 @@ class AttachmentBottomSheet(
 
     private fun openDocumentPicker() {
         // Allow common document types
-        val mimeTypes = arrayOf(
-            "application/pdf",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-powerpoint",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "text/plain",
-            "application/zip"
-        )
+        val mimeTypes =
+                arrayOf(
+                        "application/pdf",
+                        "application/msword",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/vnd.ms-excel",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-powerpoint",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "text/plain",
+                        "application/zip"
+                )
         pickDocumentLauncher.launch(mimeTypes)
     }
 
     private fun createImageFile(): java.io.File {
-        val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-            .format(java.util.Date())
+        val timeStamp =
+                java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+                        .format(java.util.Date())
         val storageDir = requireContext().cacheDir
-        return java.io.File.createTempFile(
-            "JPEG_${timeStamp}_",
-            ".jpg",
-            storageDir
-        )
+        return java.io.File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir)
     }
 
     private fun hasCameraPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
     }
 
     private fun hasImagePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.READ_MEDIA_IMAGES
+                    requireContext(),
+                    Manifest.permission.READ_MEDIA_IMAGES
             ) == PackageManager.PERMISSION_GRANTED
         } else {
             hasLegacyStoragePermission()
@@ -238,48 +244,45 @@ class AttachmentBottomSheet(
 
     private fun hasLegacyStoragePermission(): Boolean {
         return ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.READ_EXTERNAL_STORAGE
+                requireContext(),
+                Manifest.permission.READ_EXTERNAL_STORAGE
         ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun showPermissionRationale(
-        message: String,
-        permission: String,
-        launcher: ActivityResultLauncher<String>
+            message: String,
+            permission: String,
+            launcher: ActivityResultLauncher<String>
     ) {
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Permission Required")
-            .setMessage(message)
-            .setPositiveButton("Grant") { _, _ ->
-                launcher.launch(permission)
-            }
-            .setNegativeButton("Cancel") { dialog, _ ->
-                dialog.dismiss()
-                dismiss()
-            }
-            .show()
+                .setTitle("Permission Required")
+                .setMessage(message)
+                .setPositiveButton("Grant") { _, _ -> launcher.launch(permission) }
+                .setNegativeButton("Cancel") { dialog, _ ->
+                    dialog.dismiss()
+                    dismiss()
+                }
+                .show()
     }
 
     private fun showPermissionDeniedMessage(message: String) {
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Permission Denied")
-            .setMessage("$message. You can grant permission in app settings.")
-            .setPositiveButton("Settings") { _, _ ->
-                openAppSettings()
-            }
-            .setNegativeButton("Cancel") { dialog, _ ->
-                dialog.dismiss()
-                dismiss()
-            }
-            .show()
+                .setTitle("Permission Denied")
+                .setMessage("$message. You can grant permission in app settings.")
+                .setPositiveButton("Settings") { _, _ -> openAppSettings() }
+                .setNegativeButton("Cancel") { dialog, _ ->
+                    dialog.dismiss()
+                    dismiss()
+                }
+                .show()
     }
 
     private fun openAppSettings() {
-        val intent = android.content.Intent(
-            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.parse("package:${requireContext().packageName}")
-        )
+        val intent =
+                android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${requireContext().packageName}")
+                )
         startActivity(intent)
         dismiss()
     }

@@ -1,7 +1,9 @@
 package com.example.loginandregistration
 
 import android.app.Application
+import coil.Coil
 import com.example.loginandregistration.utils.FirestoreConfig
+import com.example.loginandregistration.utils.ImageLoaderConfig
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -24,5 +26,14 @@ class TeamCollaborationApp : Application() {
         FirestoreConfig.enableOfflinePersistence(firestore)
 
         android.util.Log.d("TeamCollaborationApp", "Firestore offline persistence enabled")
+
+        // Configure Coil ImageLoader with disk caching for offline support
+        val imageLoader = ImageLoaderConfig.createImageLoader(this)
+        Coil.setImageLoader(imageLoader)
+
+        android.util.Log.d(
+                "TeamCollaborationApp",
+                "Coil ImageLoader configured with 50MB disk cache"
+        )
     }
 }

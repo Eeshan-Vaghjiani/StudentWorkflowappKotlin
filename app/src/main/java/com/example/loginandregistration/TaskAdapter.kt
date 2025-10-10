@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
@@ -40,7 +41,9 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
             holder.iconBackground.setCardBackgroundColor(color)
         } catch (e: IllegalArgumentException) {
             // Fallback to default color if parsing fails
-            holder.iconBackground.setCardBackgroundColor(Color.parseColor("#007AFF"))
+            val defaultColor =
+                    ContextCompat.getColor(holder.itemView.context, R.color.primary_color)
+            holder.iconBackground.setCardBackgroundColor(defaultColor)
         }
 
         // Set status chip color
@@ -50,7 +53,9 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
             holder.statusChip.setTextColor(statusColor)
         } catch (e: IllegalArgumentException) {
             // Fallback to default color
-            holder.statusChip.setTextColor(Color.parseColor("#007AFF"))
+            val defaultColor =
+                    ContextCompat.getColor(holder.itemView.context, R.color.primary_color)
+            holder.statusChip.setTextColor(defaultColor)
         }
 
         // Set appropriate icon based on status
