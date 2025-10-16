@@ -402,7 +402,15 @@ class ChatRepository(
                 return Result.failure(Exception("User not authenticated"))
             }
 
-            if (text.isBlank()) {
+            // Validate and sanitize message text
+            val (validation, sanitizedText) =
+                    com.example.loginandregistration.utils.InputValidator
+                            .validateAndSanitizeMessage(text)
+            if (!validation.isValid) {
+                return Result.failure(Exception(validation.errorMessage ?: "Invalid message"))
+            }
+
+            if (sanitizedText.isNullOrBlank()) {
                 return Result.failure(Exception("Message cannot be empty"))
             }
 
@@ -425,7 +433,7 @@ class ChatRepository(
                             senderId = getCurrentUserId(),
                             senderName = currentUser.displayName,
                             senderImageUrl = currentUser.profileImageUrl,
-                            text = text,
+                            text = sanitizedText,
                             timestamp = Date(),
                             readBy = listOf(getCurrentUserId()),
                             status = MessageStatus.SENDING
@@ -444,7 +452,7 @@ class ChatRepository(
                         .set(message.copy(status = MessageStatus.SENT))
                         .await()
 
-                updateChatLastMessage(chatId, text, getCurrentUserId())
+                updateChatLastMessage(chatId, sanitizedText, getCurrentUserId())
 
                 // Remove from queue on success
                 offlineQueue?.removeMessage(messageId)

@@ -77,7 +77,12 @@ class HomeFragment : Fragment() {
                                         true
                                     }
                                     R.id.action_debug -> {
-                                        startActivity(android.content.Intent(requireContext(), DebugActivity::class.java))
+                                        startActivity(
+                                                android.content.Intent(
+                                                        requireContext(),
+                                                        DebugActivity::class.java
+                                                )
+                                        )
                                         true
                                     }
                                     else -> false
@@ -107,51 +112,57 @@ class HomeFragment : Fragment() {
         binding.tvTasksDueCount.text = "0"
         binding.tvGroupsCount.text = "0"
         binding.tvSessionsCount.text = "0"
-        
+
         // AI usage - keep static for now
         binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 7)
         binding.progressBarAiUsage.progress = 30
-        binding.tvAiUsageDetails.text =
-                getString(R.string.home_ai_prompts_usage_template, 3, 10)
+        binding.tvAiUsageDetails.text = getString(R.string.home_ai_prompts_usage_template, 3, 10)
 
         // Set up real-time listeners for continuous updates
         setupRealTimeListeners()
     }
 
     private fun setupRealTimeListeners() {
-        // Set up real-time listener for tasks using Flow
-        lifecycleScope.launch {
+        // Set up real-time listener for tasks using Flow with lifecycle awareness
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val taskRepository = com.example.loginandregistration.repository.TaskRepository()
                 taskRepository.getDashboardTaskStatsFlow().collect { taskStats ->
+                    // Update UI on main thread
                     binding.tvTasksDueCount.text = taskStats.tasksDue.toString()
                 }
             } catch (e: Exception) {
-                // Handle error silently
+                // Handle error silently - show 0 as fallback
+                binding.tvTasksDueCount.text = "0"
             }
         }
 
-        // Set up real-time listener for groups using Flow
-        lifecycleScope.launch {
+        // Set up real-time listener for groups using Flow with lifecycle awareness
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val groupRepository = com.example.loginandregistration.repository.GroupRepository()
                 groupRepository.getGroupStatsFlow().collect { groupStats ->
+                    // Update UI on main thread
                     binding.tvGroupsCount.text = groupStats.myGroups.toString()
                 }
             } catch (e: Exception) {
-                // Handle error silently
+                // Handle error silently - show 0 as fallback
+                binding.tvGroupsCount.text = "0"
             }
         }
-        
-        // Set up real-time listener for study sessions using Flow
-        lifecycleScope.launch {
+
+        // Set up real-time listener for study sessions using Flow with lifecycle awareness
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val sessionRepository = com.example.loginandregistration.repository.SessionRepository()
+                val sessionRepository =
+                        com.example.loginandregistration.repository.SessionRepository()
                 sessionRepository.getSessionStatsFlow().collect { sessionStats ->
+                    // Update UI on main thread
                     binding.tvSessionsCount.text = sessionStats.totalSessions.toString()
                 }
             } catch (e: Exception) {
-                // Handle error silently
+                // Handle error silently - show 0 as fallback
+                binding.tvSessionsCount.text = "0"
             }
         }
     }

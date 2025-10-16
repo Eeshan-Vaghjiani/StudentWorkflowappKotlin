@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#2196F3"
+        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0"/>
+    
+    <!-- Team icon - Three people -->
+    <group
+        android:translateX="54"
+        android:translateY="54">
+        
+        <!-- Person 1 (left) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-18,-8m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"/>
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M-18,0c-5,0 -9,4 -9,9v3h18v-3c0,-5 -4,-9 -9,-9z"/>
+        
+        <!-- Person 2 (center, larger) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,-12m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0"/>
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,-3c-6,0 -11,5 -11,11v4h22v-4c0,-6 -5,-11 -11,-11z"/>
+        
+        <!-- Person 3 (right) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M18,-8m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"/>
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M18,0c-5,0 -9,4 -9,9v3h18v-3c0,-5 -4,-9 -9,-9z"/>
+        
+        <!-- Chat bubble -->
+        <path
+            android:fillColor="#FFC107"
+            android:pathData="M-8,16h16c2.2,0 4,1.8 4,4v8c0,2.2 -1.8,4 -4,4h-12l-4,4v-4c-2.2,0 -4,-1.8 -4,-4v-8c0,-2.2 1.8,-4 4,-4z"/>
+        
+        <!-- Checkmark in bubble -->
+        <path
+            android:fillColor="#2196F3"
+            android:strokeWidth="2"
+            android:strokeColor="#2196F3"
+            android:pathData="M-4,24l3,3l6,-6"/>
+    </group>
+</vector>

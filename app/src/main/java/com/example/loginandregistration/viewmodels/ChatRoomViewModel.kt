@@ -47,6 +47,8 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     private var isLoadingMoreMessages = false
 
     init {
+        Log.d(TAG, "ChatRoomViewModel initialized")
+
         // Monitor connection status
         viewModelScope.launch {
             connectionMonitor.isConnected.collect { connected ->
@@ -342,6 +344,8 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
     override fun onCleared() {
         super.onCleared()
-        // Coroutines in viewModelScope are automatically cancelled
+        Log.d(TAG, "ChatRoomViewModel cleared - all coroutines and listeners will be cancelled")
+        // viewModelScope automatically cancels all coroutines when ViewModel is cleared
+        // This includes all Flow collectors (messages, typing users, connection status)
     }
 }

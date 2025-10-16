@@ -5,21 +5,21 @@ import android.net.Uri
 import android.util.Log
 import android.webkit.MimeTypeMap
 import com.example.loginandregistration.utils.ImageCompressor
+import com.example.loginandregistration.utils.InputValidator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
-import com.google.firebase.storage.StorageReference
-import kotlinx.coroutines.tasks.await
 import java.io.File
+import kotlinx.coroutines.tasks.await
 
 /**
- * Repository for handling file uploads and downloads with Firebase Storage.
- * Supports images, documents, and profile pictures with progress callbacks.
+ * Repository for handling file uploads and downloads with Firebase Storage. Supports images,
+ * documents, and profile pictures with progress callbacks.
  */
 class StorageRepository(
-    private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val context: Context
+        private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
+        private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+        private val context: Context
 ) {
     companion object {
         private const val TAG = "StorageRepository"
@@ -33,18 +33,18 @@ class StorageRepository(
     private fun getCurrentUserId(): String = auth.currentUser?.uid ?: ""
 
     /**
-     * Uploads an image with compression to Firebase Storage.
-     * Images are compressed to max 1920x1080 at 80% quality.
-     * 
+     * Uploads an image with compression to Firebase Storage. Images are compressed to max 1920x1080
+     * at 80% quality.
+     *
      * @param uri URI of the image to upload
      * @param path Storage path (e.g., "chat_images/chatId")
      * @param onProgress Callback for upload progress (0-100)
      * @return Result with download URL on success
      */
     suspend fun uploadImage(
-        uri: Uri,
-        path: String,
-        onProgress: (Int) -> Unit = {}
+            uri: Uri,
+            path: String,
+            onProgress: (Int) -> Unit = {}
     ): Result<String> {
         return try {
             if (getCurrentUserId().isEmpty()) {
@@ -56,15 +56,14 @@ class StorageRepository(
             // Compress image before upload
             val compressedFile = ImageCompressor.compressImage(context, uri)
             val fileSize = compressedFile.length()
-            
+
             Log.d(TAG, "Image compressed to ${fileSize / 1024}KB")
 
-            // Check file size
-            if (fileSize > MAX_IMAGE_SIZE) {
+            // Validate file size using InputValidator
+            val validation = InputValidator.validateImageSize(fileSize)
+            if (!validation.isValid) {
                 compressedFile.delete()
-                return Result.failure(
-                    Exception("Image size (${fileSize / 1024}KB) exceeds maximum allowed size (${MAX_IMAGE_SIZE / 1024}KB)")
-                )
+                return Result.failure(Exception(validation.errorMessage ?: "Invalid image size"))
             }
 
             // Create storage reference
@@ -72,17 +71,20 @@ class StorageRepository(
             val storageRef = storage.reference.child(path).child(fileName)
 
             // Create metadata
-            val metadata = StorageMetadata.Builder()
-                .setContentType("image/jpeg")
-                .setCustomMetadata("uploadedBy", getCurrentUserId())
-                .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
-                .build()
+            val metadata =
+                    StorageMetadata.Builder()
+                            .setContentType("image/jpeg")
+                            .setCustomMetadata("uploadedBy", getCurrentUserId())
+                            .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
+                            .build()
 
             // Upload file with progress tracking
             val uploadTask = storageRef.putFile(Uri.fromFile(compressedFile), metadata)
 
             uploadTask.addOnProgressListener { taskSnapshot ->
-                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+                val progress =
+                        (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                                .toInt()
                 onProgress(progress)
                 Log.d(TAG, "Upload progress: $progress%")
             }
@@ -92,7 +94,7 @@ class StorageRepository(
 
             // Get download URL
             val downloadUrl = storageRef.downloadUrl.await().toString()
-            
+
             // Clean up compressed file
             compressedFile.delete()
 
@@ -106,16 +108,16 @@ class StorageRepository(
 
     /**
      * Uploads a document to Firebase Storage.
-     * 
+     *
      * @param uri URI of the document to upload
      * @param path Storage path (e.g., "chat_documents/chatId")
      * @param onProgress Callback for upload progress (0-100)
      * @return Result with download URL on success
      */
     suspend fun uploadDocument(
-        uri: Uri,
-        path: String,
-        onProgress: (Int) -> Unit = {}
+            uri: Uri,
+            path: String,
+            onProgress: (Int) -> Unit = {}
     ): Result<String> {
         return try {
             if (getCurrentUserId().isEmpty()) {
@@ -130,13 +132,15 @@ class StorageRepository(
             val fileSize = fileInfo.second
             val mimeType = fileInfo.third
 
-            Log.d(TAG, "Document: $fileName, Size: ${fileSize / 1024}KB, Type: $mimeType")
+            Log.d(
+                    TAG,
+                    "Document: $fileName, Size: ${InputValidator.formatFileSize(fileSize)}, Type: $mimeType"
+            )
 
-            // Check file size
-            if (fileSize > MAX_DOCUMENT_SIZE) {
-                return Result.failure(
-                    Exception("Document size (${fileSize / 1024}KB) exceeds maximum allowed size (${MAX_DOCUMENT_SIZE / 1024}KB)")
-                )
+            // Validate file size using InputValidator
+            val validation = InputValidator.validateDocumentSize(fileSize)
+            if (!validation.isValid) {
+                return Result.failure(Exception(validation.errorMessage ?: "Invalid document size"))
             }
 
             // Create storage reference with timestamp to avoid conflicts
@@ -144,19 +148,22 @@ class StorageRepository(
             val storageRef = storage.reference.child(path).child(uniqueFileName)
 
             // Create metadata
-            val metadata = StorageMetadata.Builder()
-                .setContentType(mimeType)
-                .setCustomMetadata("uploadedBy", getCurrentUserId())
-                .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
-                .setCustomMetadata("originalFileName", fileName)
-                .setCustomMetadata("fileSize", fileSize.toString())
-                .build()
+            val metadata =
+                    StorageMetadata.Builder()
+                            .setContentType(mimeType)
+                            .setCustomMetadata("uploadedBy", getCurrentUserId())
+                            .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
+                            .setCustomMetadata("originalFileName", fileName)
+                            .setCustomMetadata("fileSize", fileSize.toString())
+                            .build()
 
             // Upload file with progress tracking
             val uploadTask = storageRef.putFile(uri, metadata)
 
             uploadTask.addOnProgressListener { taskSnapshot ->
-                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+                val progress =
+                        (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                                .toInt()
                 onProgress(progress)
                 Log.d(TAG, "Upload progress: $progress%")
             }
@@ -176,18 +183,18 @@ class StorageRepository(
     }
 
     /**
-     * Uploads a profile picture with compression and cropping.
-     * Profile pictures are compressed to under 500KB.
-     * 
+     * Uploads a profile picture with compression and cropping. Profile pictures are compressed to
+     * under 500KB.
+     *
      * @param uri URI of the image to upload
      * @param userId User ID (defaults to current user)
      * @param onProgress Callback for upload progress (0-100)
      * @return Result with download URL on success
      */
     suspend fun uploadProfilePicture(
-        uri: Uri,
-        userId: String = getCurrentUserId(),
-        onProgress: (Int) -> Unit = {}
+            uri: Uri,
+            userId: String = getCurrentUserId(),
+            onProgress: (Int) -> Unit = {}
     ): Result<String> {
         return try {
             if (getCurrentUserId().isEmpty()) {
@@ -197,14 +204,15 @@ class StorageRepository(
             Log.d(TAG, "Starting profile picture upload for user: $userId")
 
             // Compress image with smaller dimensions for profile pictures
-            val compressedFile = ImageCompressor.compressImage(
-                context = context,
-                uri = uri,
-                maxWidth = 800,
-                maxHeight = 800,
-                quality = 85
-            )
-            
+            val compressedFile =
+                    ImageCompressor.compressImage(
+                            context = context,
+                            uri = uri,
+                            maxWidth = 800,
+                            maxHeight = 800,
+                            quality = 85
+                    )
+
             val fileSize = compressedFile.length()
             Log.d(TAG, "Profile picture compressed to ${fileSize / 1024}KB")
 
@@ -212,7 +220,9 @@ class StorageRepository(
             if (fileSize > 500 * 1024) {
                 compressedFile.delete()
                 return Result.failure(
-                    Exception("Profile picture size (${fileSize / 1024}KB) exceeds maximum allowed size (500KB)")
+                        Exception(
+                                "Profile picture size (${fileSize / 1024}KB) exceeds maximum allowed size (500KB)"
+                        )
                 )
             }
 
@@ -222,17 +232,20 @@ class StorageRepository(
             val storageRef = storage.reference.child(path).child(fileName)
 
             // Create metadata
-            val metadata = StorageMetadata.Builder()
-                .setContentType("image/jpeg")
-                .setCustomMetadata("uploadedBy", getCurrentUserId())
-                .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
-                .build()
+            val metadata =
+                    StorageMetadata.Builder()
+                            .setContentType("image/jpeg")
+                            .setCustomMetadata("uploadedBy", getCurrentUserId())
+                            .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
+                            .build()
 
             // Upload file with progress tracking
             val uploadTask = storageRef.putFile(Uri.fromFile(compressedFile), metadata)
 
             uploadTask.addOnProgressListener { taskSnapshot ->
-                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+                val progress =
+                        (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                                .toInt()
                 onProgress(progress)
                 Log.d(TAG, "Upload progress: $progress%")
             }
@@ -242,7 +255,7 @@ class StorageRepository(
 
             // Get download URL
             val downloadUrl = storageRef.downloadUrl.await().toString()
-            
+
             // Clean up compressed file
             compressedFile.delete()
 
@@ -256,16 +269,16 @@ class StorageRepository(
 
     /**
      * Downloads a file from Firebase Storage.
-     * 
+     *
      * @param url Download URL from Firebase Storage
      * @param destinationFile File where the download will be saved
      * @param onProgress Callback for download progress (0-100)
      * @return Result with the downloaded file on success
      */
     suspend fun downloadFile(
-        url: String,
-        destinationFile: File,
-        onProgress: (Int) -> Unit = {}
+            url: String,
+            destinationFile: File,
+            onProgress: (Int) -> Unit = {}
     ): Result<File> {
         return try {
             Log.d(TAG, "Starting file download from: $url")
@@ -280,7 +293,9 @@ class StorageRepository(
             val downloadTask = storageRef.getFile(destinationFile)
 
             downloadTask.addOnProgressListener { taskSnapshot ->
-                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+                val progress =
+                        (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                                .toInt()
                 onProgress(progress)
                 Log.d(TAG, "Download progress: $progress%")
             }
@@ -298,7 +313,7 @@ class StorageRepository(
 
     /**
      * Deletes a file from Firebase Storage.
-     * 
+     *
      * @param url Download URL of the file to delete
      * @return Result indicating success or failure
      */
@@ -322,7 +337,7 @@ class StorageRepository(
 
     /**
      * Gets metadata for a file in Firebase Storage.
-     * 
+     *
      * @param url Download URL of the file
      * @return Result with StorageMetadata on success
      */
@@ -344,21 +359,18 @@ class StorageRepository(
         }
     }
 
-    /**
-     * Gets file information from URI.
-     * Returns (fileName, fileSize, mimeType)
-     */
+    /** Gets file information from URI. Returns (fileName, fileSize, mimeType) */
     private fun getFileInfo(uri: Uri): Triple<String, Long, String> {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
-        
+
         var fileName = "document"
         var fileSize = 0L
-        
+
         cursor?.use {
             if (it.moveToFirst()) {
                 val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                 val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                
+
                 if (nameIndex != -1) {
                     fileName = it.getString(nameIndex) ?: "document"
                 }
@@ -367,27 +379,22 @@ class StorageRepository(
                 }
             }
         }
-        
+
         // Get MIME type
-        val mimeType = context.contentResolver.getType(uri) 
-            ?: getMimeTypeFromExtension(fileName)
-            ?: "application/octet-stream"
-        
+        val mimeType =
+                context.contentResolver.getType(uri)
+                        ?: getMimeTypeFromExtension(fileName) ?: "application/octet-stream"
+
         return Triple(fileName, fileSize, mimeType)
     }
 
-    /**
-     * Public method to get file information from URI.
-     * Returns (fileName, fileSize)
-     */
+    /** Public method to get file information from URI. Returns (fileName, fileSize) */
     fun getFileInfoFromUri(uri: Uri): Pair<String, Long> {
         val fileInfo = getFileInfo(uri)
         return Pair(fileInfo.first, fileInfo.second)
     }
 
-    /**
-     * Gets MIME type from file extension.
-     */
+    /** Gets MIME type from file extension. */
     private fun getMimeTypeFromExtension(fileName: String): String? {
         val extension = fileName.substringAfterLast('.', "")
         return if (extension.isNotEmpty()) {
@@ -397,23 +404,17 @@ class StorageRepository(
         }
     }
 
-    /**
-     * Helper method to get storage reference for chat images.
-     */
+    /** Helper method to get storage reference for chat images. */
     fun getChatImagePath(chatId: String): String {
         return "$CHAT_IMAGES_PATH/$chatId"
     }
 
-    /**
-     * Helper method to get storage reference for chat documents.
-     */
+    /** Helper method to get storage reference for chat documents. */
     fun getChatDocumentPath(chatId: String): String {
         return "$CHAT_DOCUMENTS_PATH/$chatId"
     }
 
-    /**
-     * Helper method to get storage reference for profile images.
-     */
+    /** Helper method to get storage reference for profile images. */
     fun getProfileImagePath(userId: String): String {
         return "$PROFILE_IMAGES_PATH/$userId"
     }

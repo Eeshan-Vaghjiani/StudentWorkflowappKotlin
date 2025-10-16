@@ -55,6 +55,7 @@ object ImageLoaderConfig {
      * @param imageLoader The ImageLoader instance
      * @return Map containing cache statistics
      */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
     fun getCacheStats(imageLoader: ImageLoader): Map<String, Any> {
         val memoryCache = imageLoader.memoryCache
         val diskCache = imageLoader.diskCache
@@ -73,6 +74,7 @@ object ImageLoaderConfig {
      *
      * @param imageLoader The ImageLoader instance
      */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
     fun clearCache(imageLoader: ImageLoader) {
         imageLoader.memoryCache?.clear()
         imageLoader.diskCache?.clear()

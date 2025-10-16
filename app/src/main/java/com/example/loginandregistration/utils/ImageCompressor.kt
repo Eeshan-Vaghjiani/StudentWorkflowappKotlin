@@ -2,7 +2,6 @@ package com.example.loginandregistration.utils
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import android.util.Log
@@ -43,34 +42,18 @@ object ImageCompressor {
         try {
             Log.d(TAG, "Starting image compression for URI: $uri")
 
-            // Load bitmap from URI
-            val inputStream =
-                    context.contentResolver.openInputStream(uri)
-                            ?: throw IOException("Cannot open input stream for URI: $uri")
+            // Check memory before loading bitmap
+            if (MemoryManager.isLowMemory(context)) {
+                Log.w(TAG, "Low memory detected - using reduced dimensions")
+                val (reducedWidth, reducedHeight) =
+                        MemoryManager.getRecommendedImageDimensions(context)
+                return compressImage(context, uri, reducedWidth, reducedHeight, quality)
+            }
 
-            // Decode with inJustDecodeBounds to get dimensions without loading full image
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeStream(inputStream, null, options)
-            inputStream.close()
-
-            val originalWidth = options.outWidth
-            val originalHeight = options.outHeight
-            Log.d(TAG, "Original image dimensions: ${originalWidth}x${originalHeight}")
-
-            // Calculate sample size for efficient memory usage
-            val sampleSize = calculateSampleSize(originalWidth, originalHeight, maxWidth, maxHeight)
-            Log.d(TAG, "Calculated sample size: $sampleSize")
-
-            // Decode with sample size
-            val inputStream2 =
-                    context.contentResolver.openInputStream(uri)
-                            ?: throw IOException("Cannot open input stream for URI: $uri")
-
-            val decodedOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            // Use MemoryManager for efficient bitmap decoding
             var bitmap =
-                    BitmapFactory.decodeStream(inputStream2, null, decodedOptions)
+                    MemoryManager.decodeSampledBitmapFromUri(context, uri, maxWidth, maxHeight)
                             ?: throw IOException("Failed to decode bitmap from URI: $uri")
-            inputStream2.close()
 
             Log.d(TAG, "Decoded bitmap dimensions: ${bitmap.width}x${bitmap.height}")
 
@@ -92,7 +75,7 @@ object ImageCompressor {
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
             }
 
-            // Recycle bitmap to free memory
+            // Recycle bitmap to free memory immediately
             bitmap.recycle()
 
             val fileSizeKB = outputFile.length() / 1024

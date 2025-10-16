@@ -16,15 +16,19 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.GroupRepository
+import com.example.loginandregistration.utils.collectWithLifecycle
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class GroupsFragment : Fragment() {
+
+        companion object {
+                private const val TAG = "GroupsFragment"
+        }
 
         private lateinit var recyclerMyGroups: RecyclerView
         private lateinit var recyclerRecentActivity: RecyclerView
@@ -155,115 +159,88 @@ class GroupsFragment : Fragment() {
         }
 
         private fun setupRealTimeListeners() {
+                // Use lifecycle-aware collection that automatically stops when Fragment is stopped
+                // and resumes when Fragment is started again
+
                 // Real-time listener for group statistics
-                lifecycleScope.launch {
-                        try {
-                                groupRepository.getGroupStatsFlow().collect { stats ->
-                                        android.util.Log.d(
-                                                "GroupsFragment",
-                                                "Received group stats update: myGroups=${stats.myGroups}, activeAssignments=${stats.activeAssignments}, newMessages=${stats.newMessages}"
-                                        )
+                groupRepository.getGroupStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats
+                        ->
+                        Log.d(
+                                TAG,
+                                "Received group stats update: myGroups=${stats.myGroups}, activeAssignments=${stats.activeAssignments}, newMessages=${stats.newMessages}"
+                        )
 
-                                        val myGroupsTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_my_groups_count
-                                                )
-                                        val activeAssignmentsTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_active_assignments_count
-                                                )
-                                        val newMessagesTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_new_messages_count
-                                                )
-
-                                        myGroupsTextView?.text = stats.myGroups.toString()
-                                        activeAssignmentsTextView?.text =
-                                                stats.activeAssignments.toString()
-                                        newMessagesTextView?.text = stats.newMessages.toString()
-
-                                        android.util.Log.d(
-                                                "GroupsFragment",
-                                                "Updated UI elements: myGroups=${myGroupsTextView?.text}, activeAssignments=${activeAssignmentsTextView?.text}, newMessages=${newMessagesTextView?.text}"
-                                        )
-                                }
-                        } catch (e: Exception) {
-                                android.util.Log.e(
-                                        "GroupsFragment",
-                                        "Error in group stats listener: ${e.message}"
+                        val myGroupsTextView =
+                                currentView?.findViewById<android.widget.TextView>(
+                                        R.id.tv_my_groups_count
                                 )
-                                // Handle error silently, keep existing values
-                        }
+                        val activeAssignmentsTextView =
+                                currentView?.findViewById<android.widget.TextView>(
+                                        R.id.tv_active_assignments_count
+                                )
+                        val newMessagesTextView =
+                                currentView?.findViewById<android.widget.TextView>(
+                                        R.id.tv_new_messages_count
+                                )
+
+                        myGroupsTextView?.text = stats.myGroups.toString()
+                        activeAssignmentsTextView?.text = stats.activeAssignments.toString()
+                        newMessagesTextView?.text = stats.newMessages.toString()
+
+                        Log.d(
+                                TAG,
+                                "Updated UI elements: myGroups=${myGroupsTextView?.text}, activeAssignments=${activeAssignmentsTextView?.text}, newMessages=${newMessagesTextView?.text}"
+                        )
                 }
 
                 // Real-time listener for user's groups
-                lifecycleScope.launch {
-                        try {
-                                android.util.Log.d(
-                                        "GroupsFragment",
-                                        "Setting up user groups flow listener"
-                                )
-                                groupRepository.getUserGroupsFlow().collect { firebaseGroups ->
-                                        android.util.Log.d(
-                                                "GroupsFragment",
-                                                "Received user groups update: ${firebaseGroups.size} groups"
-                                        )
+                groupRepository.getUserGroupsFlow().collectWithLifecycle(viewLifecycleOwner) {
+                        firebaseGroups ->
+                        android.util.Log.d(
+                                "GroupsFragment",
+                                "Received user groups update: ${firebaseGroups.size} groups"
+                        )
 
-                                        val displayGroups =
-                                                firebaseGroups.map { firebaseGroup ->
-                                                        Group(
-                                                                id = firebaseGroup.id.hashCode(),
-                                                                name = firebaseGroup.name,
-                                                                details =
-                                                                        "${firebaseGroup.members.size} members • ${firebaseGroup.subject}",
-                                                                assignmentCount =
-                                                                        0, // TODO: Implement when
-                                                                // tasks are linked to
-                                                                // groups
-                                                                iconColor = "#007AFF",
-                                                                iconResource = R.drawable.ic_groups
-                                                        )
-                                                }
-
-                                        android.util.Log.d(
-                                                "GroupsFragment",
-                                                "Mapped to ${displayGroups.size} display groups"
-                                        )
-
-                                        myGroupsAdapter =
-                                                GroupAdapter(displayGroups) { group ->
-                                                        // Navigate to group details
-                                                        val intent =
-                                                                android.content.Intent(
-                                                                        context,
-                                                                        GroupDetailsActivity::class
-                                                                                .java
-                                                                )
-                                                        intent.putExtra(
-                                                                "GROUP_ID",
-                                                                firebaseGroups
-                                                                        .find {
-                                                                                it.name ==
-                                                                                        group.name
-                                                                        }
-                                                                        ?.id
-                                                                        ?: ""
-                                                        )
-                                                        startActivity(intent)
-                                                }
-                                        recyclerMyGroups.adapter = myGroupsAdapter
-                                        android.util.Log.d(
-                                                "GroupsFragment",
-                                                "Updated recyclerMyGroups adapter with ${myGroupsAdapter.itemCount} items"
+                        val displayGroups =
+                                firebaseGroups.map { firebaseGroup ->
+                                        Group(
+                                                id = firebaseGroup.id.hashCode(),
+                                                name = firebaseGroup.name,
+                                                details =
+                                                        "${firebaseGroup.members.size} members • ${firebaseGroup.subject}",
+                                                assignmentCount = 0, // TODO: Implement when
+                                                // tasks are linked to
+                                                // groups
+                                                iconColor = "#007AFF",
+                                                iconResource = R.drawable.ic_groups
                                         )
                                 }
-                        } catch (e: Exception) {
-                                android.util.Log.e(
-                                        "GroupsFragment",
-                                        "Error in user groups listener: ${e.message}"
-                                )
-                                e.printStackTrace()
-                        }
+
+                        android.util.Log.d(
+                                "GroupsFragment",
+                                "Mapped to ${displayGroups.size} display groups"
+                        )
+
+                        myGroupsAdapter =
+                                GroupAdapter(displayGroups) { group ->
+                                        // Navigate to group details
+                                        val intent =
+                                                android.content.Intent(
+                                                        context,
+                                                        GroupDetailsActivity::class.java
+                                                )
+                                        intent.putExtra(
+                                                "GROUP_ID",
+                                                firebaseGroups.find { it.name == group.name }?.id
+                                                        ?: ""
+                                        )
+                                        startActivity(intent)
+                                }
+                        recyclerMyGroups.adapter = myGroupsAdapter
+                        android.util.Log.d(
+                                "GroupsFragment",
+                                "Updated recyclerMyGroups adapter with ${myGroupsAdapter.itemCount} items"
+                        )
                 }
 
                 // Load initial data for activities and discover groups
@@ -660,5 +637,15 @@ class GroupsFragment : Fragment() {
                                 iconResource = R.drawable.ic_assignment
                         )
                 )
+        }
+
+        override fun onStart() {
+                super.onStart()
+                Log.d(TAG, "onStart - Firestore listeners will be attached")
+        }
+
+        override fun onStop() {
+                super.onStop()
+                Log.d(TAG, "onStop - Firestore listeners will be detached")
         }
 }

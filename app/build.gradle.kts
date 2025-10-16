@@ -9,13 +9,30 @@ android {
     compileSdk = 34 // use latest stable, not 36 yet
 
     defaultConfig {
-        applicationId = "com.example.loginandregistration"
+        applicationId = "com.teamsync.collaboration"
         minSdk = 23
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // App metadata
+        setProperty("archivesBaseName", "TeamSync-v$versionName")
+    }
+
+    signingConfigs {
+        create("release") {
+            // For production, use keystore file
+            // Store these values in local.properties or environment variables
+            // DO NOT commit keystore credentials to version control
+            
+            // Example configuration (uncomment and configure for actual release):
+            // storeFile = file("path/to/your/keystore.jks")
+            // storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            // keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            // keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        }
     }
 
     buildTypes {
@@ -26,9 +43,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Uncomment when signing config is set up:
+            // signingConfig = signingConfigs.getByName("release")
+            
+            // Enable R8 full mode for better optimization
+            isDebuggable = false
         }
         debug {
             isMinifyEnabled = false
+            isDebuggable = true
+            // Removed applicationIdSuffix to match google-services.json
+            // applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 
@@ -52,6 +78,7 @@ dependencies {
 
     // AndroidX + Material
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-ktx:1.9.2")
@@ -101,6 +128,11 @@ dependencies {
     
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mockito:mockito-core:5.7.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("com.google.truth:truth:1.1.5")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }

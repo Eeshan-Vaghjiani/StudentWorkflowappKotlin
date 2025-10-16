@@ -15,10 +15,15 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.utils.ThemeUtils
+import com.example.loginandregistration.utils.collectWithLifecycle
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
 
 class TasksFragment : Fragment() {
+
+        companion object {
+                private const val TAG = "TasksFragment"
+        }
 
         private lateinit var recyclerTasks: RecyclerView
         private lateinit var taskAdapter: TaskAdapter
@@ -70,48 +75,45 @@ class TasksFragment : Fragment() {
         }
 
         private fun setupRealTimeListeners() {
-                // Real-time listener for task statistics
-                lifecycleScope.launch {
-                        try {
-                                taskRepository.getTaskStatsFlow().collect { stats ->
-                                        currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_overdue_count
-                                                )
-                                                ?.text = stats.overdue.toString()
-                                        currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_due_today_count
-                                                )
-                                                ?.text = stats.dueToday.toString()
-                                        currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_completed_count
-                                                )
-                                                ?.text = stats.completed.toString()
+                // Use lifecycle-aware collection that automatically stops when Fragment is stopped
+                // and resumes when Fragment is started again
 
-                                        // Hide refresh indicator when data loads
-                                        swipeRefreshLayout.isRefreshing = false
-                                }
-                        } catch (e: Exception) {
-                                // Handle error silently
-                                swipeRefreshLayout.isRefreshing = false
-                        }
+                // Real-time listener for task statistics
+                taskRepository.getTaskStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats
+                        ->
+                        Log.d(
+                                TAG,
+                                "Received task stats: overdue=${stats.overdue}, dueToday=${stats.dueToday}, completed=${stats.completed}"
+                        )
+                        currentView?.findViewById<android.widget.TextView>(R.id.tv_overdue_count)
+                                ?.text = stats.overdue.toString()
+                        currentView?.findViewById<android.widget.TextView>(R.id.tv_due_today_count)
+                                ?.text = stats.dueToday.toString()
+                        currentView?.findViewById<android.widget.TextView>(R.id.tv_completed_count)
+                                ?.text = stats.completed.toString()
+
+                        // Hide refresh indicator when data loads
+                        swipeRefreshLayout.isRefreshing = false
                 }
 
                 // Real-time listener for user's tasks
-                lifecycleScope.launch {
-                        try {
-                                taskRepository.getUserTasksFlow().collect { firebaseTasks ->
-                                        updateTasksList(firebaseTasks)
-                                        // Hide refresh indicator when data loads
-                                        swipeRefreshLayout.isRefreshing = false
-                                }
-                        } catch (e: Exception) {
-                                // Handle error silently, but don't show dummy data
-                                // Just log the error and continue with empty list
-                                Log.e("TasksFragment", "Error fetching tasks: ${e.message}")
-                                updateTasksList(emptyList())
-                                swipeRefreshLayout.isRefreshing = false
-                        }
+                taskRepository.getUserTasksFlow().collectWithLifecycle(viewLifecycleOwner) {
+                        firebaseTasks ->
+                        Log.d(TAG, "Received ${firebaseTasks.size} tasks")
+                        updateTasksList(firebaseTasks)
+                        // Hide refresh indicator when data loads
+                        swipeRefreshLayout.isRefreshing = false
                 }
+        }
+
+        override fun onStart() {
+                super.onStart()
+                Log.d(TAG, "onStart - Firestore listeners will be attached")
+        }
+
+        override fun onStop() {
+                super.onStop()
+                Log.d(TAG, "onStop - Firestore listeners will be detached")
         }
 
         private fun refreshData() {

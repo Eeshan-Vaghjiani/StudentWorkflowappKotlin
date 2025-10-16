@@ -14,6 +14,7 @@ class DebugActivity : AppCompatActivity() {
 
     private lateinit var btnCreateDemoChat: Button
     private lateinit var btnListUsers: Button
+    private lateinit var btnMemoryMonitor: Button
     private lateinit var tvDebugOutput: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,11 +23,17 @@ class DebugActivity : AppCompatActivity() {
 
         btnCreateDemoChat = findViewById(R.id.btnCreateDemoChat)
         btnListUsers = findViewById(R.id.btnListUsers)
+        btnMemoryMonitor = findViewById(R.id.btnMemoryMonitor)
         tvDebugOutput = findViewById(R.id.tvDebugOutput)
 
         btnCreateDemoChat.setOnClickListener { createDemoChat() }
-
         btnListUsers.setOnClickListener { listUsers() }
+        btnMemoryMonitor.setOnClickListener { openMemoryMonitor() }
+    }
+
+    private fun openMemoryMonitor() {
+        val intent = Intent(this, MemoryMonitorActivity::class.java)
+        startActivity(intent)
     }
 
     private fun createDemoChat() {

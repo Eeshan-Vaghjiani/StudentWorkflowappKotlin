@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple splash background - just the color -->
+<!-- The splash screen library handles the icon separately -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background color -->
+    <item android:drawable="@color/colorPrimaryBlue"/>
+</layer-list>

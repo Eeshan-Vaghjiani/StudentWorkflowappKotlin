@@ -28,6 +28,30 @@ class EnhancedGroupRepository {
         val user = auth.currentUser ?: return Result.failure(Exception("User not authenticated"))
 
         return try {
+            // Validate and sanitize group name
+            val (nameValidation, sanitizedName) =
+                    com.example.loginandregistration.utils.InputValidator
+                            .validateAndSanitizeGroupName(name)
+            if (!nameValidation.isValid) {
+                return Result.failure(
+                        Exception(nameValidation.errorMessage ?: "Invalid group name")
+                )
+            }
+
+            // Validate group description
+            val descValidation =
+                    com.example.loginandregistration.utils.InputValidator.validateGroupDescription(
+                            description
+                    )
+            if (!descValidation.isValid) {
+                return Result.failure(
+                        Exception(descValidation.errorMessage ?: "Invalid group description")
+                )
+            }
+
+            val sanitizedDescription =
+                    com.example.loginandregistration.utils.InputValidator.sanitizeInput(description)
+
             val joinCode = generateJoinCode()
             val owner =
                     GroupMember(
@@ -40,8 +64,8 @@ class EnhancedGroupRepository {
 
             val group =
                     FirebaseGroup(
-                            name = name,
-                            description = description,
+                            name = sanitizedName!!,
+                            description = sanitizedDescription,
                             subject = subject,
                             owner = user.uid,
                             joinCode = joinCode,
@@ -64,7 +88,7 @@ class EnhancedGroupRepository {
                     groupId = docRef.id,
                     type = "group_created",
                     title = "Group created",
-                    description = "Group \"$name\" was created"
+                    description = "Group \"$sanitizedName\" was created"
             )
 
             Result.success(docRef.id)
@@ -196,8 +220,33 @@ class EnhancedGroupRepository {
 
             val updates = mutableMapOf<String, Any>("updatedAt" to Timestamp.now())
 
-            name?.let { updates["name"] = it }
-            description?.let { updates["description"] = it }
+            // Validate and sanitize name if provided
+            name?.let {
+                val (nameValidation, sanitizedName) =
+                        com.example.loginandregistration.utils.InputValidator
+                                .validateAndSanitizeGroupName(it)
+                if (!nameValidation.isValid) {
+                    return Result.failure(
+                            Exception(nameValidation.errorMessage ?: "Invalid group name")
+                    )
+                }
+                updates["name"] = sanitizedName!!
+            }
+
+            // Validate and sanitize description if provided
+            description?.let {
+                val descValidation =
+                        com.example.loginandregistration.utils.InputValidator
+                                .validateGroupDescription(it)
+                if (!descValidation.isValid) {
+                    return Result.failure(
+                            Exception(descValidation.errorMessage ?: "Invalid group description")
+                    )
+                }
+                updates["description"] =
+                        com.example.loginandregistration.utils.InputValidator.sanitizeInput(it)
+            }
+
             settings?.let { updates["settings"] = it }
 
             groupsCollection.document(groupId).update(updates).await()
@@ -236,6 +285,13 @@ class EnhancedGroupRepository {
                 auth.currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
 
         return try {
+            // Validate email format
+            val emailValidation =
+                    com.example.loginandregistration.utils.InputValidator.validateEmail(memberEmail)
+            if (!emailValidation.isValid) {
+                return Result.failure(Exception(emailValidation.errorMessage ?: "Invalid email"))
+            }
+
             val group = getGroupById(groupId).getOrThrow()
 
             // Check permissions

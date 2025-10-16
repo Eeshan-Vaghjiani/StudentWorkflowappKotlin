@@ -41,6 +41,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:52796977485:android:6ad98d1593a230c2bd0704",
+        "android_client_info": {
+          "package_name": "com.teamsync.collaboration"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "52796977485-2ckv1qu3dbdqc1dtmptj94s243pb03ir.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6QouijeF9AqxwEY7JYfFsyvRdAOre6-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "52796977485-2ckv1qu3dbdqc1dtmptj94s243pb03ir.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

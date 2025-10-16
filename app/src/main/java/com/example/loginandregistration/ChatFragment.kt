@@ -3,6 +3,7 @@ package com.example.loginandregistration
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,6 +18,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.adapters.ChatAdapter
 import com.example.loginandregistration.models.Chat
 import com.example.loginandregistration.repository.ChatRepository
+import com.example.loginandregistration.utils.collectWithLifecycle
 import com.example.loginandregistration.viewmodels.ChatViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
@@ -24,6 +26,10 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 class ChatFragment : Fragment() {
+
+    companion object {
+        private const val TAG = "ChatFragment"
+    }
 
     private lateinit var viewModel: ChatViewModel
     private lateinit var chatAdapter: ChatAdapter
@@ -164,56 +170,64 @@ class ChatFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        // Observe filtered chats
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.filteredChats.collect { chats ->
-                chatAdapter.submitList(chats)
+        // Use lifecycle-aware collection that automatically stops when Fragment is stopped
+        // and resumes when Fragment is started again
 
-                // Show/hide empty state
-                if (chats.isEmpty()) {
-                    emptyStateView.visibility = View.VISIBLE
-                    emptyStateView.showNoChats {
-                        // Open user search dialog when action button clicked
-                        val dialog = UserSearchDialog.newInstance()
-                        dialog.show(parentFragmentManager, UserSearchDialog.TAG)
-                    }
-                    chatsRecyclerView.visibility = View.GONE
-                } else {
-                    emptyStateView.visibility = View.GONE
-                    chatsRecyclerView.visibility = View.VISIBLE
+        // Observe filtered chats
+        viewModel.filteredChats.collectWithLifecycle(viewLifecycleOwner) { chats ->
+            Log.d(TAG, "Received ${chats.size} chats")
+            chatAdapter.submitList(chats)
+
+            // Show/hide empty state
+            if (chats.isEmpty()) {
+                emptyStateView.visibility = View.VISIBLE
+                emptyStateView.showNoChats {
+                    // Open user search dialog when action button clicked
+                    val dialog = UserSearchDialog.newInstance()
+                    dialog.show(parentFragmentManager, UserSearchDialog.TAG)
                 }
+                chatsRecyclerView.visibility = View.GONE
+            } else {
+                emptyStateView.visibility = View.GONE
+                chatsRecyclerView.visibility = View.VISIBLE
             }
         }
 
         // Observe loading state
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isLoading.collect { isLoading ->
-                swipeRefreshLayout.isRefreshing = isLoading
+        viewModel.isLoading.collectWithLifecycle(viewLifecycleOwner) { isLoading ->
+            swipeRefreshLayout.isRefreshing = isLoading
 
-                // Show skeleton loader on initial load, hide on subsequent refreshes
-                if (isLoading && chatAdapter.itemCount == 0) {
-                    com.example.loginandregistration.utils.SkeletonLoaderHelper.showSkeleton(
-                            skeletonRecyclerView,
-                            chatsRecyclerView
-                    )
-                } else if (!isLoading) {
-                    com.example.loginandregistration.utils.SkeletonLoaderHelper.showContent(
-                            skeletonRecyclerView,
-                            chatsRecyclerView
-                    )
-                }
+            // Show skeleton loader on initial load, hide on subsequent refreshes
+            if (isLoading && chatAdapter.itemCount == 0) {
+                com.example.loginandregistration.utils.SkeletonLoaderHelper.showSkeleton(
+                        skeletonRecyclerView,
+                        chatsRecyclerView
+                )
+            } else if (!isLoading) {
+                com.example.loginandregistration.utils.SkeletonLoaderHelper.showContent(
+                        skeletonRecyclerView,
+                        chatsRecyclerView
+                )
             }
         }
 
         // Observe errors
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.error.collect { error ->
-                error?.let {
-                    Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
-                    viewModel.clearError()
-                }
+        viewModel.error.collectWithLifecycle(viewLifecycleOwner) { error ->
+            error?.let {
+                Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
+                viewModel.clearError()
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Log.d(TAG, "onStart - Firestore listeners will be attached via ViewModel")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.d(TAG, "onStop - Firestore listeners will be detached via ViewModel")
     }
 
     private fun onChatClick(chat: Chat) {

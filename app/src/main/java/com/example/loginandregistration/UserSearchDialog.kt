@@ -130,9 +130,23 @@ class UserSearchDialog : DialogFragment() {
         if (query.isBlank()) {
             userSearchAdapter.submitList(emptyList())
             showEmptyState(false)
+            searchEditText.error = null
             return
         }
 
+        // Validate email format if query looks like an email
+        if (query.contains("@")) {
+            val validation =
+                    com.example.loginandregistration.utils.InputValidator.validateEmail(query)
+            if (!validation.isValid) {
+                searchEditText.error = validation.errorMessage
+                userSearchAdapter.submitList(emptyList())
+                showEmptyState(true)
+                return
+            }
+        }
+
+        searchEditText.error = null
         showLoading(true)
 
         lifecycleScope.launch {

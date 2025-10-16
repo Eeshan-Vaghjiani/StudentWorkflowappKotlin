@@ -232,6 +232,17 @@ class ChatRoomActivity : AppCompatActivity() {
             return
         }
 
+        // Validate message length
+        val validation =
+                com.example.loginandregistration.utils.InputValidator.validateMessageText(
+                        messageText
+                )
+        if (!validation.isValid) {
+            binding.messageEditText.error = validation.errorMessage
+            Toast.makeText(this, validation.errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
         // Stop typing indicator when sending
         if (isTyping) {
             isTyping = false
@@ -241,6 +252,7 @@ class ChatRoomActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.sendMessage(messageText)
             binding.messageEditText.text?.clear()
+            binding.messageEditText.error = null
         }
     }
 
