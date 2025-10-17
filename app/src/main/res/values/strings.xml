@@ -180,6 +180,11 @@
     <!-- Empty State Strings -->
     <string name="empty_state_icon">Empty state icon</string>
     
+    <!-- Dashboard Empty State -->
+    <string name="empty_state_dashboard_title">Welcome to TeamSync!</string>
+    <string name="empty_state_dashboard_message">Get started by creating your first task or joining a group</string>
+    <string name="empty_state_create_task">Create Task</string>
+    
     <!-- No Chats Empty State -->
     <string name="empty_state_no_chats_title">No Chats Yet</string>
     <string name="empty_state_no_chats_description">Start a conversation by creating a new chat or joining a group</string>
@@ -266,4 +271,26 @@
     <string name="success_file_uploaded">File uploaded successfully.</string>
     <string name="success_file_downloaded">File downloaded successfully.</string>
     <string name="success_message_sent">Message sent.</string>
+    
+    <!-- Empty State Messages -->
+    <string name="no_groups">No groups</string>
+    <string name="no_groups_yet">No groups yet</string>
+    <string name="create_or_join_group_message">Create a new group or join an existing one to get started</string>
+    <string name="no_activity">No activity</string>
+    <string name="no_recent_activity">No recent activity</string>
+    <string name="no_groups_to_discover">No groups to discover</string>
+    <string name="no_public_groups_available">No public groups available at the moment</string>
+    
+    <!-- Offline Indicator -->
+    <string name="offline_icon">Offline icon</string>
+    <string name="offline_message">No internet connection</string>
+    
+    <!-- Success Messages -->
+    <string name="operation_successful">Operation completed successfully</string>
+    <string name="group_created">Group created successfully</string>
+    <string name="group_joined">Joined group successfully</string>
+    <string name="task_created">Task created successfully</string>
+    <string name="task_updated">Task updated successfully</string>
+    <string name="message_sent">Message sent</string>
+    <string name="profile_updated">Profile updated successfully</string>
 </resources>

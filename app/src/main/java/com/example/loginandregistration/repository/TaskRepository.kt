@@ -31,6 +31,115 @@ class TaskRepository(private val context: Context? = null) {
         }
     }
 
+    // Get user tasks with category filtering (supports assignedTo array)
+    fun getUserTasks(category: String? = null): Flow<List<FirebaseTask>> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        var query = tasksCollection.whereEqualTo("userId", userId)
+
+        // Filter by category if specified and not "All"
+        if (category != null && category.lowercase() != "all") {
+            query = query.whereEqualTo("category", category.lowercase())
+        }
+
+        val listener =
+                query.orderBy("dueDate", Query.Direction.ASCENDING).addSnapshotListener {
+                        snapshot,
+                        error ->
+                    if (error != null) {
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+
+                    val tasks = snapshot?.toObjects(FirebaseTask::class.java) ?: emptyList()
+                    trySend(tasks)
+                }
+
+        awaitClose { listener.remove() }
+    }
+
+    // Get tasks for specific date (for calendar integration)
+    fun getTasksForDate(date: java.time.LocalDate): Flow<List<FirebaseTask>> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val startOfDay =
+                date.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val endOfDay =
+                date.plusDays(1)
+                        .atStartOfDay(java.time.ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+
+        val listener =
+                tasksCollection.whereEqualTo("userId", userId).addSnapshotListener { snapshot, error
+                    ->
+                    if (error != null) {
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+
+                    val allTasks = snapshot?.toObjects(FirebaseTask::class.java) ?: emptyList()
+
+                    // Filter tasks by date range (since Firestore doesn't support multiple range
+                    // queries)
+                    val tasksForDate =
+                            allTasks.filter { task ->
+                                val taskTime = task.dueDate?.toDate()?.time ?: 0
+                                taskTime >= startOfDay && taskTime < endOfDay
+                            }
+
+                    trySend(tasksForDate)
+                }
+
+        awaitClose { listener.remove() }
+    }
+
+    // Get dates that have tasks (for calendar indicators)
+    fun getDatesWithTasks(): Flow<Set<java.time.LocalDate>> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(emptySet())
+            close()
+            return@callbackFlow
+        }
+
+        val listener =
+                tasksCollection.whereEqualTo("userId", userId).addSnapshotListener { snapshot, error
+                    ->
+                    if (error != null) {
+                        trySend(emptySet())
+                        return@addSnapshotListener
+                    }
+
+                    val dates =
+                            snapshot?.documents
+                                    ?.mapNotNull { doc ->
+                                        val task = doc.toObject(FirebaseTask::class.java)
+                                        task?.dueDate
+                                                ?.toDate()
+                                                ?.toInstant()
+                                                ?.atZone(java.time.ZoneId.systemDefault())
+                                                ?.toLocalDate()
+                                    }
+                                    ?.toSet()
+                                    ?: emptySet()
+
+                    trySend(dates)
+                }
+
+        awaitClose { listener.remove() }
+    }
+
     suspend fun createTask(task: FirebaseTask): String? {
         val userId = auth.currentUser?.uid ?: return null
         return try {

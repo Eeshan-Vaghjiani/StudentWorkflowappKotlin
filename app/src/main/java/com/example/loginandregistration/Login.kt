@@ -3,30 +3,51 @@ package com.example.loginandregistration
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
-import android.widget.Button
-import android.widget.EditText
+import android.util.Patterns
+import android.view.View
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.example.loginandregistration.repository.NotificationRepository
+import com.example.loginandregistration.utils.GoogleSignInHelper
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import com.google.firebase.auth.FirebaseAuth // Correct import
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.ktx.auth // KTX import for Firebase.auth
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.ktx.Firebase // KTX import for Firebase.auth
-import java.util.Date
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
 
 class Login : AppCompatActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
-    private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var googleSignInHelper: GoogleSignInHelper
+    private val notificationRepository by lazy { NotificationRepository() }
+    private val loginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // UI Components
+    private lateinit var emailInputLayout: TextInputLayout
+    private lateinit var passwordInputLayout: TextInputLayout
+    private lateinit var etEmail: TextInputEditText
+    private lateinit var etPassword: TextInputEditText
+    private lateinit var btnLogin: MaterialButton
+    private lateinit var btnGoogleLogin: MaterialButton
+    private lateinit var tvRegister: TextView
+    private lateinit var tvForgotPassword: TextView
+    private lateinit var loadingOverlay: FrameLayout
 
     companion object {
         private const val TAG = "LoginActivity"
@@ -35,48 +56,39 @@ class Login : AppCompatActivity() {
     private val googleSignInLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
                 if (result.resultCode == Activity.RESULT_OK) {
-                    val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-                    try {
-                        val account = task.getResult(ApiException::class.java)
-                        if (account != null) {
-                            Log.d(TAG, "firebaseAuthWithGoogle: ${account.id}")
-                            firebaseAuthWithGoogle(account)
-                        } else {
-                            Log.w(TAG, "Google sign in failed: Account is null")
-                            Toast.makeText(
-                                            this,
-                                            getString(
-                                                    R.string.error_google_signin_failed_no_account
-                                            ),
-                                            Toast.LENGTH_SHORT
-                                    )
-                                    .show()
-                        }
-                    } catch (e: ApiException) {
-                        Log.w(TAG, "Google sign in failed", e)
-                        Toast.makeText(
-                                        this,
-                                        getString(
-                                                R.string.error_google_signin_failed_status,
-                                                e.statusCode
-                                        ),
-                                        Toast.LENGTH_SHORT
+                    val task = googleSignInHelper.handleSignInResult(result.data)
+                    task
+                            .addOnSuccessListener { account: GoogleSignInAccount ->
+                                Log.d(
+                                        TAG,
+                                        "Google sign-in successful, authenticating with Firebase"
                                 )
-                                .show()
-                    }
+                                authenticateWithFirebase(account)
+                            }
+                            .addOnFailureListener { e: Exception ->
+                                showLoading(false)
+                                Log.w(TAG, "Google sign in failed", e)
+                                val errorMessage =
+                                        if (e is ApiException) {
+                                            when (e.statusCode) {
+                                                12501 -> "Sign-in was cancelled"
+                                                12500 ->
+                                                        "Sign-in configuration error. Please contact support."
+                                                else -> "Google sign in failed: ${e.statusCode}"
+                                            }
+                                        } else {
+                                            "Google sign in failed: ${e.message}"
+                                        }
+                                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
+                            }
                 } else {
+                    showLoading(false)
                     Log.w(
                             TAG,
                             "Google sign in cancelled or failed: resultCode=${result.resultCode}"
                     )
-                    if (result.resultCode != Activity.RESULT_CANCELED
-                    ) { // Show message if not just cancelled by user
-                        Toast.makeText(
-                                        this,
-                                        getString(R.string.error_google_signin_cancelled),
-                                        Toast.LENGTH_SHORT
-                                )
-                                .show()
+                    if (result.resultCode != Activity.RESULT_CANCELED) {
+                        Toast.makeText(this, "Google sign-in cancelled", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -85,112 +97,219 @@ class Login : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
-        auth = Firebase.auth // Using KTX version
+        auth = Firebase.auth
         firestore = FirebaseFirestore.getInstance()
+        googleSignInHelper = GoogleSignInHelper(this)
 
-        val gso =
-                GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken(getString(R.string.default_web_client_id))
-                        .requestEmail()
-                        .build()
-        googleSignInClient = GoogleSignIn.getClient(this, gso)
+        // Initialize UI components
+        emailInputLayout = findViewById(R.id.emailInputLayout)
+        passwordInputLayout = findViewById(R.id.passwordInputLayout)
+        etEmail = findViewById(R.id.etEmail)
+        etPassword = findViewById(R.id.etPassword)
+        btnLogin = findViewById(R.id.btnLogin)
+        btnGoogleLogin = findViewById(R.id.btnGoogleLogin)
+        tvRegister = findViewById(R.id.tvRegister)
+        tvForgotPassword = findViewById(R.id.tvForgotPassword)
+        loadingOverlay = findViewById(R.id.loadingOverlay)
 
-        val etEmail = findViewById<EditText>(R.id.etEmail)
-        val etPassword = findViewById<EditText>(R.id.etPassword)
-        val btnLogin = findViewById<Button>(R.id.btnLogin)
-        val tvRegister = findViewById<TextView>(R.id.tvRegister)
-        val btnGoogleLogin = findViewById<Button>(R.id.btnGoogleLogin)
+        // Setup real-time validation
+        setupValidation()
 
         btnLogin.setOnClickListener {
-            val email = etEmail.text.toString().trim()
-            val password = etPassword.text.toString().trim()
-
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(
-                                this,
-                                getString(R.string.error_empty_credentials),
-                                Toast.LENGTH_SHORT
-                        )
-                        .show()
-                return@setOnClickListener
-            }
-
-            auth.signInWithEmailAndPassword(email, password).addOnCompleteListener(this) { task ->
-                if (task.isSuccessful) {
-                    val user = auth.currentUser
-                    if (user != null) {
-                        // Create or update user document in Firestore
-                        createOrUpdateUserInFirestore(
-                                userId = user.uid,
-                                email = user.email ?: email,
-                                displayName = user.displayName ?: email.substringBefore("@"),
-                                profileImageUrl = user.photoUrl?.toString() ?: ""
-                        )
-                    }
-                    Toast.makeText(this, getString(R.string.login_successful), Toast.LENGTH_SHORT)
-                            .show()
-                    navigateToDashboard()
-                } else {
-                    Log.w(TAG, "signInWithEmail:failure", task.exception)
-                    Toast.makeText(
-                                    this,
-                                    getString(
-                                            R.string.login_failed,
-                                            task.exception?.message
-                                                    ?: getString(R.string.unknown_error)
-                                    ),
-                                    Toast.LENGTH_LONG
-                            )
-                            .show()
-                }
+            if (validateForm()) {
+                performLogin()
             }
         }
 
         tvRegister.setOnClickListener { startActivity(Intent(this, Register::class.java)) }
 
+        tvForgotPassword.setOnClickListener {
+            Toast.makeText(this, "Forgot password feature coming soon", Toast.LENGTH_SHORT).show()
+        }
+
         btnGoogleLogin.setOnClickListener { signInWithGoogle() }
     }
 
-    private fun signInWithGoogle() {
-        val signInIntent = googleSignInClient.signInIntent
-        googleSignInLauncher.launch(signInIntent)
+    private fun setupValidation() {
+        // Email validation
+        etEmail.addTextChangedListener(
+                object : TextWatcher {
+                    override fun beforeTextChanged(
+                            s: CharSequence?,
+                            start: Int,
+                            count: Int,
+                            after: Int
+                    ) {}
+                    override fun onTextChanged(
+                            s: CharSequence?,
+                            start: Int,
+                            before: Int,
+                            count: Int
+                    ) {}
+                    override fun afterTextChanged(s: Editable?) {
+                        validateEmail()
+                    }
+                }
+        )
+
+        // Password validation
+        etPassword.addTextChangedListener(
+                object : TextWatcher {
+                    override fun beforeTextChanged(
+                            s: CharSequence?,
+                            start: Int,
+                            count: Int,
+                            after: Int
+                    ) {}
+                    override fun onTextChanged(
+                            s: CharSequence?,
+                            start: Int,
+                            before: Int,
+                            count: Int
+                    ) {}
+                    override fun afterTextChanged(s: Editable?) {
+                        validatePassword()
+                    }
+                }
+        )
     }
 
-    private fun firebaseAuthWithGoogle(account: GoogleSignInAccount) {
-        val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-        auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
+    private fun validateEmail(): Boolean {
+        val email = etEmail.text.toString().trim()
+        return when {
+            email.isEmpty() -> {
+                emailInputLayout.error = null
+                true
+            }
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                emailInputLayout.error = "Please enter a valid email address"
+                false
+            }
+            else -> {
+                emailInputLayout.error = null
+                true
+            }
+        }
+    }
+
+    private fun validatePassword(): Boolean {
+        val password = etPassword.text.toString()
+        return when {
+            password.isEmpty() -> {
+                passwordInputLayout.error = null
+                true
+            }
+            password.length < 6 -> {
+                passwordInputLayout.error = "Password must be at least 6 characters"
+                false
+            }
+            else -> {
+                passwordInputLayout.error = null
+                true
+            }
+        }
+    }
+
+    private fun validateForm(): Boolean {
+        val email = etEmail.text.toString().trim()
+        val password = etPassword.text.toString()
+
+        var isValid = true
+
+        if (email.isEmpty()) {
+            emailInputLayout.error = "Email is required"
+            isValid = false
+        } else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            emailInputLayout.error = "Please enter a valid email address"
+            isValid = false
+        } else {
+            emailInputLayout.error = null
+        }
+
+        if (password.isEmpty()) {
+            passwordInputLayout.error = "Password is required"
+            isValid = false
+        } else if (password.length < 6) {
+            passwordInputLayout.error = "Password must be at least 6 characters"
+            isValid = false
+        } else {
+            passwordInputLayout.error = null
+        }
+
+        return isValid
+    }
+
+    private fun showLoading(show: Boolean) {
+        loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
+        btnLogin.isEnabled = !show
+        btnGoogleLogin.isEnabled = !show
+    }
+
+    private fun performLogin() {
+        val email = etEmail.text.toString().trim()
+        val password = etPassword.text.toString().trim()
+
+        showLoading(true)
+
+        auth.signInWithEmailAndPassword(email, password).addOnCompleteListener(this) { task ->
+            showLoading(false)
+
             if (task.isSuccessful) {
                 val user = auth.currentUser
                 if (user != null) {
-                    // Create or update user document in Firestore
                     createOrUpdateUserInFirestore(
                             userId = user.uid,
-                            email = user.email ?: "",
-                            displayName = account.displayName
-                                            ?: user.email?.substringBefore("@") ?: "User",
-                            profileImageUrl = account.photoUrl?.toString() ?: ""
+                            email = user.email ?: email,
+                            displayName = user.displayName ?: email.substringBefore("@"),
+                            profileImageUrl = user.photoUrl?.toString() ?: ""
                     )
+                    // Save FCM token after successful login
+                    saveFcmTokenAfterLogin()
                 }
-                Toast.makeText(
-                                this,
-                                getString(R.string.google_login_successful),
-                                Toast.LENGTH_SHORT
-                        )
-                        .show()
+                Toast.makeText(this, "Login successful", Toast.LENGTH_SHORT).show()
                 navigateToDashboard()
             } else {
-                Log.w(TAG, "signInWithCredential:failure", task.exception)
-                Toast.makeText(
-                                this,
-                                getString(
-                                        R.string.google_login_failed,
-                                        task.exception?.message ?: getString(R.string.unknown_error)
-                                ),
-                                Toast.LENGTH_LONG
-                        )
-                        .show()
+                Log.w(TAG, "signInWithEmail:failure", task.exception)
+                val errorMessage =
+                        when (task.exception?.message) {
+                            "The email address is badly formatted." -> "Invalid email format"
+                            "The password is invalid or the user does not have a password." ->
+                                    "Invalid password"
+                            "There is no user record corresponding to this identifier. The user may have been deleted." ->
+                                    "No account found with this email"
+                            else -> task.exception?.message ?: "Unknown error"
+                        }
+                Toast.makeText(this, "Login Failed: $errorMessage", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun signInWithGoogle() {
+        showLoading(true)
+        val signInIntent = googleSignInHelper.getSignInIntent()
+        googleSignInLauncher.launch(signInIntent)
+    }
+
+    private fun authenticateWithFirebase(account: GoogleSignInAccount) {
+        showLoading(true)
+
+        googleSignInHelper.authenticateWithFirebase(
+                account = account,
+                onSuccess = { userId: String ->
+                    showLoading(false)
+                    Log.d(TAG, "Firebase authentication successful for user: $userId")
+                    // Save FCM token after successful Google login
+                    saveFcmTokenAfterLogin()
+                    Toast.makeText(this, "Google login successful", Toast.LENGTH_SHORT).show()
+                    navigateToDashboard()
+                },
+                onFailure = { errorMessage: String ->
+                    showLoading(false)
+                    Log.e(TAG, "Firebase authentication failed: $errorMessage")
+                    Toast.makeText(this, "Google login failed: $errorMessage", Toast.LENGTH_LONG)
+                            .show()
+                }
+        )
     }
 
     private fun createOrUpdateUserInFirestore(
@@ -199,41 +318,71 @@ class Login : AppCompatActivity() {
             displayName: String,
             profileImageUrl: String
     ) {
-        val userMap =
-                hashMapOf(
-                        "userId" to userId,
-                        "email" to email,
-                        "displayName" to displayName,
-                        "photoUrl" to profileImageUrl,
-                        "profileImageUrl" to profileImageUrl,
-                        "online" to true,
-                        "lastSeen" to Date(),
-                        "lastActive" to Date()
-                )
+        val userRef = firestore.collection("users").document(userId)
 
-        firestore
-                .collection("users")
-                .document(userId)
-                .set(userMap)
-                .addOnSuccessListener { Log.d(TAG, "User document created/updated successfully") }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Error creating/updating user document", e)
+        // Check if user exists first
+        userRef.get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        // User exists, update only necessary fields
+                        val updates =
+                                hashMapOf<String, Any>(
+                                        "displayName" to displayName,
+                                        "photoUrl" to profileImageUrl,
+                                        "profileImageUrl" to profileImageUrl,
+                                        "lastActive" to com.google.firebase.Timestamp.now(),
+                                        "isOnline" to true
+                                )
+
+                        userRef.update(updates)
+                                .addOnSuccessListener {
+                                    Log.d(TAG, "User document updated successfully")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e(TAG, "Error updating user document", e)
+                                }
+                    } else {
+                        // User doesn't exist, create new document
+                        val userData =
+                                hashMapOf(
+                                        "uid" to userId,
+                                        "email" to email,
+                                        "displayName" to displayName,
+                                        "photoUrl" to profileImageUrl,
+                                        "profileImageUrl" to profileImageUrl,
+                                        "authProvider" to "email",
+                                        "createdAt" to com.google.firebase.Timestamp.now(),
+                                        "lastActive" to com.google.firebase.Timestamp.now(),
+                                        "isOnline" to true,
+                                        "fcmToken" to "",
+                                        "aiPromptsUsed" to 0,
+                                        "aiPromptsLimit" to 10
+                                )
+
+                        userRef.set(userData)
+                                .addOnSuccessListener {
+                                    Log.d(TAG, "User document created successfully")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.e(TAG, "Error creating user document", e)
+                                }
+                    }
                 }
+                .addOnFailureListener { e -> Log.e(TAG, "Error checking user document", e) }
     }
 
-    private fun updateUserOnlineStatus(userId: String, online: Boolean) {
-        val updates =
-                hashMapOf<String, Any>(
-                        "online" to online,
-                        "lastSeen" to Date(),
-                        "lastActive" to Date()
+    private fun saveFcmTokenAfterLogin() {
+        loginScope.launch {
+            val result = notificationRepository.saveFcmToken()
+            if (result.isSuccess) {
+                Log.d(TAG, "FCM token saved successfully after login")
+            } else {
+                Log.w(
+                        TAG,
+                        "Failed to save FCM token after login: ${result.exceptionOrNull()?.message}"
                 )
-
-        firestore
-                .collection("users")
-                .document(userId)
-                .set(updates, com.google.firebase.firestore.SetOptions.merge())
-                .addOnFailureListener { e -> Log.e(TAG, "Error updating user status", e) }
+            }
+        }
     }
 
     private fun navigateToDashboard() { // Assuming MainActivity is DashboardActivity
@@ -241,6 +390,11 @@ class Login : AppCompatActivity() {
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        loginScope.coroutineContext.cancelChildren()
     }
 
     override fun onStart() {

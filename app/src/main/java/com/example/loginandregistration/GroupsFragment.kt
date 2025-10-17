@@ -17,6 +17,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.GroupRepository
 import com.example.loginandregistration.utils.collectWithLifecycle
+import com.example.loginandregistration.utils.ConnectionMonitor
+import com.example.loginandregistration.utils.ErrorHandler
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.Timestamp
@@ -40,7 +42,11 @@ class GroupsFragment : Fragment() {
 
         private lateinit var groupRepository: GroupRepository
         private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+        private lateinit var connectionMonitor: ConnectionMonitor
+        private lateinit var offlineIndicator: View
+        private lateinit var loadingSkeleton: View
         private var currentView: View? = null
+        private var isLoading = false
 
         override fun onCreateView(
                 inflater: LayoutInflater,
@@ -51,9 +57,11 @@ class GroupsFragment : Fragment() {
                 currentView = view
 
                 groupRepository = GroupRepository()
+                connectionMonitor = ConnectionMonitor(requireContext())
                 setupViews(view)
                 setupRecyclerViews(view)
                 setupClickListeners(view)
+                setupConnectionMonitoring()
                 setupRealTimeListeners()
 
                 return view
@@ -64,9 +72,33 @@ class GroupsFragment : Fragment() {
                 recyclerRecentActivity = view.findViewById(R.id.recycler_recent_activity)
                 recyclerDiscoverGroups = view.findViewById(R.id.recycler_discover_groups)
                 swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
+                offlineIndicator = view.findViewById(R.id.offlineIndicator)
+                loadingSkeleton = view.findViewById(R.id.loading_skeleton)
 
                 // Setup swipe refresh
                 swipeRefreshLayout.setOnRefreshListener { refreshData() }
+
+                // Show loading initially
+                showLoading(true)
+        }
+
+        private fun setupConnectionMonitoring() {
+                connectionMonitor.isConnected.collectWithLifecycle(viewLifecycleOwner) { isConnected
+                        ->
+                        offlineIndicator.visibility = if (isConnected) View.GONE else View.VISIBLE
+
+                        if (!isConnected) {
+                                Log.w(TAG, "Device is offline")
+                        } else {
+                                Log.d(TAG, "Device is online")
+                        }
+                }
+        }
+
+        private fun showLoading(show: Boolean) {
+                isLoading = show
+                loadingSkeleton.visibility = if (show) View.VISIBLE else View.GONE
+                swipeRefreshLayout.visibility = if (show) View.GONE else View.VISIBLE
         }
 
         private fun setupRecyclerViews(view: View) {
@@ -86,10 +118,9 @@ class GroupsFragment : Fragment() {
                         adapter = myGroupsAdapter
                 }
 
-                // Recent Activity
-                val activities = getDummyActivities()
+                // Recent Activity - Initialize with empty list, will be populated from Firestore
                 activityAdapter =
-                        ActivityAdapter(activities) { _ ->
+                        ActivityAdapter(emptyList()) { _ ->
                                 Toast.makeText(
                                                 context,
                                                 getString(R.string.activity_clicked),
@@ -103,10 +134,9 @@ class GroupsFragment : Fragment() {
                         adapter = activityAdapter
                 }
 
-                // Discover Groups
-                val discoverGroups = getDummyDiscoverGroups()
+                // Discover Groups - Initialize with empty list, will be populated from Firestore
                 discoverGroupsAdapter =
-                        DiscoverGroupAdapter(discoverGroups) { group -> joinDiscoverGroup(group) }
+                        DiscoverGroupAdapter(emptyList()) { group -> joinDiscoverGroup(group) }
 
                 recyclerDiscoverGroups.apply {
                         layoutManager = LinearLayoutManager(context)
@@ -196,10 +226,18 @@ class GroupsFragment : Fragment() {
                 // Real-time listener for user's groups
                 groupRepository.getUserGroupsFlow().collectWithLifecycle(viewLifecycleOwner) {
                         firebaseGroups ->
-                        android.util.Log.d(
-                                "GroupsFragment",
-                                "Received user groups update: ${firebaseGroups.size} groups"
-                        )
+                        Log.d(TAG, "Received user groups update: ${firebaseGroups.size} groups")
+
+                        // Hide loading skeleton after first data load
+                        if (isLoading) {
+                                showLoading(false)
+                        }
+
+                        // Stop refresh animation
+                        swipeRefreshLayout.isRefreshing = false
+
+                        // Update empty state visibility
+                        updateMyGroupsEmptyState(firebaseGroups.isEmpty())
 
                         val displayGroups =
                                 firebaseGroups.map { firebaseGroup ->
@@ -208,27 +246,19 @@ class GroupsFragment : Fragment() {
                                                 name = firebaseGroup.name,
                                                 details =
                                                         "${firebaseGroup.members.size} members • ${firebaseGroup.subject}",
-                                                assignmentCount = 0, // TODO: Implement when
-                                                // tasks are linked to
-                                                // groups
+                                                assignmentCount = firebaseGroup.tasks.size,
                                                 iconColor = "#007AFF",
                                                 iconResource = R.drawable.ic_groups
                                         )
                                 }
 
-                        android.util.Log.d(
-                                "GroupsFragment",
-                                "Mapped to ${displayGroups.size} display groups"
-                        )
+                        Log.d(TAG, "Mapped to ${displayGroups.size} display groups")
 
                         myGroupsAdapter =
                                 GroupAdapter(displayGroups) { group ->
                                         // Navigate to group details
                                         val intent =
-                                                android.content.Intent(
-                                                        context,
-                                                        GroupDetailsActivity::class.java
-                                                )
+                                                Intent(context, GroupDetailsActivity::class.java)
                                         intent.putExtra(
                                                 "GROUP_ID",
                                                 firebaseGroups.find { it.name == group.name }?.id
@@ -237,8 +267,8 @@ class GroupsFragment : Fragment() {
                                         startActivity(intent)
                                 }
                         recyclerMyGroups.adapter = myGroupsAdapter
-                        android.util.Log.d(
-                                "GroupsFragment",
+                        Log.d(
+                                TAG,
                                 "Updated recyclerMyGroups adapter with ${myGroupsAdapter.itemCount} items"
                         )
                 }
@@ -278,6 +308,9 @@ class GroupsFragment : Fragment() {
                                         }
                                 recyclerRecentActivity.adapter = activityAdapter
 
+                                // Update activity empty state
+                                updateActivityEmptyState(displayActivities.isEmpty())
+
                                 // Load discoverable groups
                                 val publicGroups = groupRepository.getPublicGroups()
                                 val displayDiscoverGroups =
@@ -298,12 +331,23 @@ class GroupsFragment : Fragment() {
                                         }
                                 recyclerDiscoverGroups.adapter = discoverGroupsAdapter
 
+                                // Update discover groups empty state
+                                updateDiscoverGroupsEmptyState(displayDiscoverGroups.isEmpty())
+
                                 // Hide refresh indicator when data loads
                                 swipeRefreshLayout.isRefreshing = false
                         } catch (e: Exception) {
-                                Toast.makeText(context, "Error loading data", Toast.LENGTH_SHORT)
-                                        .show()
+                                Log.e(TAG, "Error loading data", e)
                                 swipeRefreshLayout.isRefreshing = false
+                                showLoading(false)
+
+                                // Use ErrorHandler for consistent error handling
+                                context?.let { ctx ->
+                                        ErrorHandler.handleError(ctx, e, currentView) {
+                                                // Retry callback
+                                                loadInitialData()
+                                        }
+                                }
                         }
                 }
         }
@@ -350,31 +394,44 @@ class GroupsFragment : Fragment() {
                         }
 
                         lifecycleScope.launch {
-                                val groupId =
-                                        groupRepository.createGroup(
-                                                name,
-                                                description,
-                                                subject,
-                                                "public"
-                                        )
-                                if (groupId != null) {
-                                        Toast.makeText(
-                                                        context,
-                                                        getString(
-                                                                R.string.group_created_successfully
-                                                        ),
-                                                        Toast.LENGTH_SHORT
+                                try {
+                                        val groupId =
+                                                groupRepository.createGroup(
+                                                        name,
+                                                        description,
+                                                        subject,
+                                                        "public"
                                                 )
-                                                .show()
-                                        dialog.dismiss()
-                                        loadGroupsData() // Refresh the data
-                                } else {
-                                        Toast.makeText(
-                                                        context,
-                                                        getString(R.string.error_creating_group),
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
+                                        if (groupId != null) {
+                                                context?.let { ctx ->
+                                                        ErrorHandler.showSuccessMessage(
+                                                                ctx,
+                                                                currentView,
+                                                                getString(R.string.group_created)
+                                                        )
+                                                }
+                                                dialog.dismiss()
+                                                loadGroupsData() // Refresh the data
+                                        } else {
+                                                context?.let { ctx ->
+                                                        ErrorHandler.handleGenericError(
+                                                                ctx,
+                                                                currentView,
+                                                                getString(
+                                                                        R.string
+                                                                                .error_creating_group
+                                                                )
+                                                        )
+                                                }
+                                        }
+                                } catch (e: Exception) {
+                                        Log.e(TAG, "Error creating group", e)
+                                        context?.let { ctx ->
+                                                ErrorHandler.handleError(ctx, e, currentView) {
+                                                        // Retry callback
+                                                        btnCreate.performClick()
+                                                }
+                                        }
                                 }
                         }
                 }
@@ -407,25 +464,37 @@ class GroupsFragment : Fragment() {
                         }
 
                         lifecycleScope.launch {
-                                val success = groupRepository.joinGroupByCode(code)
-                                if (success) {
-                                        Toast.makeText(
-                                                        context,
-                                                        getString(
-                                                                R.string.joined_group_successfully
-                                                        ),
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                        dialog.dismiss()
-                                        loadGroupsData() // Refresh the data
-                                } else {
-                                        Toast.makeText(
-                                                        context,
-                                                        getString(R.string.error_joining_group),
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
+                                try {
+                                        val success = groupRepository.joinGroupByCode(code)
+                                        if (success) {
+                                                context?.let { ctx ->
+                                                        ErrorHandler.showSuccessMessage(
+                                                                ctx,
+                                                                currentView,
+                                                                getString(R.string.group_joined)
+                                                        )
+                                                }
+                                                dialog.dismiss()
+                                                loadGroupsData() // Refresh the data
+                                        } else {
+                                                context?.let { ctx ->
+                                                        ErrorHandler.handleGenericError(
+                                                                ctx,
+                                                                currentView,
+                                                                getString(
+                                                                        R.string.error_joining_group
+                                                                )
+                                                        )
+                                                }
+                                        }
+                                } catch (e: Exception) {
+                                        Log.e(TAG, "Error joining group", e)
+                                        context?.let { ctx ->
+                                                ErrorHandler.handleError(ctx, e, currentView) {
+                                                        // Retry callback
+                                                        btnJoin.performClick()
+                                                }
+                                        }
                                 }
                         }
                 }
@@ -540,6 +609,55 @@ class GroupsFragment : Fragment() {
                                         )
                                         .show()
                                 swipeRefreshLayout.isRefreshing = false
+                        }
+                }
+        }
+
+        private fun updateMyGroupsEmptyState(isEmpty: Boolean) {
+                currentView?.let { view ->
+                        val emptyStateView = view.findViewById<View>(R.id.empty_state_my_groups)
+                        val recyclerView = view.findViewById<RecyclerView>(R.id.recycler_my_groups)
+
+                        if (isEmpty) {
+                                emptyStateView?.visibility = View.VISIBLE
+                                recyclerView?.visibility = View.GONE
+                                Log.d(TAG, "Showing empty state for my groups")
+                        } else {
+                                emptyStateView?.visibility = View.GONE
+                                recyclerView?.visibility = View.VISIBLE
+                                Log.d(TAG, "Hiding empty state for my groups")
+                        }
+                }
+        }
+
+        private fun updateActivityEmptyState(isEmpty: Boolean) {
+                currentView?.let { view ->
+                        val emptyStateView = view.findViewById<View>(R.id.empty_state_activity)
+                        val recyclerView =
+                                view.findViewById<RecyclerView>(R.id.recycler_recent_activity)
+
+                        if (isEmpty) {
+                                emptyStateView?.visibility = View.VISIBLE
+                                recyclerView?.visibility = View.GONE
+                        } else {
+                                emptyStateView?.visibility = View.GONE
+                                recyclerView?.visibility = View.VISIBLE
+                        }
+                }
+        }
+
+        private fun updateDiscoverGroupsEmptyState(isEmpty: Boolean) {
+                currentView?.let { view ->
+                        val emptyStateView = view.findViewById<View>(R.id.empty_state_discover)
+                        val recyclerView =
+                                view.findViewById<RecyclerView>(R.id.recycler_discover_groups)
+
+                        if (isEmpty) {
+                                emptyStateView?.visibility = View.VISIBLE
+                                recyclerView?.visibility = View.GONE
+                        } else {
+                                emptyStateView?.visibility = View.GONE
+                                recyclerView?.visibility = View.VISIBLE
                         }
                 }
         }

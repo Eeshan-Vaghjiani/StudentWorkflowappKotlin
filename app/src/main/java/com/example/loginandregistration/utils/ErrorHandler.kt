@@ -11,6 +11,7 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.storage.StorageException
 import java.io.IOException
@@ -274,29 +275,60 @@ object ErrorHandler {
         }
     }
 
-    /** Log error to console for debugging */
+    /** Log error to console and Crashlytics for debugging */
     private fun logError(error: AppError) {
+        val crashlytics = FirebaseCrashlytics.getInstance()
+
         when (error) {
             is AppError.NetworkError -> {
                 Log.e(TAG, "Network Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "network")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
             }
             is AppError.AuthError -> {
                 Log.e(TAG, "Auth Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "auth")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
             }
             is AppError.PermissionError -> {
                 Log.e(TAG, "Permission Error: ${error.message} (${error.permission})")
+                crashlytics.log("Permission Error: ${error.message} (${error.permission})")
+                crashlytics.setCustomKey("error_type", "permission")
+                crashlytics.setCustomKey("permission", error.permission ?: "unknown")
             }
             is AppError.StorageError -> {
                 Log.e(TAG, "Storage Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "storage")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
             }
             is AppError.ValidationError -> {
                 Log.w(TAG, "Validation Error: ${error.message}")
+                // Don't log validation errors to Crashlytics (user input errors)
             }
             is AppError.FirestoreError -> {
                 Log.e(TAG, "Firestore Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "firestore")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
             }
             is AppError.UnknownError -> {
                 Log.e(TAG, "Unknown Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "unknown")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
             }
         }
     }

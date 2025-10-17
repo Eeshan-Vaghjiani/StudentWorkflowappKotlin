@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -96,13 +97,20 @@ class TasksFragment : Fragment() {
                         swipeRefreshLayout.isRefreshing = false
                 }
 
-                // Real-time listener for user's tasks
-                taskRepository.getUserTasksFlow().collectWithLifecycle(viewLifecycleOwner) {
-                        firebaseTasks ->
-                        Log.d(TAG, "Received ${firebaseTasks.size} tasks")
+                // Real-time listener for user's tasks with category filtering
+                taskRepository.getUserTasks(currentFilter).collectWithLifecycle(
+                                viewLifecycleOwner
+                        ) { firebaseTasks ->
+                        Log.d(
+                                TAG,
+                                "Received ${firebaseTasks.size} tasks for filter: $currentFilter"
+                        )
                         updateTasksList(firebaseTasks)
                         // Hide refresh indicator when data loads
                         swipeRefreshLayout.isRefreshing = false
+
+                        // Show/hide empty state
+                        showEmptyStateIfNeeded(firebaseTasks.isEmpty())
                 }
         }
 
@@ -126,8 +134,10 @@ class TasksFragment : Fragment() {
                         try {
                                 // Force a refresh by re-fetching data
                                 // The Flow listeners will pick up the changes
-                                taskRepository.getUserTasksFlow().collect { firebaseTasks ->
+                                taskRepository.getUserTasks(currentFilter).collect { firebaseTasks
+                                        ->
                                         updateTasksList(firebaseTasks)
+                                        showEmptyStateIfNeeded(firebaseTasks.isEmpty())
                                         swipeRefreshLayout.isRefreshing = false
                                         return@collect // Only collect once for refresh
                                 }
@@ -145,17 +155,8 @@ class TasksFragment : Fragment() {
         }
 
         private fun updateTasksList(firebaseTasks: List<FirebaseTask>) {
-                val filteredTasks =
-                        when (currentFilter) {
-                                "personal" -> firebaseTasks.filter { it.category == "personal" }
-                                "group" -> firebaseTasks.filter { it.category == "group" }
-                                "assignments" ->
-                                        firebaseTasks.filter { it.category == "assignment" }
-                                else -> firebaseTasks
-                        }
-
                 val displayTasks =
-                        filteredTasks.map { firebaseTask ->
+                        firebaseTasks.map { firebaseTask ->
                                 Task(
                                         id = firebaseTask.id.hashCode(),
                                         title = firebaseTask.title,
@@ -182,7 +183,29 @@ class TasksFragment : Fragment() {
                 recyclerTasks.adapter = taskAdapter
         }
 
-        // This is now handled by the updateTasksList method above
+        private fun showEmptyStateIfNeeded(isEmpty: Boolean) {
+                currentView?.let { view ->
+                        val emptyStateView = view.findViewById<View>(R.id.empty_state_layout)
+                        val emptyStateText = view.findViewById<TextView>(R.id.empty_state_text)
+
+                        if (isEmpty) {
+                                emptyStateView?.visibility = View.VISIBLE
+                                recyclerTasks.visibility = View.GONE
+
+                                val message =
+                                        when (currentFilter) {
+                                                "personal" -> "No personal tasks yet"
+                                                "group" -> "No group tasks yet"
+                                                "assignment" -> "No assignments yet"
+                                                else -> "No tasks yet"
+                                        }
+                                emptyStateText?.text = message
+                        } else {
+                                emptyStateView?.visibility = View.GONE
+                                recyclerTasks.visibility = View.VISIBLE
+                        }
+                }
+        }
 
         private fun setupClickListeners(view: View) {
                 // Header buttons
@@ -211,8 +234,7 @@ class TasksFragment : Fragment() {
                 // Category buttons
                 view.findViewById<MaterialButton>(R.id.btn_all_tasks)?.setOnClickListener {
                         currentFilter = "all"
-                        // No need to fetch tasks manually, the real-time listener will update with
-                        // the new filter
+                        setupRealTimeListeners() // Re-setup listeners with new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "All Tasks"),
@@ -223,8 +245,7 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_personal)?.setOnClickListener {
                         currentFilter = "personal"
-                        // No need to fetch tasks manually, the real-time listener will update with
-                        // the new filter
+                        setupRealTimeListeners() // Re-setup listeners with new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Personal"),
@@ -235,8 +256,7 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_group)?.setOnClickListener {
                         currentFilter = "group"
-                        // No need to fetch tasks manually, the real-time listener will update with
-                        // the new filter
+                        setupRealTimeListeners() // Re-setup listeners with new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Group"),
@@ -246,9 +266,8 @@ class TasksFragment : Fragment() {
                 }
 
                 view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
-                        currentFilter = "assignments"
-                        // No need to fetch tasks manually, the real-time listener will update with
-                        // the new filter
+                        currentFilter = "assignment"
+                        setupRealTimeListeners() // Re-setup listeners with new filter
                         Toast.makeText(
                                         context,
                                         getString(R.string.category_selected, "Assignments"),
@@ -321,51 +340,6 @@ class TasksFragment : Fragment() {
                         diff < 2 * 24 * 60 * 60 * 1000 -> "Due tomorrow"
                         else -> "Due in ${diff / (24 * 60 * 60 * 1000)} days"
                 }
-        }
-
-        private fun getDummyTasks(): List<Task> {
-                return listOf(
-                        Task(
-                                id = 1,
-                                title = "Research Paper Draft",
-                                subtitle = "Overdue • Computer Science • Due 2 days ago",
-                                status = "Overdue",
-                                iconColor = "#FF3B30",
-                                statusColor = "#FF3B30"
-                        ),
-                        Task(
-                                id = 2,
-                                title = "Math Assignment",
-                                subtitle = "Due today • Mathematics • Due in 4 hours",
-                                status = "Due Today",
-                                iconColor = "#FF9500",
-                                statusColor = "#FF9500"
-                        ),
-                        Task(
-                                id = 3,
-                                title = "Lab Report",
-                                subtitle = "Due tomorrow • Chemistry • Due in 1 day",
-                                status = "Due Tomorrow",
-                                iconColor = "#007AFF",
-                                statusColor = "#007AFF"
-                        ),
-                        Task(
-                                id = 4,
-                                title = "Literature Review",
-                                subtitle = "Due in 3 days • English • Due in 3 days",
-                                status = "Due Later",
-                                iconColor = "#34C759",
-                                statusColor = "#34C759"
-                        ),
-                        Task(
-                                id = 5,
-                                title = "Physics Quiz",
-                                subtitle = "Completed • Physics • Completed yesterday",
-                                status = "Completed",
-                                iconColor = "#8E8E93",
-                                statusColor = "#8E8E93"
-                        )
-                )
         }
 
         private fun showCreateTaskDialog() {

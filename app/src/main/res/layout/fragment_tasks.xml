@@ -323,6 +323,34 @@
                             android:paddingBottom="12dp"
                             tools:itemCount="5"
                             tools:listitem="@layout/item_task" />
+
+                        <!-- Empty State -->
+                        <LinearLayout
+                            android:id="@+id/empty_state_layout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="32dp"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="📋"
+                                android:textSize="48sp" />
+
+                            <TextView
+                                android:id="@+id/empty_state_text"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="16dp"
+                                android:text="No tasks yet"
+                                android:textSize="16sp"
+                                android:textColor="@color/text_secondary"
+                                android:gravity="center" />
+
+                        </LinearLayout>
                     </FrameLayout>
 
                 </LinearLayout>

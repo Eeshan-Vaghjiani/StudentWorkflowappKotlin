@@ -286,12 +286,7 @@ class GroupRepository {
 
             // Soft delete by marking as inactive
             groupDoc.reference
-                    .update(
-                            mapOf(
-                                    "isActive" to false,
-                                    "updatedAt" to Timestamp.now()
-                            )
-                    )
+                    .update(mapOf("isActive" to false, "updatedAt" to Timestamp.now()))
                     .await()
 
             true
@@ -303,10 +298,13 @@ class GroupRepository {
     fun getUserGroupsFlow(): Flow<List<FirebaseGroup>> = callbackFlow {
         val userId = auth.currentUser?.uid
         if (userId == null) {
+            Log.d("GroupRepository", "No authenticated user, returning empty list")
             trySend(emptyList())
             close()
             return@callbackFlow
         }
+
+        Log.d("GroupRepository", "Setting up real-time listener for user groups: $userId")
 
         val listener =
                 groupsCollection
@@ -315,17 +313,42 @@ class GroupRepository {
                         .orderBy("updatedAt", Query.Direction.DESCENDING)
                         .addSnapshotListener { snapshot, error ->
                             if (error != null) {
-                                Log.e("GroupRepository", "Error getting user groups: ${error.message}")
+                                Log.e(
+                                        "GroupRepository",
+                                        "Error getting user groups: ${error.message}",
+                                        error
+                                )
                                 trySend(emptyList())
                                 return@addSnapshotListener
                             }
 
                             val groups =
-                                    snapshot?.toObjects(FirebaseGroup::class.java) ?: emptyList()
+                                    snapshot?.documents?.mapNotNull { doc ->
+                                        try {
+                                            doc.toObject(FirebaseGroup::class.java)
+                                                    ?.copy(id = doc.id)
+                                        } catch (e: Exception) {
+                                            Log.e(
+                                                    "GroupRepository",
+                                                    "Error parsing group document: ${doc.id}",
+                                                    e
+                                            )
+                                            null
+                                        }
+                                    }
+                                            ?: emptyList()
+
+                            Log.d(
+                                    "GroupRepository",
+                                    "Received ${groups.size} groups from Firestore"
+                            )
                             trySend(groups)
                         }
 
-        awaitClose { listener.remove() }
+        awaitClose {
+            Log.d("GroupRepository", "Removing groups listener")
+            listener.remove()
+        }
     }
 
     fun getGroupStatsFlow(): Flow<GroupStats> = callbackFlow {
@@ -349,13 +372,15 @@ class GroupRepository {
                             }
 
                             // Process the groups snapshot
-                            val groups = groupSnapshot?.toObjects(FirebaseGroup::class.java) ?: emptyList()
+                            val groups =
+                                    groupSnapshot?.toObjects(FirebaseGroup::class.java)
+                                            ?: emptyList()
                             val myGroupsCount = groups.size
-                            
+
                             // Always send an update with the current group count
                             Log.d("GroupRepository", "Group count update: $myGroupsCount groups")
                             trySend(GroupStats(myGroups = myGroupsCount))
-                            
+
                             // If there are groups, fetch additional stats asynchronously
                             if (groups.isNotEmpty()) {
                                 val groupIds = groups.map { it.id }
@@ -366,44 +391,50 @@ class GroupRepository {
         // Register for cleanup when the flow is cancelled
         awaitClose { groupsListener.remove() }
     }
-    
+
     // Helper method to fetch activity stats separately
-    private fun ProducerScope<GroupStats>.fetchActivityStats(groupIds: List<String>, myGroupsCount: Int) {
+    private fun ProducerScope<GroupStats>.fetchActivityStats(
+            groupIds: List<String>,
+            myGroupsCount: Int
+    ) {
         try {
             // For activities, use a separate query to avoid nesting listeners
             activitiesCollection
-                .whereIn("groupId", groupIds.take(10)) // Firestore limit
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(50)
-                .get()
-                .addOnSuccessListener { activitySnapshot ->
-                    val activities = activitySnapshot.toObjects(GroupActivity::class.java)
-                    val newMessages = activities.filter { it.type == "message" }.size
+                    .whereIn("groupId", groupIds.take(10)) // Firestore limit
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .limit(50)
+                    .get()
+                    .addOnSuccessListener { activitySnapshot ->
+                        val activities = activitySnapshot.toObjects(GroupActivity::class.java)
+                        val newMessages = activities.filter { it.type == "message" }.size
 
-                    // TODO: Calculate active assignments when task-group linking is implemented
-                    val activeAssignments = 0
+                        // TODO: Calculate active assignments when task-group linking is implemented
+                        val activeAssignments = 0
 
-                    // Send updated stats with activity information
-                    Log.d("GroupRepository", "Activity stats update: $myGroupsCount groups, $newMessages messages")
-                    trySend(
-                        GroupStats(
-                            myGroups = myGroupsCount,
-                            activeAssignments = activeAssignments,
-                            newMessages = newMessages
+                        // Send updated stats with activity information
+                        Log.d(
+                                "GroupRepository",
+                                "Activity stats update: $myGroupsCount groups, $newMessages messages"
                         )
-                    )
-                }
-                .addOnFailureListener { error ->
-                    Log.e("GroupRepository", "Error getting activities: ${error.message}")
-                    // If activities query fails, still maintain the group count
-                    trySend(GroupStats(myGroups = myGroupsCount))
-                }
+                        trySend(
+                                GroupStats(
+                                        myGroups = myGroupsCount,
+                                        activeAssignments = activeAssignments,
+                                        newMessages = newMessages
+                                )
+                        )
+                    }
+                    .addOnFailureListener { error ->
+                        Log.e("GroupRepository", "Error getting activities: ${error.message}")
+                        // If activities query fails, still maintain the group count
+                        trySend(GroupStats(myGroups = myGroupsCount))
+                    }
         } catch (e: Exception) {
             Log.e("GroupRepository", "Exception in fetchActivityStats: ${e.message}")
             trySend(GroupStats(myGroups = myGroupsCount))
         }
     }
-    
+
     // Helper method to get a group by ID
     suspend fun getGroupById(groupId: String): FirebaseGroup? {
         return try {
@@ -413,36 +444,36 @@ class GroupRepository {
             null
         }
     }
-    
+
     // Helper method to check if a user is an admin of a group
     suspend fun isUserGroupAdmin(groupId: String, userId: String): Boolean {
         val group = getGroupById(groupId) ?: return false
         val member = group.members.find { it.userId == userId } ?: return false
         return member.role == "admin" || member.role == "owner"
     }
-    
+
     // Helper method to get a group's join code
     suspend fun getGroupJoinCode(groupId: String): String? {
         val group = getGroupById(groupId) ?: return null
         return group.joinCode
     }
-    
+
     // Get recent group activities
     suspend fun getGroupActivities(limit: Int = 20): List<GroupActivity> {
         val userId = auth.currentUser?.uid ?: return emptyList()
         return try {
             activitiesCollection
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(limit.toLong())
-                .get()
-                .await()
-                .toObjects(GroupActivity::class.java)
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .limit(limit.toLong())
+                    .get()
+                    .await()
+                    .toObjects(GroupActivity::class.java)
         } catch (e: Exception) {
             Log.e("GroupRepository", "Error getting activities: ${e.message}")
             emptyList()
         }
     }
-    
+
     suspend fun getGroupAdminInfo(groupId: String): Pair<FirebaseGroup?, String?> {
         val userId = auth.currentUser?.uid ?: return Pair(null, null)
         return try {
@@ -456,166 +487,194 @@ class GroupRepository {
             Pair(null, null)
         }
     }
-    
+
     // Remove a member from a group
     suspend fun removeMemberFromGroup(groupId: String, memberId: String): Boolean {
         val userId = auth.currentUser?.uid ?: return false
         val group = getGroupById(groupId) ?: return false
-        
+
         // Check if user is admin
         if (!isUserGroupAdmin(groupId, userId)) {
             return false
         }
-        
+
         // Cannot remove the owner
         if (memberId == group.owner) {
             return false
         }
-        
+
         try {
             // Update the group document
-            groupsCollection.document(groupId).update(
-                "members", group.members.filter { it.userId != memberId },
-                "memberIds", group.memberIds.filter { it != memberId },
-                "updatedAt", Timestamp.now()
-            ).await()
-            
+            groupsCollection
+                    .document(groupId)
+                    .update(
+                            "members",
+                            group.members.filter { it.userId != memberId },
+                            "memberIds",
+                            group.memberIds.filter { it != memberId },
+                            "updatedAt",
+                            Timestamp.now()
+                    )
+                    .await()
+
             // Add activity
             val user = auth.currentUser
             if (user != null) {
-                val memberName = group.members.find { it.userId == memberId }?.displayName ?: "A member"
+                val memberName =
+                        group.members.find { it.userId == memberId }?.displayName ?: "A member"
                 addGroupActivity(
-                    groupId = groupId,
-                    title = "Member removed",
-                    description = "$memberName was removed from the group",
-                    type = "member_left"
+                        groupId = groupId,
+                        title = "Member removed",
+                        description = "$memberName was removed from the group",
+                        type = "member_left"
                 )
             }
-            
+
             return true
         } catch (e: Exception) {
             Log.e("GroupRepository", "Error removing member: ${e.message}")
             return false
         }
     }
-    
+
     // Regenerate a new join code for a group
     suspend fun regenerateJoinCode(groupId: String): String? {
         val userId = auth.currentUser?.uid ?: return null
         val group = getGroupById(groupId) ?: return null
-        
+
         // Check if user is admin
         if (!isUserGroupAdmin(groupId, userId)) {
             return null
         }
-        
+
         try {
             val newCode = generateJoinCode()
-            groupsCollection.document(groupId).update(
-                "joinCode", newCode,
-                "updatedAt", Timestamp.now()
-            ).await()
-            
+            groupsCollection
+                    .document(groupId)
+                    .update("joinCode", newCode, "updatedAt", Timestamp.now())
+                    .await()
+
             return newCode
         } catch (e: Exception) {
             Log.e("GroupRepository", "Error regenerating join code: ${e.message}")
             return null
         }
     }
-    
+
     // Update group details
-    suspend fun updateGroupDetails(groupId: String, name: String, description: String, subject: String, privacy: String): Boolean {
+    suspend fun updateGroupDetails(
+            groupId: String,
+            name: String,
+            description: String,
+            subject: String,
+            privacy: String
+    ): Boolean {
         val userId = auth.currentUser?.uid ?: return false
         val group = getGroupById(groupId) ?: return false
-        
+
         // Check if user is admin
         if (!isUserGroupAdmin(groupId, userId)) {
             return false
         }
-        
+
         try {
-            groupsCollection.document(groupId).update(
-                "name", name,
-                "description", description,
-                "subject", subject,
-                "settings.isPublic", privacy == "public",
-                "updatedAt", Timestamp.now()
-            ).await()
-            
+            groupsCollection
+                    .document(groupId)
+                    .update(
+                            "name",
+                            name,
+                            "description",
+                            description,
+                            "subject",
+                            subject,
+                            "settings.isPublic",
+                            privacy == "public",
+                            "updatedAt",
+                            Timestamp.now()
+                    )
+                    .await()
+
             // Add activity
             val user = auth.currentUser
             if (user != null) {
                 addGroupActivity(
-                    groupId = groupId,
-                    title = "Group details updated",
-                    description = "${user.displayName ?: "Someone"} updated the group details",
-                    type = "group_updated"
+                        groupId = groupId,
+                        title = "Group details updated",
+                        description = "${user.displayName ?: "Someone"} updated the group details",
+                        type = "group_updated"
                 )
             }
-            
+
             return true
         } catch (e: Exception) {
             Log.e("GroupRepository", "Error updating group: ${e.message}")
             return false
         }
     }
-    
+
     private val usersCollection = db.collection("users")
-    
+
     // Add a member to a group
     suspend fun addMemberToGroup(groupId: String, userId: String): Boolean {
         val currentUserId = auth.currentUser?.uid ?: return false
         val group = getGroupById(groupId) ?: return false
-        
+
         // Check if current user is admin
         if (!isUserGroupAdmin(groupId, currentUserId)) {
             return false
         }
-        
+
         // Check if user is already a member
         if (group.memberIds.contains(userId)) {
             return false
         }
-        
+
         try {
             // Get user details from users collection
             val userSnapshot = usersCollection.document(userId).get().await()
             val targetUser = userSnapshot.toObject(FirebaseUser::class.java) ?: return false
-            
+
             val email = targetUser.email
             val displayName = targetUser.displayName
-            
+
             // Create new member
-            val newMember = GroupMember(
-                userId = userId,
-                email = email,
-                displayName = displayName,
-                role = "member",
-                joinedAt = Timestamp.now(),
-                isActive = true
-            )
-            
+            val newMember =
+                    GroupMember(
+                            userId = userId,
+                            email = email,
+                            displayName = displayName,
+                            role = "member",
+                            joinedAt = Timestamp.now(),
+                            isActive = true
+                    )
+
             // Update the group document
             val updatedMembers = group.members.toMutableList().apply { add(newMember) }
             val updatedMemberIds = group.memberIds.toMutableList().apply { add(userId) }
-            
-            groupsCollection.document(groupId).update(
-                "members", updatedMembers,
-                "memberIds", updatedMemberIds,
-                "updatedAt", Timestamp.now()
-            ).await()
-            
+
+            groupsCollection
+                    .document(groupId)
+                    .update(
+                            "members",
+                            updatedMembers,
+                            "memberIds",
+                            updatedMemberIds,
+                            "updatedAt",
+                            Timestamp.now()
+                    )
+                    .await()
+
             // Add activity
             val user = auth.currentUser
             if (user != null) {
                 addGroupActivity(
-                    groupId = groupId,
-                    title = "New member added",
-                    description = "${displayName} was added to the group",
-                    type = "member_joined"
+                        groupId = groupId,
+                        title = "New member added",
+                        description = "${displayName} was added to the group",
+                        type = "member_joined"
                 )
             }
-            
+
             return true
         } catch (e: Exception) {
             Log.e("GroupRepository", "Error adding member: ${e.message}")

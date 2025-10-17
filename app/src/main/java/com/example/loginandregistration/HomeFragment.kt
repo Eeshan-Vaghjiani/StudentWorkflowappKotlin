@@ -108,62 +108,110 @@ class HomeFragment : Fragment() {
     }
 
     private fun loadDashboardData() {
-        // Initialize UI with placeholder values
-        binding.tvTasksDueCount.text = "0"
-        binding.tvGroupsCount.text = "0"
-        binding.tvSessionsCount.text = "0"
-
-        // AI usage - keep static for now
-        binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 7)
-        binding.progressBarAiUsage.progress = 30
-        binding.tvAiUsageDetails.text = getString(R.string.home_ai_prompts_usage_template, 3, 10)
+        // Show loading state
+        showLoadingState()
 
         // Set up real-time listeners for continuous updates
         setupRealTimeListeners()
     }
 
+    private fun showLoadingState() {
+        // Show loading indicators
+        binding.tvTasksDueCount.text = "..."
+        binding.tvGroupsCount.text = "..."
+        binding.tvSessionsCount.text = "..."
+        binding.tvAiPromptsLeft.text = "..."
+        binding.progressBarAiUsage.progress = 0
+        binding.tvAiUsageDetails.text = getString(R.string.loading)
+    }
+
     private fun setupRealTimeListeners() {
-        // Set up real-time listener for tasks using Flow with lifecycle awareness
+        val dashboardRepository = com.example.loginandregistration.repository.DashboardRepository()
+
+        // Set up real-time listener for task stats
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val taskRepository = com.example.loginandregistration.repository.TaskRepository()
-                taskRepository.getDashboardTaskStatsFlow().collect { taskStats ->
+                dashboardRepository.getTaskStats().collect { taskStats ->
                     // Update UI on main thread
-                    binding.tvTasksDueCount.text = taskStats.tasksDue.toString()
+                    val tasksDue = taskStats.overdue + taskStats.dueToday
+                    binding.tvTasksDueCount.text = tasksDue.toString()
+
+                    // Check if we should show empty state
+                    val total = taskStats.overdue + taskStats.dueToday + taskStats.completed
+                    checkAndShowEmptyState(total)
                 }
             } catch (e: Exception) {
-                // Handle error silently - show 0 as fallback
+                // Handle error - show 0 as fallback
                 binding.tvTasksDueCount.text = "0"
             }
         }
 
-        // Set up real-time listener for groups using Flow with lifecycle awareness
+        // Set up real-time listener for group count
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val groupRepository = com.example.loginandregistration.repository.GroupRepository()
-                groupRepository.getGroupStatsFlow().collect { groupStats ->
+                dashboardRepository.getGroupCount().collect { groupCount ->
                     // Update UI on main thread
-                    binding.tvGroupsCount.text = groupStats.myGroups.toString()
+                    binding.tvGroupsCount.text = groupCount.toString()
                 }
             } catch (e: Exception) {
-                // Handle error silently - show 0 as fallback
+                // Handle error - show 0 as fallback
                 binding.tvGroupsCount.text = "0"
             }
         }
 
-        // Set up real-time listener for study sessions using Flow with lifecycle awareness
+        // Set up real-time listener for session stats
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val sessionRepository =
-                        com.example.loginandregistration.repository.SessionRepository()
-                sessionRepository.getSessionStatsFlow().collect { sessionStats ->
+                dashboardRepository.getSessionStats().collect { sessionStats ->
                     // Update UI on main thread
                     binding.tvSessionsCount.text = sessionStats.totalSessions.toString()
                 }
             } catch (e: Exception) {
-                // Handle error silently - show 0 as fallback
+                // Handle error - show 0 as fallback
                 binding.tvSessionsCount.text = "0"
             }
+        }
+
+        // Set up real-time listener for AI usage stats
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                dashboardRepository.getAIUsageStats().collect { aiStats ->
+                    // Update UI on main thread
+                    val remaining = aiStats.limit - aiStats.used
+                    binding.tvAiPromptsLeft.text =
+                            getString(R.string.home_ai_prompts_left_template, remaining)
+
+                    val progress =
+                            if (aiStats.limit > 0) {
+                                (aiStats.used * 100) / aiStats.limit
+                            } else {
+                                0
+                            }
+                    binding.progressBarAiUsage.progress = progress
+
+                    binding.tvAiUsageDetails.text =
+                            getString(
+                                    R.string.home_ai_prompts_usage_template,
+                                    aiStats.used,
+                                    aiStats.limit
+                            )
+                }
+            } catch (e: Exception) {
+                // Handle error - show default values
+                binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 10)
+                binding.progressBarAiUsage.progress = 0
+                binding.tvAiUsageDetails.text =
+                        getString(R.string.home_ai_prompts_usage_template, 0, 10)
+            }
+        }
+    }
+
+    private fun checkAndShowEmptyState(totalTasks: Int) {
+        // For now, we'll just log this - empty state can be shown in a future enhancement
+        // when we have more comprehensive data about user's overall activity
+        if (totalTasks == 0) {
+            // Could show empty state view here
+            android.util.Log.d("HomeFragment", "User has no tasks")
         }
     }
 
