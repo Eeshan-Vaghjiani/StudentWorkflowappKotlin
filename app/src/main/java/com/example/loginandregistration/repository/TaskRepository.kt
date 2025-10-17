@@ -3,6 +3,7 @@ package com.example.loginandregistration.repository
 import android.content.Context
 import com.example.loginandregistration.models.FirebaseTask
 import com.example.loginandregistration.utils.TaskReminderScheduler
+import com.example.loginandregistration.utils.safeFirestoreCall
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -17,17 +18,19 @@ class TaskRepository(private val context: Context? = null) {
     private val auth = FirebaseAuth.getInstance()
     private val tasksCollection = db.collection("tasks")
 
-    suspend fun getUserTasks(): List<FirebaseTask> {
-        val userId = auth.currentUser?.uid ?: return emptyList()
-        return try {
-            tasksCollection
+    suspend fun getUserTasks(): Result<List<FirebaseTask>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall {
+            val snapshot = tasksCollection
                     .whereEqualTo("userId", userId)
                     .orderBy("dueDate", Query.Direction.ASCENDING)
                     .get()
                     .await()
-                    .toObjects(FirebaseTask::class.java)
-        } catch (e: Exception) {
-            emptyList()
+            
+            // Map documents to FirebaseTask objects with proper ID assignment
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(FirebaseTask::class.java)?.copy(id = doc.id)
+            }
         }
     }
 
@@ -140,15 +143,22 @@ class TaskRepository(private val context: Context? = null) {
         awaitClose { listener.remove() }
     }
 
-    suspend fun createTask(task: FirebaseTask): String? {
-        val userId = auth.currentUser?.uid ?: return null
-        return try {
+    suspend fun createTask(task: FirebaseTask): Result<String> {
+        val userId = auth.currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
+        
+        return safeFirestoreCall {
+            // Ensure all required fields are properly initialized
             val taskWithUser =
                     task.copy(
                             userId = userId,
                             createdAt = Timestamp.now(),
-                            updatedAt = Timestamp.now()
+                            updatedAt = Timestamp.now(),
+                            status = if (task.status.isEmpty()) "pending" else task.status,
+                            category = if (task.category.isEmpty()) "personal" else task.category,
+                            priority = if (task.priority.isEmpty()) "medium" else task.priority
                     )
+            
+            // Add task to Firestore
             val docRef = tasksCollection.add(taskWithUser).await()
             val taskId = docRef.id
 
@@ -158,14 +168,13 @@ class TaskRepository(private val context: Context? = null) {
                 TaskReminderScheduler.scheduleReminder(it, taskWithId)
             }
 
+            android.util.Log.d("TaskRepository", "Task created successfully with ID: $taskId")
             taskId
-        } catch (e: Exception) {
-            null
         }
     }
 
-    suspend fun updateTask(taskId: String, updates: Map<String, Any>): Boolean {
-        return try {
+    suspend fun updateTask(taskId: String, updates: Map<String, Any>): Result<Unit> {
+        return safeFirestoreCall {
             val updatesWithTimestamp = updates.toMutableMap()
             updatesWithTimestamp["updatedAt"] = Timestamp.now()
             tasksCollection.document(taskId).update(updatesWithTimestamp).await()
@@ -189,29 +198,23 @@ class TaskRepository(private val context: Context? = null) {
                     }
                 }
             }
-
-            true
-        } catch (e: Exception) {
-            false
         }
     }
 
-    suspend fun deleteTask(taskId: String): Boolean {
-        return try {
+    suspend fun deleteTask(taskId: String): Result<Unit> {
+        return safeFirestoreCall {
             // Cancel reminder before deleting task
             context?.let { TaskReminderScheduler.cancelReminder(it, taskId) }
 
             tasksCollection.document(taskId).delete().await()
-            true
-        } catch (e: Exception) {
-            false
         }
     }
 
     suspend fun getTaskStats(): TaskStats {
         val userId = auth.currentUser?.uid ?: return TaskStats()
         return try {
-            val tasks = getUserTasks()
+            val result = getUserTasks()
+            val tasks = result.getOrElse { emptyList() }
             val now = Timestamp.now()
 
             var overdue = 0
@@ -287,7 +290,8 @@ class TaskRepository(private val context: Context? = null) {
     suspend fun getDashboardTaskStats(): DashboardTaskStats {
         val userId = auth.currentUser?.uid ?: return DashboardTaskStats()
         return try {
-            val tasks = getUserTasks()
+            val result = getUserTasks()
+            val tasks = result.getOrElse { emptyList() }
             val now = Timestamp.now()
 
             var tasksDue = 0

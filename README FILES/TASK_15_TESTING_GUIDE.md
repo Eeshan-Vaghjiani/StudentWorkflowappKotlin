@@ -1,576 +1,372 @@
-# Task 15: Image Message Sending - Testing Guide
+# Task 15: AI Task Creation - Testing Guide
 
 ## Prerequisites
 
-Before testing, ensure:
-- ✅ App is built successfully
-- ✅ Firebase project is configured
-- ✅ Firebase Storage is enabled
-- ✅ Storage security rules allow authenticated uploads
-- ✅ At least two test accounts exist
-- ✅ Test devices/emulators have images in gallery
+### 1. Get Gemini API Key
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the generated API key
 
-## Test Environment Setup
-
-### 1. Firebase Storage Rules
-Verify these rules are deployed:
-```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /chat_images/{chatId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 5 * 1024 * 1024;
-    }
-  }
-}
+### 2. Configure API Key
+Add to `local.properties` in project root:
+```properties
+GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-### 2. Test Images
-Prepare test images with different characteristics:
-- Small image (< 100KB)
-- Medium image (500KB - 1MB)
-- Large image (2-5MB)
-- Very large image (> 5MB) - should fail
-- Portrait orientation
-- Landscape orientation
-- Square image
-- Image with EXIF rotation data
+### 3. Rebuild Project
+```bash
+./gradlew clean build
+```
 
-## Test Cases
+## Test Scenarios
 
-### TC1: Basic Image Sending (Happy Path)
+### Scenario 1: Basic Task Creation with AI
 
 **Steps:**
-1. Open the app and log in
-2. Navigate to Chat tab
-3. Open an existing chat or create a new direct chat
-4. Tap the attachment button (📎)
-5. Select "Gallery" option
-6. Choose a medium-sized image (500KB)
-7. Observe the progress dialog
+1. Launch the app and sign in
+2. Navigate to Tasks tab
+3. Click the "+" (Add Task) button
+4. In the task creation dialog, click "Create with AI"
+5. Enter prompt: "Create a math homework assignment due next Friday"
+6. Click "Create with AI"
 
 **Expected Results:**
-- ✅ Attachment bottom sheet appears
-- ✅ Gallery option is visible and clickable
-- ✅ Image picker opens
-- ✅ Progress dialog shows "Uploading Image"
-- ✅ Progress updates from 0% to 100%
-- ✅ Progress dialog dismisses automatically
-- ✅ Image appears in chat as a message
-- ✅ Image displays as 200x200dp thumbnail
-- ✅ Timestamp appears below image
-- ✅ Read receipt icon appears (clock → checkmark)
-- ✅ Chat scrolls to show new message
+- ✅ Loading indicator appears
+- ✅ AI processes the request (2-5 seconds)
+- ✅ Success message: "Task created successfully with AI assistance!"
+- ✅ Both dialogs close automatically
+- ✅ New task appears in the task list with:
+  - Title: "Math Homework Assignment" (or similar)
+  - Subject: "Mathematics"
+  - Due date: Next Friday
+  - Priority: Medium
+  - Category: Assignment
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC2: Image Compression
+### Scenario 2: Complex Task with Multiple Details
 
 **Steps:**
-1. Open a chat
-2. Send a large image (2-5MB)
-3. Check Firebase Storage console
-4. Verify uploaded file size
+1. Click "+" to add task
+2. Click "Create with AI"
+3. Enter prompt: "I need to finish my high priority science project about photosynthesis by tomorrow"
+4. Click "Create with AI"
 
 **Expected Results:**
-- ✅ Image uploads successfully
-- ✅ Uploaded file size is significantly smaller than original
-- ✅ Image quality is acceptable
-- ✅ Image dimensions are max 1920x1080
-- ✅ File format is JPEG
+- ✅ Task created with:
+  - Title includes "science project" and "photosynthesis"
+  - Subject: "Science"
+  - Due date: Tomorrow
+  - Priority: High
+  - Description mentions photosynthesis
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC3: Progress Indicator
+### Scenario 3: Minimal Information Prompt
 
 **Steps:**
-1. Open a chat
-2. Send a large image (2-5MB)
-3. Observe progress dialog closely
+1. Click "+" to add task
+2. Click "Create with AI"
+3. Enter prompt: "Study for exam"
+4. Click "Create with AI"
 
 **Expected Results:**
-- ✅ Progress dialog appears immediately
-- ✅ Progress starts at 0%
-- ✅ Progress updates smoothly (not jumping)
-- ✅ Progress reaches 100%
-- ✅ Dialog dismisses after 100%
-- ✅ User cannot dismiss dialog during upload
+- ✅ Task created with smart defaults:
+  - Title: "Study for exam"
+  - Subject: "General"
+  - Due date: 7 days from now
+  - Priority: Medium
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC4: Image Display in Chat
+### Scenario 4: Missing API Key
 
 **Steps:**
-1. Send an image message
-2. Observe how it displays in chat
-3. Scroll up and down
-4. Close and reopen chat
+1. Remove or comment out `GEMINI_API_KEY` from `local.properties`
+2. Rebuild the app
+3. Click "+" to add task
+4. Click "Create with AI"
 
 **Expected Results:**
-- ✅ Image displays as thumbnail (200x200dp)
-- ✅ Image maintains aspect ratio
-- ✅ Image is clear and not pixelated
-- ✅ Timestamp shows below image
-- ✅ Read receipt icon appears
-- ✅ Image loads from cache on scroll
-- ✅ Image persists after reopening chat
+- ✅ Toast message: "AI Assistant is not configured. Please add GEMINI_API_KEY to local.properties"
+- ✅ Dialog remains open
+- ✅ User can still create task manually
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC5: Receiving Image Messages
+### Scenario 5: Empty Prompt
 
 **Steps:**
-1. Log in with User A on Device 1
-2. Log in with User B on Device 2
-3. User A sends image to User B
-4. Observe on Device 2
+1. Click "+" to add task
+2. Click "Create with AI"
+3. Leave the prompt field empty
+4. Click "Create with AI"
 
 **Expected Results:**
-- ✅ User B receives message in real-time
-- ✅ Image displays correctly
-- ✅ Sender's name appears (if group chat)
-- ✅ Sender's avatar appears
-- ✅ Timestamp is correct
-- ✅ Notification shows "📷 Photo"
-- ✅ Chat list shows "📷 Photo" as last message
+- ✅ Toast message: "Please describe the task you want to create"
+- ✅ Dialog remains open
+- ✅ No API call made
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC6: Image with Text
+### Scenario 6: Network Error
 
 **Steps:**
-1. Open a chat
-2. Send an image
-3. Verify if text can be added (Note: Current implementation doesn't support this in UI, but model supports it)
+1. Enable airplane mode or disconnect internet
+2. Click "+" to add task
+3. Click "Create with AI"
+4. Enter any prompt
+5. Click "Create with AI"
 
 **Expected Results:**
-- ✅ Image displays
-- ✅ Text displays below image (if supported)
-- ✅ Both are visible in message bubble
+- ✅ Loading indicator appears
+- ✅ After timeout, error message appears
+- ✅ Snackbar shows: "Failed to communicate with AI: [error details]"
+- ✅ Dialog remains open for retry
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC7: Multiple Images in Sequence
+### Scenario 7: Rapid Multiple Submissions
 
 **Steps:**
-1. Open a chat
-2. Send 3 images quickly one after another
-3. Observe upload and display
+1. Click "+" to add task
+2. Click "Create with AI"
+3. Enter prompt
+4. Click "Create with AI" multiple times rapidly
 
 **Expected Results:**
-- ✅ All 3 images upload successfully
-- ✅ Progress dialogs appear for each
-- ✅ Images appear in correct order
-- ✅ No images are lost
-- ✅ No duplicate images
-- ✅ Timestamps are sequential
+- ✅ Button becomes disabled after first click
+- ✅ Only one API call is made
+- ✅ Loading indicator shows
+- ✅ Button re-enables after completion
 
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC8: Image Upload Failure (Network Error)
+### Scenario 8: Cancel During Processing
 
 **Steps:**
-1. Open a chat
-2. Enable airplane mode
-3. Try to send an image
-4. Observe behavior
+1. Click "+" to add task
+2. Click "Create with AI"
+3. Enter prompt
+4. Click "Create with AI"
+5. Immediately click "Cancel"
 
 **Expected Results:**
-- ✅ Upload fails gracefully
-- ✅ Error message appears
-- ✅ Message is queued in offline queue
-- ✅ Message shows FAILED status
-- ✅ User can retry later
+- ✅ Dialog closes
+- ✅ API call may complete in background
+- ✅ No task is created (dialog closed before completion)
+- ✅ No error messages shown
 
-**Actual Result:** _____________________
+### Scenario 9: Various Task Types
 
-**Status:** ☐ Pass ☐ Fail
+**Test Prompts:**
 
----
+1. **Personal Task:**
+   - Prompt: "Remind me to call mom tomorrow"
+   - Expected: Personal category, due tomorrow
 
-### TC9: Image Upload Retry
+2. **Group Task:**
+   - Prompt: "Create a group meeting for project discussion next Monday"
+   - Expected: Group category, due next Monday
+
+3. **Assignment:**
+   - Prompt: "English essay about Shakespeare due in 2 weeks"
+   - Expected: Assignment category, subject: English, due in 14 days
+
+4. **Urgent Task:**
+   - Prompt: "URGENT: Submit report by end of day"
+   - Expected: High priority, due today
+
+5. **Long-term Task:**
+   - Prompt: "Prepare for final exams in December"
+   - Expected: Due date in December
+
+### Scenario 10: AI Response Variations
 
 **Steps:**
-1. Send image while offline (fails)
-2. Turn on internet connection
-3. Wait for auto-retry or manually retry
+1. Try different phrasings for the same task:
+   - "Create math homework"
+   - "I need to do my math homework"
+   - "Add a task for math homework"
+   - "Math homework assignment"
 
 **Expected Results:**
-- ✅ Message auto-retries when online
-- ✅ Upload succeeds
-- ✅ Message status updates to SENT
-- ✅ Image displays correctly
-- ✅ Other user receives message
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC10: Image Too Large (> 5MB)
-
-**Steps:**
-1. Open a chat
-2. Try to send an image larger than 5MB
-3. Observe behavior
-
-**Expected Results:**
-- ✅ Upload fails
-- ✅ Error message: "Image size exceeds maximum allowed size"
-- ✅ Message is not sent
-- ✅ No partial upload in Storage
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC11: Image Orientation (EXIF)
-
-**Steps:**
-1. Take a photo with device camera (portrait mode)
-2. Send the photo in chat
-3. Verify orientation
-
-**Expected Results:**
-- ✅ Image displays in correct orientation
-- ✅ No rotation issues
-- ✅ EXIF data is handled correctly
-- ✅ Image is not sideways or upside down
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC12: Different Aspect Ratios
-
-**Steps:**
-1. Send a portrait image (9:16)
-2. Send a landscape image (16:9)
-3. Send a square image (1:1)
-4. Observe display
-
-**Expected Results:**
-- ✅ All images display correctly
-- ✅ Aspect ratios are maintained
-- ✅ No stretching or distortion
-- ✅ Images fit within 200x200dp bounds
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC13: Image Loading States
-
-**Steps:**
-1. Send an image
-2. Observe loading states
-3. Clear app cache and reopen chat
-
-**Expected Results:**
-- ✅ Placeholder shows while loading
-- ✅ Smooth transition to actual image
-- ✅ Error icon if load fails
-- ✅ Images load from cache on reopen
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC14: Chat List Update
-
-**Steps:**
-1. Open a chat
-2. Send an image
-3. Go back to chat list
-4. Observe chat item
-
-**Expected Results:**
-- ✅ Last message shows "📷 Photo"
-- ✅ Timestamp updates
-- ✅ Chat moves to top of list
-- ✅ Unread count updates for recipient
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC15: Notification for Image Message
-
-**Steps:**
-1. User A sends image to User B
-2. User B's app is in background
-3. Observe notification
-
-**Expected Results:**
-- ✅ Notification appears
-- ✅ Title shows sender name
-- ✅ Body shows "📷 Photo"
-- ✅ Tapping notification opens chat
-- ✅ Image is visible in chat
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC16: Group Chat Image Sending
-
-**Steps:**
-1. Open a group chat
-2. Send an image
-3. Verify all members receive it
-
-**Expected Results:**
-- ✅ Image uploads successfully
-- ✅ All group members receive image
-- ✅ Sender's name and avatar show
-- ✅ Notifications sent to all members
-- ✅ Chat list updates for all members
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC17: Image Click (Placeholder)
-
-**Steps:**
-1. Send an image
-2. Tap on the image
-
-**Expected Results:**
-- ✅ Nothing happens (feature not implemented yet)
-- ✅ No crash
-- ✅ TODO comment in code for task 17
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC18: Memory Management
-
-**Steps:**
-1. Send 20 images in a chat
-2. Scroll up and down rapidly
-3. Monitor app memory usage
-
-**Expected Results:**
-- ✅ No memory leaks
-- ✅ Images load smoothly
-- ✅ No OutOfMemoryError
-- ✅ Coil caching works properly
-- ✅ App remains responsive
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC19: Firebase Storage Verification
-
-**Steps:**
-1. Send an image
-2. Open Firebase Console
-3. Navigate to Storage
-4. Check uploaded file
-
-**Expected Results:**
-- ✅ File exists at `chat_images/{chatId}/{timestamp}_{userId}.jpg`
-- ✅ File is JPEG format
-- ✅ File size is reasonable (compressed)
-- ✅ Metadata includes uploader and timestamp
-- ✅ Download URL is accessible
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-### TC20: Firestore Message Document
-
-**Steps:**
-1. Send an image
-2. Open Firebase Console
-3. Navigate to Firestore
-4. Check message document
-
-**Expected Results:**
-- ✅ Message document exists
-- ✅ `imageUrl` field contains Storage URL
-- ✅ `text` field is empty or contains caption
-- ✅ `senderId`, `senderName` are correct
-- ✅ `timestamp` is accurate
-- ✅ `status` is SENT
-- ✅ `readBy` array contains sender
-
-**Actual Result:** _____________________
-
-**Status:** ☐ Pass ☐ Fail
-
----
-
-## Performance Tests
-
-### PT1: Upload Speed
-- Small image (< 100KB): _____ seconds
-- Medium image (500KB): _____ seconds
-- Large image (2MB): _____ seconds
-
-**Expected:** < 5 seconds for medium images on good connection
-
----
-
-### PT2: Image Loading Speed
-- First load: _____ ms
-- From cache: _____ ms
-
-**Expected:** < 500ms first load, < 100ms from cache
-
----
-
-### PT3: Compression Time
-- 5MB image compression: _____ seconds
-
-**Expected:** < 3 seconds
-
----
-
-## Security Tests
-
-### ST1: Unauthenticated Upload
-**Steps:**
-1. Log out
-2. Try to send image (should not be possible)
-
-**Expected:** Upload fails, user must be authenticated
-
----
-
-### ST2: Storage Rules
-**Steps:**
-1. Try to upload file > 5MB
-2. Try to access another user's image URL
-
-**Expected:** 
-- Large file rejected
-- Other user's images accessible (read allowed)
-
----
-
-## Regression Tests
-
-### RT1: Text Messages Still Work
-**Steps:**
-1. Send a text message
-2. Verify it works as before
-
-**Expected:** No impact on text messaging
-
----
-
-### RT2: Typing Indicator Still Works
-**Steps:**
-1. Type in message input
-2. Verify typing indicator shows
-
-**Expected:** Typing indicator unaffected
-
----
-
-### RT3: Read Receipts Still Work
-**Steps:**
-1. Send text and image messages
-2. Verify read receipts update
-
-**Expected:** Read receipts work for both types
-
----
-
-## Test Summary
-
-| Category | Total | Passed | Failed | Skipped |
-|----------|-------|--------|--------|---------|
-| Functional | 17 | ___ | ___ | ___ |
-| Performance | 3 | ___ | ___ | ___ |
-| Security | 2 | ___ | ___ | ___ |
-| Regression | 3 | ___ | ___ | ___ |
-| **Total** | **25** | **___** | **___** | **___** |
-
-## Issues Found
-
-| ID | Severity | Description | Status |
-|----|----------|-------------|--------|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-
-## Test Environment
-
-- **Date:** _______________
-- **Tester:** _______________
-- **Device 1:** _______________
-- **Device 2:** _______________
-- **Android Version:** _______________
-- **App Version:** 1.0
-- **Network:** WiFi / 4G / 5G
-
-## Notes
-
-_Add any additional observations or comments here_
-
----
-
-## Sign-off
-
-- [ ] All critical tests passed
-- [ ] All high-priority issues resolved
-- [ ] Feature ready for production
-
-**Tester Signature:** _______________
-**Date:** _______________
+- ✅ All variations create similar tasks
+- ✅ AI understands different phrasings
+- ✅ Consistent task structure
+
+## Performance Testing
+
+### Response Time
+- **Expected**: 2-5 seconds for AI response
+- **Acceptable**: Up to 10 seconds
+- **Timeout**: 30 seconds
+
+### Load Testing
+1. Create 10 tasks rapidly using AI
+2. Verify all tasks are created correctly
+3. Check for memory leaks
+4. Verify UI remains responsive
+
+## Error Scenarios
+
+### 1. Invalid API Key
+**Setup:** Use incorrect API key
+**Expected:** Error message about authentication failure
+
+### 2. API Quota Exceeded
+**Setup:** Exceed Gemini API quota
+**Expected:** Error message about quota limits
+
+### 3. Malformed Response
+**Setup:** (Difficult to test manually)
+**Expected:** Graceful error handling, fallback to defaults
+
+### 4. Firestore Permission Error
+**Setup:** Sign out during task creation
+**Expected:** Permission denied error with clear message
+
+## Verification Checklist
+
+### UI/UX
+- [ ] "Create with AI" button is visible and styled correctly
+- [ ] AI prompt dialog has clear instructions
+- [ ] Loading indicator shows during processing
+- [ ] Success message is clear and visible
+- [ ] Error messages are user-friendly
+- [ ] Dialogs close automatically on success
+- [ ] Buttons are disabled during processing
+
+### Functionality
+- [ ] AI correctly parses task details
+- [ ] Tasks are created in Firestore
+- [ ] Tasks appear in the list immediately
+- [ ] Real-time updates work correctly
+- [ ] All task fields are populated
+- [ ] Due dates are calculated correctly
+- [ ] Priority levels are set appropriately
+
+### Error Handling
+- [ ] Missing API key is detected
+- [ ] Network errors are handled gracefully
+- [ ] Empty prompts are rejected
+- [ ] Invalid responses are handled
+- [ ] Firestore errors are caught
+- [ ] User receives clear feedback
+
+### Edge Cases
+- [ ] Very long prompts (500+ characters)
+- [ ] Special characters in prompts
+- [ ] Emojis in prompts
+- [ ] Multiple languages (if supported)
+- [ ] Ambiguous prompts
+- [ ] Prompts without clear task intent
+
+## Debugging
+
+### Enable Logging
+Check Android Logcat for:
+```
+Tag: TasksViewModel
+Tag: GeminiAssistantService
+```
+
+### Common Log Messages
+- "Sending prompt to AI: [prompt]"
+- "AI Response: [response]"
+- "AI suggested creating an assignment"
+- "Task created from AI: [title]"
+- "Failed to create task from AI"
+
+### Troubleshooting
+
+**Problem:** No response from AI
+- Check internet connection
+- Verify API key is correct
+- Check Logcat for errors
+- Verify Gemini API is accessible
+
+**Problem:** Task not created
+- Check Firestore security rules
+- Verify user is authenticated
+- Check task data in logs
+- Verify repository is working
+
+**Problem:** Wrong task details
+- Check AI response in logs
+- Verify parsing logic
+- Test with clearer prompts
+- Check date parsing
+
+## Test Data
+
+### Sample Prompts for Testing
+```
+1. "Create a math homework assignment due next Friday"
+2. "I need to study for my biology exam on Monday"
+3. "High priority: finish science project by tomorrow"
+4. "English literature essay due in 2 weeks"
+5. "Call dentist to schedule appointment"
+6. "Group meeting for project discussion next Tuesday"
+7. "Prepare presentation for client meeting"
+8. "Review code changes before deployment"
+9. "Buy groceries for the week"
+10. "Complete online course module by weekend"
+```
+
+### Expected Task Structures
+Each task should have:
+- ✅ Non-empty title
+- ✅ Relevant description
+- ✅ Appropriate subject
+- ✅ Valid due date (future date)
+- ✅ Priority (low/medium/high)
+- ✅ Category (personal/group/assignment)
+- ✅ Status: "pending"
+- ✅ User ID
+- ✅ Created timestamp
+
+## Acceptance Criteria
+
+### Must Have:
+- ✅ "Create with AI" button in task dialog
+- ✅ AI prompt dialog with text input
+- ✅ Loading state during processing
+- ✅ Success message on completion
+- ✅ Error handling for all failure cases
+- ✅ Task created in Firestore
+- ✅ Task appears in list
+
+### Should Have:
+- ✅ Clear user instructions
+- ✅ Helpful placeholder text
+- ✅ Disabled buttons during processing
+- ✅ Automatic dialog dismissal
+- ✅ Comprehensive error messages
+
+### Nice to Have:
+- ⚪ Conversation history
+- ⚪ Task preview before creation
+- ⚪ Edit AI-generated task before saving
+- ⚪ Multiple task creation from one prompt
+
+## Regression Testing
+
+After implementing this feature, verify:
+- [ ] Manual task creation still works
+- [ ] Existing tasks are not affected
+- [ ] Task list updates correctly
+- [ ] Task statistics are accurate
+- [ ] Other task operations work (edit, delete)
+- [ ] Navigation between screens works
+- [ ] App doesn't crash on any screen
+
+## Performance Metrics
+
+### Target Metrics:
+- API Response Time: < 5 seconds (average)
+- Task Creation Time: < 1 second (after AI response)
+- UI Responsiveness: No freezing
+- Memory Usage: No significant increase
+- Battery Impact: Minimal
+
+### Monitoring:
+- Check Android Profiler for memory leaks
+- Monitor network requests
+- Track API call frequency
+- Measure battery consumption
+
+## Conclusion
+
+This testing guide covers all aspects of the AI task creation feature. Follow these scenarios systematically to ensure the feature works correctly and provides a great user experience.
+
+**Status**: Ready for testing after API key configuration
+**Priority**: High
+**Estimated Testing Time**: 2-3 hours for comprehensive testing

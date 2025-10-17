@@ -10,7 +10,18 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.tasks.await
+
+/**
+ * Data class representing attachment metadata for chat messages
+ */
+data class AttachmentData(
+    val url: String,
+    val fileName: String,
+    val fileSize: Long,
+    val mimeType: String
+)
 
 /**
  * Repository for handling file uploads and downloads with Firebase Storage. Supports images,
@@ -178,6 +189,111 @@ class StorageRepository(
             Result.success(downloadUrl)
         } catch (e: Exception) {
             Log.e(TAG, "Error uploading document", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Uploads a chat attachment (image or document) and returns detailed metadata.
+     * This method automatically detects the file type and handles it appropriately.
+     *
+     * @param chatId Chat ID where the attachment will be used
+     * @param fileUri URI of the file to upload
+     * @param fileName Original file name
+     * @param onProgress Callback for upload progress (0-100)
+     * @return Result with AttachmentData containing URL and metadata on success
+     */
+    suspend fun uploadChatAttachment(
+            chatId: String,
+            fileUri: Uri,
+            fileName: String,
+            onProgress: (Int) -> Unit = {}
+    ): Result<AttachmentData> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            Log.d(TAG, "Starting chat attachment upload for chat: $chatId, file: $fileName")
+
+            // Get file info
+            val fileInfo = getFileInfo(fileUri)
+            val actualFileName = fileName.ifEmpty { fileInfo.first }
+            val fileSize = fileInfo.second
+            val mimeType = fileInfo.third
+
+            Log.d(TAG, "Attachment: $actualFileName, Size: ${fileSize / 1024}KB, Type: $mimeType")
+
+            // Determine if it's an image or document
+            val isImage = mimeType.startsWith("image/")
+            
+            // Validate file size
+            val validation = if (isImage) {
+                InputValidator.validateImageSize(fileSize)
+            } else {
+                InputValidator.validateDocumentSize(fileSize)
+            }
+            
+            if (!validation.isValid) {
+                return Result.failure(Exception(validation.errorMessage ?: "Invalid file size"))
+            }
+
+            // Create storage reference with unique name
+            val uniqueFileName = "${UUID.randomUUID()}_${getCurrentUserId()}_$actualFileName"
+            val path = if (isImage) "chat_attachments/$chatId/images" else "chat_attachments/$chatId/documents"
+            val storageRef = storage.reference.child(path).child(uniqueFileName)
+
+            // For images, compress before upload
+            val uploadUri = if (isImage) {
+                val compressedFile = ImageCompressor.compressImage(context, fileUri)
+                Uri.fromFile(compressedFile)
+            } else {
+                fileUri
+            }
+
+            // Create metadata
+            val metadata = StorageMetadata.Builder()
+                    .setContentType(mimeType)
+                    .setCustomMetadata("uploadedBy", getCurrentUserId())
+                    .setCustomMetadata("uploadedAt", System.currentTimeMillis().toString())
+                    .setCustomMetadata("originalFileName", actualFileName)
+                    .setCustomMetadata("chatId", chatId)
+                    .build()
+
+            // Upload file with progress tracking
+            val uploadTask = storageRef.putFile(uploadUri, metadata)
+
+            uploadTask.addOnProgressListener { taskSnapshot ->
+                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toInt()
+                onProgress(progress)
+                Log.d(TAG, "Upload progress: $progress%")
+            }
+
+            // Wait for upload to complete
+            val taskSnapshot = uploadTask.await()
+
+            // Get download URL
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+
+            // Clean up compressed file if it was an image
+            if (isImage && uploadUri.scheme == "file") {
+                uploadUri.path?.let { File(it).delete() }
+            }
+
+            // Get actual file size from metadata
+            val uploadedFileSize = taskSnapshot.metadata?.sizeBytes ?: fileSize
+
+            val attachmentData = AttachmentData(
+                url = downloadUrl,
+                fileName = actualFileName,
+                fileSize = uploadedFileSize,
+                mimeType = mimeType
+            )
+
+            Log.d(TAG, "Chat attachment uploaded successfully: $downloadUrl")
+            Result.success(attachmentData)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error uploading chat attachment", e)
             Result.failure(e)
         }
     }

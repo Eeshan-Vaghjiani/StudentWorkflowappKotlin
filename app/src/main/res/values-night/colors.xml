@@ -65,4 +65,8 @@
     <color name="black">#FF000000</color>
     <color name="colorWhite">#FFFFFF</color>
     <color name="colorBlack">#000000</color>
+    
+    <!-- Material 3 Surface Colors (Dark Mode) -->
+    <color name="surface">#2C2C2E</color>
+    <color name="surface_variant">#3A3A3C</color>
 </resources>

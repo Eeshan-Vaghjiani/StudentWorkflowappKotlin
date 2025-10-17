@@ -198,7 +198,7 @@ class RealtimeDataSyncManager(private val context: Context) {
 
     /** Get pending offline message count */
     fun getPendingMessageCount(): Int {
-        return offlineMessageQueue.getQueuedMessageCount()
+        return offlineMessageQueue.getPendingMessageCount()
     }
 
     /** Clear all pending offline messages */
@@ -219,12 +219,14 @@ class RealtimeDataSyncManager(private val context: Context) {
             report.taskStatsValid = taskStats.overdue >= 0 && taskStats.dueToday >= 0
 
             // Verify groups
-            val groups = groupRepository.getUserGroups()
-            report.groupsValid = groups.isNotEmpty() || true // Empty is valid
+            val groupsResult = groupRepository.getUserGroups()
+            val groups = groupsResult.getOrElse { emptyList() }
+            report.groupsValid = true // Empty is valid
 
             // Verify tasks
-            val tasks = taskRepository.getUserTasks()
-            report.tasksValid = tasks.isNotEmpty() || true // Empty is valid
+            val tasksResult = taskRepository.getUserTasks()
+            val tasks = tasksResult.getOrElse { emptyList() }
+            report.tasksValid = true // Empty is valid
 
             report.isConsistent = report.taskStatsValid && report.groupsValid && report.tasksValid
 

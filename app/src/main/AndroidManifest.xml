@@ -55,6 +55,10 @@
         </service>
         
         <activity
+            android:name=".AIAssistantActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".ChatActivity"
             android:exported="false" />
         <activity

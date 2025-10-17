@@ -5,8 +5,10 @@ import android.net.Uri
 import android.util.Log
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.utils.OfflineMessageQueue
+import com.example.loginandregistration.utils.safeFirestoreCall
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import java.util.Date
@@ -442,8 +444,8 @@ class ChatRepository(
             // Queue message for offline support
             offlineQueue?.queueMessage(message)
 
-            try {
-                // Attempt to send message
+            // Use safeFirestoreCall for proper error handling
+            val sendResult = safeFirestoreCall {
                 firestore
                         .collection(CHATS_COLLECTION)
                         .document(chatId)
@@ -451,18 +453,21 @@ class ChatRepository(
                         .document(messageId)
                         .set(message.copy(status = MessageStatus.SENT))
                         .await()
+            }
 
-                updateChatLastMessage(chatId, sanitizedText, getCurrentUserId())
+            if (sendResult.isFailure) {
+                val exception = sendResult.exceptionOrNull()
+                Log.e(TAG, "Error sending message (attempt ${retryCount + 1})", exception)
 
-                // Remove from queue on success
-                offlineQueue?.removeMessage(messageId)
-
-                // Trigger notifications for recipients
-                triggerNotifications(chatId, message)
-
-                Result.success(message.copy(status = MessageStatus.SENT))
-            } catch (sendError: Exception) {
-                Log.e(TAG, "Error sending message (attempt ${retryCount + 1})", sendError)
+                // Check if it's a permission error
+                if (exception is com.example.loginandregistration.utils.ErrorHandler.AppError.PermissionError ||
+                    exception is com.example.loginandregistration.utils.ErrorHandler.AppError.FirestoreError) {
+                    // Don't retry permission errors
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                            Exception("Permission denied: You don't have access to send messages in this chat")
+                    )
+                }
 
                 // If we've exceeded retry attempts, mark as failed
                 if (retryCount >= MAX_RETRY_ATTEMPTS) {
@@ -472,10 +477,31 @@ class ChatRepository(
                     )
                 }
 
-                // Keep message in queue with SENDING status
+                // Keep message in queue with SENDING status for retry
                 offlineQueue?.updateMessageStatus(messageId, MessageStatus.SENDING)
-                throw sendError
+                return Result.failure(exception ?: Exception("Failed to send message"))
             }
+
+            // Update chat last message
+            val updateResult = safeFirestoreCall {
+                updateChatLastMessage(chatId, sanitizedText, getCurrentUserId())
+            }
+            
+            if (updateResult.isFailure) {
+                Log.w(TAG, "Failed to update chat last message, but message was sent", updateResult.exceptionOrNull())
+            }
+
+            // Remove from queue on success
+            offlineQueue?.removeMessage(messageId)
+
+            // Trigger notifications for recipients (don't fail if this fails)
+            try {
+                triggerNotifications(chatId, message)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to trigger notifications, but message was sent", e)
+            }
+
+            Result.success(message.copy(status = MessageStatus.SENT))
         } catch (e: Exception) {
             Log.e(TAG, "Error sending message", e)
             Result.failure(e)
@@ -789,101 +815,120 @@ class ChatRepository(
         }
     }
 
-    suspend fun markMessagesAsRead(chatId: String, messageIds: List<String>) {
-        try {
-            if (getCurrentUserId().isEmpty()) return
-
-            val batch = firestore.batch()
-
-            for (messageId in messageIds) {
-                val messageRef =
-                        firestore
-                                .collection(CHATS_COLLECTION)
-                                .document(chatId)
-                                .collection(MESSAGES_COLLECTION)
-                                .document(messageId)
-
-                // Add current user to readBy array
-                batch.update(
-                        messageRef,
-                        mapOf(
-                                "readBy" to
-                                        com.google.firebase.firestore.FieldValue.arrayUnion(
-                                                getCurrentUserId()
-                                        ),
-                                "status" to MessageStatus.READ.name
-                        )
-                )
+    suspend fun markMessagesAsRead(chatId: String, messageIds: List<String>): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
             }
 
-            batch.commit().await()
+            if (messageIds.isEmpty()) {
+                return Result.success(Unit)
+            }
 
-            firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .update("unreadCount.${getCurrentUserId()}", 0)
-                    .await()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error marking messages as read", e)
-        }
-    }
+            Log.d(TAG, "markMessagesAsRead: Marking ${messageIds.size} messages as read in chat $chatId")
 
-    suspend fun updateTypingStatus(chatId: String, isTyping: Boolean) {
-        try {
-            if (getCurrentUserId().isEmpty()) return
+            // Use safeFirestoreCall for proper error handling
+            val batchResult = safeFirestoreCall {
+                val batch = firestore.batch()
 
-            firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .collection(TYPING_STATUS_COLLECTION)
-                    .document(getCurrentUserId())
-                    .set(
-                            TypingStatus(
-                                    userId = getCurrentUserId(),
-                                    isTyping = isTyping,
-                                    timestamp = System.currentTimeMillis()
+                for (messageId in messageIds) {
+                    val messageRef =
+                            firestore
+                                    .collection(CHATS_COLLECTION)
+                                    .document(chatId)
+                                    .collection(MESSAGES_COLLECTION)
+                                    .document(messageId)
+
+                    // Add current user to readBy array
+                    batch.update(
+                            messageRef,
+                            mapOf(
+                                    "readBy" to
+                                            com.google.firebase.firestore.FieldValue.arrayUnion(
+                                                    getCurrentUserId()
+                                            ),
+                                    "status" to MessageStatus.READ.name
                             )
                     )
-                    .await()
+                }
+
+                batch.commit().await()
+            }
+
+            if (batchResult.isFailure) {
+                val exception = batchResult.exceptionOrNull()
+                Log.e(TAG, "Error marking messages as read (batch update)", exception)
+                
+                // If it's a permission error, log but don't fail completely
+                if (exception is com.example.loginandregistration.utils.ErrorHandler.AppError.PermissionError) {
+                    Log.w(TAG, "Permission denied when marking messages as read - user may not have access")
+                    return Result.failure(Exception("Permission denied: Cannot mark messages as read"))
+                }
+                
+                return Result.failure(exception ?: Exception("Failed to mark messages as read"))
+            }
+
+            // Update unread count for the chat
+            val unreadResult = safeFirestoreCall {
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .update("unreadCount.${getCurrentUserId()}", 0)
+                        .await()
+            }
+
+            if (unreadResult.isFailure) {
+                Log.w(TAG, "Failed to update unread count, but messages were marked as read", unreadResult.exceptionOrNull())
+            }
+
+            Log.d(TAG, "markMessagesAsRead: Successfully marked messages as read")
+            Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Error updating typing status", e)
+            Log.e(TAG, "Error marking messages as read", e)
+            Result.failure(e)
         }
     }
 
-    fun getTypingUsers(chatId: String): Flow<List<String>> = callbackFlow {
-        val listener =
+    suspend fun updateTypingStatus(chatId: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            // Use safeFirestoreCall for proper error handling
+            val result = safeFirestoreCall {
                 firestore
                         .collection(CHATS_COLLECTION)
                         .document(chatId)
                         .collection(TYPING_STATUS_COLLECTION)
-                        .addSnapshotListener { snapshot, error ->
-                            if (error != null) {
-                                Log.e(TAG, "Error listening to typing status", error)
-                                return@addSnapshotListener
-                            }
+                        .document(getCurrentUserId())
+                        .set(
+                                TypingStatus(
+                                        userId = getCurrentUserId(),
+                                        isTyping = isTyping,
+                                        timestamp = System.currentTimeMillis()
+                                )
+                        )
+                        .await()
+            }
 
-                            val typingUsers =
-                                    snapshot?.documents?.mapNotNull { doc ->
-                                        try {
-                                            val status = doc.toObject(TypingStatus::class.java)
-                                            if (status?.isTyping == true &&
-                                                            status.userId != getCurrentUserId()
-                                            ) {
-                                                status.userId
-                                            } else {
-                                                null
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error parsing typing status", e)
-                                            null
-                                        }
-                                    }
-                                            ?: emptyList()
+            if (result.isFailure) {
+                val exception = result.exceptionOrNull()
+                // Log but don't fail the UI - typing status is not critical
+                Log.w(TAG, "Error updating typing status (non-critical)", exception)
+                
+                if (exception is com.example.loginandregistration.utils.ErrorHandler.AppError.PermissionError) {
+                    Log.w(TAG, "Permission denied for typing status - user may not have access to this chat")
+                }
+                
+                return Result.failure(exception ?: Exception("Unknown error"))
+            }
 
-                            trySend(typingUsers)
-                        }
-
-        awaitClose { listener.remove() }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error updating typing status", e)
+            Result.failure(e)
+        }
     }
 
     suspend fun searchUsers(query: String): Result<List<UserInfo>> {
@@ -1107,14 +1152,19 @@ class ChatRepository(
     /** Retry sending a failed message */
     suspend fun retryMessage(message: Message): Result<Message> {
         return try {
+            Log.d(TAG, "retryMessage: Retrying message ${message.id}")
+            
             // Reset message status to SENDING
             offlineQueue?.updateMessageStatus(message.id, MessageStatus.SENDING)
 
-            // Attempt to send
+            // Attempt to send with retry count
             val result = sendMessage(message.chatId, message.text, retryCount = 0)
 
             if (result.isSuccess) {
                 offlineQueue?.removeMessage(message.id)
+                Log.d(TAG, "retryMessage: Successfully sent message ${message.id}")
+            } else {
+                Log.w(TAG, "retryMessage: Failed to send message ${message.id}", result.exceptionOrNull())
             }
 
             result
@@ -1129,18 +1179,44 @@ class ChatRepository(
     suspend fun processQueuedMessages(): Result<Int> {
         return try {
             val queuedMessages = offlineQueue?.getQueuedMessages() ?: emptyList()
+            val pendingMessages = queuedMessages.filter { it.status == MessageStatus.SENDING }
+            
+            if (pendingMessages.isEmpty()) {
+                Log.d(TAG, "No pending messages to process")
+                return Result.success(0)
+            }
+            
+            Log.d(TAG, "Processing ${pendingMessages.size} queued messages")
             var successCount = 0
+            var failureCount = 0
 
-            for (message in queuedMessages) {
-                if (message.status == MessageStatus.SENDING) {
+            for (message in pendingMessages) {
+                try {
+                    // Add small delay between retries to avoid overwhelming the server
+                    kotlinx.coroutines.delay(500)
+                    
                     val result = sendMessage(message.chatId, message.text, retryCount = 0)
                     if (result.isSuccess) {
                         successCount++
+                        Log.d(TAG, "Successfully sent queued message ${message.id}")
+                    } else {
+                        failureCount++
+                        Log.w(TAG, "Failed to send queued message ${message.id}", result.exceptionOrNull())
+                        
+                        // Check if it's a permission error - if so, mark as failed permanently
+                        val exception = result.exceptionOrNull()
+                        if (exception?.message?.contains("Permission denied", ignoreCase = true) == true) {
+                            offlineQueue?.markMessageAsFailed(message.id)
+                            Log.w(TAG, "Marked message ${message.id} as permanently failed due to permission error")
+                        }
                     }
+                } catch (e: Exception) {
+                    failureCount++
+                    Log.e(TAG, "Error processing queued message ${message.id}", e)
                 }
             }
 
-            Log.d(TAG, "Processed $successCount queued messages")
+            Log.d(TAG, "Processed queued messages: $successCount succeeded, $failureCount failed")
             Result.success(successCount)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing queued messages", e)
@@ -1151,6 +1227,63 @@ class ChatRepository(
     /** Clear the offline message queue */
     fun clearOfflineQueue() {
         offlineQueue?.clearQueue()
+    }
+
+    /**
+     * Retry messages with exponential backoff strategy.
+     * This should be called periodically (e.g., when app comes to foreground or network is restored)
+     */
+    suspend fun retryPendingMessagesWithBackoff(): Result<Int> {
+        return try {
+            val messagesToRetry = offlineQueue?.getMessagesNeedingRetry() ?: emptyList()
+            
+            if (messagesToRetry.isEmpty()) {
+                Log.d(TAG, "No messages need retry")
+                return Result.success(0)
+            }
+            
+            Log.d(TAG, "Retrying ${messagesToRetry.size} pending messages with backoff")
+            var successCount = 0
+            
+            for (message in messagesToRetry) {
+                try {
+                    // Calculate backoff delay based on message age
+                    val messageAge = System.currentTimeMillis() - (message.timestamp?.time ?: 0)
+                    val backoffDelay = calculateBackoffDelay(messageAge)
+                    
+                    Log.d(TAG, "Retrying message ${message.id} after ${backoffDelay}ms backoff")
+                    kotlinx.coroutines.delay(backoffDelay)
+                    
+                    val result = retryMessage(message)
+                    if (result.isSuccess) {
+                        successCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error retrying message ${message.id} with backoff", e)
+                }
+            }
+            
+            Log.d(TAG, "Retry with backoff completed: $successCount succeeded")
+            Result.success(successCount)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in retry with backoff", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Calculate exponential backoff delay based on message age
+     */
+    private fun calculateBackoffDelay(messageAgeMs: Long): Long {
+        // Start with 1 second, double for each 30 seconds of age, max 30 seconds
+        val baseDelay = 1000L
+        val maxDelay = 30000L
+        val doubleInterval = 30000L
+        
+        val multiplier = (messageAgeMs / doubleInterval).toInt()
+        val delay = baseDelay * (1 shl multiplier.coerceAtMost(5)) // Max 2^5 = 32x
+        
+        return delay.coerceAtMost(maxDelay)
     }
 
     /**
@@ -1290,5 +1423,155 @@ class ChatRepository(
             Log.e(TAG, "deleteMessage: Error deleting message", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Sets the typing status for the current user in a chat.
+     * 
+     * @param chatId ID of the chat
+     * @param isTyping Whether the user is currently typing
+     * @return Result indicating success or failure
+     */
+    suspend fun setTypingStatus(chatId: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                Log.w(TAG, "setTypingStatus: User not authenticated")
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            Log.d(TAG, "setTypingStatus: Setting typing status to $isTyping for chat $chatId")
+
+            val typingData = mapOf(
+                "userId" to getCurrentUserId(),
+                "isTyping" to isTyping,
+                "timestamp" to Date()
+            )
+
+            // Use safeFirestoreCall for proper error handling
+            val result = safeFirestoreCall {
+                firestore
+                    .collection(CHATS_COLLECTION)
+                    .document(chatId)
+                    .collection(TYPING_STATUS_COLLECTION)
+                    .document(getCurrentUserId())
+                    .set(typingData)
+                    .await()
+            }
+
+            if (result.isFailure) {
+                val exception = result.exceptionOrNull()
+                Log.e(TAG, "setTypingStatus: Failed to set typing status", exception)
+                
+                // Handle permission errors gracefully - don't fail the UI
+                if (exception is com.example.loginandregistration.utils.ErrorHandler.AppError.PermissionError) {
+                    Log.w(TAG, "setTypingStatus: Permission denied, but continuing gracefully")
+                    // Return success to prevent UI errors, but log the issue
+                    return Result.success(Unit)
+                }
+                
+                return Result.failure(exception ?: Exception("Failed to set typing status"))
+            }
+
+            Log.d(TAG, "setTypingStatus: Successfully set typing status")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "setTypingStatus: Unexpected error", e)
+            // Handle gracefully - typing indicators are not critical
+            Result.success(Unit)
+        }
+    }
+
+    /**
+     * Gets a flow of users currently typing in a chat.
+     * 
+     * @param chatId ID of the chat
+     * @return Flow emitting list of user IDs who are currently typing
+     */
+    fun getTypingUsers(chatId: String): Flow<List<String>> = callbackFlow {
+        if (getCurrentUserId().isEmpty()) {
+            Log.w(TAG, "getTypingUsers: User not authenticated")
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        Log.d(TAG, "getTypingUsers: Setting up listener for chat $chatId")
+
+        val listener = firestore
+            .collection(CHATS_COLLECTION)
+            .document(chatId)
+            .collection(TYPING_STATUS_COLLECTION)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "getTypingUsers: Error listening to typing status", error)
+                    
+                    // Handle permission errors gracefully
+                    if (error is FirebaseFirestoreException && 
+                        error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        Log.w(TAG, "getTypingUsers: Permission denied, sending empty list")
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+                    
+                    // For other errors, send empty list and continue
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+
+                if (snapshot == null) {
+                    Log.w(TAG, "getTypingUsers: Snapshot is null")
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+
+                try {
+                    val currentTime = Date()
+                    val typingUsers = snapshot.documents
+                        .mapNotNull { doc ->
+                            try {
+                                val userId = doc.getString("userId")
+                                val isTyping = doc.getBoolean("isTyping") ?: false
+                                val timestamp = doc.getDate("timestamp")
+                                
+                                // Only include users who are typing and updated within last 5 seconds
+                                // Exclude current user from the list
+                                if (userId != null && 
+                                    userId != getCurrentUserId() && 
+                                    isTyping && 
+                                    timestamp != null &&
+                                    (currentTime.time - timestamp.time) < 5000) {
+                                    userId
+                                } else {
+                                    null
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "getTypingUsers: Error parsing typing status document", e)
+                                null
+                            }
+                        }
+
+                    Log.d(TAG, "getTypingUsers: ${typingUsers.size} users typing")
+                    trySend(typingUsers)
+                } catch (e: Exception) {
+                    Log.e(TAG, "getTypingUsers: Error processing typing status", e)
+                    trySend(emptyList())
+                }
+            }
+
+        awaitClose {
+            Log.d(TAG, "getTypingUsers: Closing listener")
+            listener.remove()
+        }
+    }
+
+    /**
+     * Clears the typing status for the current user in a chat.
+     * This should be called when the user stops typing or sends a message.
+     * 
+     * @param chatId ID of the chat
+     * @return Result indicating success or failure
+     */
+    suspend fun clearTypingStatus(chatId: String): Result<Unit> {
+        return setTypingStatus(chatId, false)
     }
 }

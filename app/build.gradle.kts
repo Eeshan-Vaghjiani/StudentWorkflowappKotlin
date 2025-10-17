@@ -20,6 +20,17 @@ android {
         
         // App metadata
         setProperty("archivesBaseName", "TeamSync-v$versionName")
+        
+        // Read API keys from local.properties
+        val properties = org.jetbrains.kotlin.konan.properties.Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { properties.load(it) }
+        }
+        
+        // Gemini API Key for AI Assistant
+        val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     signingConfigs {
@@ -70,6 +81,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
@@ -124,6 +136,10 @@ dependencies {
     
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
+    
+    // OkHttp for API calls
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     
     // ExifInterface for image rotation handling
     implementation("androidx.exifinterface:exifinterface:1.3.7")

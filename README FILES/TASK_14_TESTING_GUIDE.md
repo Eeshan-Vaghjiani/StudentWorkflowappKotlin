@@ -1,241 +1,544 @@
-# Task 14 Testing Guide: Attachment Picker
+# Task 14: AI Assistant UI - Testing Guide
 
-## Prerequisites
-- Android device or emulator running API 23+
-- App installed and logged in
-- At least one chat conversation available
+## Pre-Testing Setup
 
-## Test Scenarios
+### 1. Configure API Key
+Before testing, ensure the Gemini API key is configured:
 
-### 1. Basic Functionality Test
+```properties
+# In local.properties
+GEMINI_API_KEY=your_actual_gemini_api_key_here
+```
 
-#### Test 1.1: Attachment Button Visibility
-1. Open the app and navigate to a chat room
-2. Look at the message input area
-3. **Expected:** Attachment button (paperclip icon) visible to the left of the text input field
+### 2. Rebuild Project
+After adding the API key:
+```bash
+./gradlew clean build
+```
 
-#### Test 1.2: Bottom Sheet Display
-1. Tap the attachment button
-2. **Expected:** Bottom sheet slides up from bottom
-3. **Expected:** Three options visible: Camera, Gallery, Documents
-4. **Expected:** Each option has an icon and label
+### 3. Verify Dependencies
+Ensure these dependencies are in `app/build.gradle.kts`:
+- OkHttp (for API calls)
+- Gson (for JSON parsing)
+- Material Components (for UI)
+- Coroutines (for async operations)
 
-#### Test 1.3: Bottom Sheet Dismissal
-1. Open the bottom sheet
-2. Tap outside the bottom sheet or swipe down
-3. **Expected:** Bottom sheet dismisses
+## Manual Testing Checklist
 
-### 2. Camera Permission Tests (Android 13+)
+### Test 1: Launch AI Assistant
+**Steps:**
+1. Open the app
+2. Navigate to Tasks tab
+3. Scroll to Quick Actions section
+4. Tap "AI Assistant" button
 
-#### Test 2.1: Camera Permission - First Request
-1. Fresh install or clear app data
-2. Open chat and tap attachment button
-3. Tap "Camera" option
-4. **Expected:** Permission dialog appears requesting CAMERA permission
-5. Tap "Allow"
-6. **Expected:** Camera app opens
-7. Take a photo
-8. **Expected:** Toast message shows "Image selected: [URI]"
-9. **Expected:** Bottom sheet dismisses
+**Expected Result:**
+- ✅ AI Assistant activity opens
+- ✅ Empty state is displayed
+- ✅ AI brain icon is visible
+- ✅ Welcome message is shown
+- ✅ Message input is ready
 
-#### Test 2.2: Camera Permission - Denied Once
-1. Open chat and tap attachment button
-2. Tap "Camera" option
-3. Tap "Deny" on permission dialog
-4. Tap attachment button again
-5. Tap "Camera" option
-6. **Expected:** Rationale dialog appears explaining why permission is needed
-7. Tap "Grant"
-8. **Expected:** Permission dialog appears again
-9. Tap "Allow"
-10. **Expected:** Camera opens
+**Pass/Fail:** ___
 
-#### Test 2.3: Camera Permission - Permanently Denied
-1. Deny camera permission twice (select "Don't ask again")
-2. Tap attachment button and select "Camera"
-3. **Expected:** Dialog appears with option to open Settings
-4. Tap "Settings"
-5. **Expected:** App settings page opens
-6. Grant camera permission
-7. Return to app and try again
-8. **Expected:** Camera opens without permission dialog
+---
 
-### 3. Gallery Permission Tests
+### Test 2: Send Simple Message
+**Steps:**
+1. Type "Hello" in the message input
+2. Tap the send button
 
-#### Test 3.1: Gallery Permission - Android 13+ (READ_MEDIA_IMAGES)
-**Device:** Android 13 or higher
-1. Fresh install or clear app data
-2. Open chat and tap attachment button
-3. Tap "Gallery" option
-4. **Expected:** Permission dialog requests READ_MEDIA_IMAGES
-5. Tap "Allow"
-6. **Expected:** Photo picker opens
-7. Select an image
-8. **Expected:** Toast message shows "Image selected: [URI]"
-9. **Expected:** Bottom sheet dismisses
+**Expected Result:**
+- ✅ User message appears (right-aligned, blue)
+- ✅ Loading indicator shows "AI is thinking..."
+- ✅ AI response appears (left-aligned, gray)
+- ✅ Messages have timestamps
+- ✅ Input field clears after sending
 
-#### Test 3.2: Gallery Permission - Android 12 and below (READ_EXTERNAL_STORAGE)
-**Device:** Android 12 or lower
-1. Fresh install or clear app data
-2. Open chat and tap attachment button
-3. Tap "Gallery" option
-4. **Expected:** Permission dialog requests READ_EXTERNAL_STORAGE
-5. Tap "Allow"
-6. **Expected:** Gallery/photo picker opens
-7. Select an image
-8. **Expected:** Toast message shows "Image selected: [URI]"
+**Pass/Fail:** ___
 
-#### Test 3.3: Gallery Permission - Denied
-1. Deny storage permission
-2. Tap attachment button and select "Gallery"
-3. **Expected:** Rationale dialog appears
-4. Tap "Grant" and allow permission
-5. **Expected:** Gallery opens
+---
 
-### 4. Document Picker Tests
+### Test 3: Create Assignment Request
+**Steps:**
+1. Type "Create a Math homework assignment due next Friday"
+2. Tap send button
+3. Wait for AI response
 
-#### Test 4.1: Document Picker - No Permission Required
-1. Open chat and tap attachment button
-2. Tap "Documents" option
-3. **Expected:** Document picker opens immediately (no permission dialog)
-4. **Expected:** Can browse files and folders
+**Expected Result:**
+- ✅ AI responds with assignment details
+- ✅ "Create Assignment" button appears
+- ✅ Button is clickable
+- ✅ Assignment details are visible in message
 
-#### Test 4.2: Document Selection - PDF
-1. Open document picker
-2. Navigate to a PDF file
-3. Select the PDF
-4. **Expected:** Toast message shows "Document selected: [URI]"
-5. **Expected:** Bottom sheet dismisses
+**Pass/Fail:** ___
 
-#### Test 4.3: Document Selection - Various Types
-Test with different file types:
-- PDF (.pdf)
-- Word document (.doc, .docx)
-- Excel spreadsheet (.xls, .xlsx)
-- PowerPoint (.ppt, .pptx)
-- Text file (.txt)
-- ZIP file (.zip)
+---
 
-**Expected:** All supported types can be selected
+### Test 4: Create Assignment Action
+**Steps:**
+1. After Test 3, tap "Create Assignment" button
+2. Wait for confirmation
 
-### 5. Edge Cases and Error Handling
+**Expected Result:**
+- ✅ Loading indicator appears
+- ✅ Success toast shows "Assignment created: [title]"
+- ✅ Confirmation message appears in chat
+- ✅ Task appears in Tasks list
 
-#### Test 5.1: Camera - Cancel
-1. Open camera from attachment picker
-2. Press back button or cancel
-3. **Expected:** Returns to chat without error
-4. **Expected:** No toast message
+**Pass/Fail:** ___
 
-#### Test 5.2: Gallery - Cancel
-1. Open gallery from attachment picker
-2. Press back button without selecting
-3. **Expected:** Returns to chat without error
-4. **Expected:** No toast message
+---
 
-#### Test 5.3: Document Picker - Cancel
-1. Open document picker
-2. Press back button without selecting
-3. **Expected:** Returns to chat without error
-4. **Expected:** No toast message
+### Test 5: Multiple Messages
+**Steps:**
+1. Send 5 different messages in sequence
+2. Wait for each response
 
-#### Test 5.4: Multiple Selections
-1. Select an image from gallery
-2. Immediately tap attachment button again
-3. Select a document
-4. **Expected:** Both selections work independently
-5. **Expected:** No crashes or errors
+**Expected Result:**
+- ✅ All messages display correctly
+- ✅ Conversation flows naturally
+- ✅ RecyclerView scrolls to bottom
+- ✅ No UI glitches or crashes
 
-#### Test 5.5: Rotation Test
-1. Open attachment bottom sheet
-2. Rotate device
-3. **Expected:** Bottom sheet remains visible or gracefully dismisses
-4. **Expected:** No crashes
+**Pass/Fail:** ___
 
-### 6. UI/UX Tests
+---
 
-#### Test 6.1: Icon Visibility
-1. Check all icons are visible and properly colored
-2. **Expected:** Camera, Gallery, Document icons display correctly
-3. **Expected:** Attachment button icon visible in chat input
+### Test 6: Loading States
+**Steps:**
+1. Send a message
+2. Observe loading indicator
+3. Wait for response
 
-#### Test 6.2: Touch Feedback
-1. Tap each option in bottom sheet
-2. **Expected:** Ripple effect shows on tap
-3. **Expected:** Options respond immediately
+**Expected Result:**
+- ✅ Loading layout appears immediately
+- ✅ "AI is thinking..." text is visible
+- ✅ Send button is disabled
+- ✅ Input field is disabled
+- ✅ Loading disappears when response arrives
 
-#### Test 6.3: Accessibility
+**Pass/Fail:** ___
+
+---
+
+### Test 7: Error Handling - No API Key
+**Steps:**
+1. Remove API key from local.properties
+2. Rebuild app
+3. Open AI Assistant
+4. Send a message
+
+**Expected Result:**
+- ✅ Toast shows "Please configure Gemini API key"
+- ✅ App doesn't crash
+- ✅ Error message in chat (optional)
+
+**Pass/Fail:** ___
+
+---
+
+### Test 8: Error Handling - Network Error
+**Steps:**
+1. Turn off internet connection
+2. Send a message
+3. Observe behavior
+
+**Expected Result:**
+- ✅ Error toast appears
+- ✅ Error message in chat
+- ✅ App doesn't crash
+- ✅ Can retry after reconnecting
+
+**Pass/Fail:** ___
+
+---
+
+### Test 9: Empty State
+**Steps:**
+1. Open AI Assistant (fresh)
+2. Observe initial state
+
+**Expected Result:**
+- ✅ Empty state layout is visible
+- ✅ AI brain icon is displayed
+- ✅ Welcome text is shown
+- ✅ Instructions are clear
+- ✅ RecyclerView is hidden
+
+**Pass/Fail:** ___
+
+---
+
+### Test 10: Dark Mode
+**Steps:**
+1. Enable dark mode in device settings
+2. Open AI Assistant
+3. Send messages
+
+**Expected Result:**
+- ✅ Dark theme is applied
+- ✅ Text is readable
+- ✅ Colors are appropriate
+- ✅ No contrast issues
+
+**Pass/Fail:** ___
+
+---
+
+### Test 11: Keyboard Behavior
+**Steps:**
+1. Tap message input
+2. Type a long message
+3. Observe layout
+
+**Expected Result:**
+- ✅ Keyboard appears
+- ✅ Layout adjusts (adjustResize)
+- ✅ Input field is visible
+- ✅ Send button is accessible
+- ✅ Messages scroll up
+
+**Pass/Fail:** ___
+
+---
+
+### Test 12: Enter Key to Send
+**Steps:**
+1. Type a message
+2. Press Enter key on keyboard
+
+**Expected Result:**
+- ✅ Message is sent
+- ✅ Same behavior as tapping send button
+
+**Pass/Fail:** ___
+
+---
+
+### Test 13: Back Navigation
+**Steps:**
+1. Open AI Assistant
+2. Send a message
+3. Tap back button in toolbar
+
+**Expected Result:**
+- ✅ Returns to Tasks screen
+- ✅ No crash
+- ✅ Conversation is lost (expected)
+
+**Pass/Fail:** ___
+
+---
+
+### Test 14: Screen Rotation
+**Steps:**
+1. Open AI Assistant
+2. Send messages
+3. Rotate device
+4. Send more messages
+
+**Expected Result:**
+- ✅ Messages persist after rotation
+- ✅ ViewModel survives rotation
+- ✅ No crash
+- ✅ UI rebuilds correctly
+
+**Pass/Fail:** ___
+
+---
+
+### Test 15: Rapid Message Sending
+**Steps:**
+1. Type and send 3 messages quickly
+2. Don't wait for responses
+
+**Expected Result:**
+- ✅ All messages are queued
+- ✅ Responses arrive in order
+- ✅ No crashes
+- ✅ UI remains responsive
+
+**Pass/Fail:** ___
+
+---
+
+## Integration Testing
+
+### Test 16: Task Creation Integration
+**Steps:**
+1. Create assignment via AI Assistant
+2. Navigate to Tasks tab
+3. Check for new task
+
+**Expected Result:**
+- ✅ Task appears in Tasks list
+- ✅ Task has correct title
+- ✅ Task has correct due date
+- ✅ Task has correct subject
+- ✅ Task has correct priority
+
+**Pass/Fail:** ___
+
+---
+
+### Test 17: Multiple Task Creation
+**Steps:**
+1. Create 3 different assignments via AI
+2. Check Tasks list
+
+**Expected Result:**
+- ✅ All 3 tasks are created
+- ✅ Each task has unique details
+- ✅ No duplicates
+- ✅ All tasks are visible
+
+**Pass/Fail:** ___
+
+---
+
+## Performance Testing
+
+### Test 18: Message List Performance
+**Steps:**
+1. Send 20+ messages
+2. Scroll through conversation
+3. Observe performance
+
+**Expected Result:**
+- ✅ Smooth scrolling
+- ✅ No lag
+- ✅ DiffUtil updates efficiently
+- ✅ No memory issues
+
+**Pass/Fail:** ___
+
+---
+
+### Test 19: Memory Usage
+**Steps:**
+1. Open AI Assistant
+2. Send 50+ messages
+3. Check memory usage
+
+**Expected Result:**
+- ✅ Memory usage is reasonable
+- ✅ No memory leaks
+- ✅ App doesn't slow down
+- ✅ No OutOfMemoryError
+
+**Pass/Fail:** ___
+
+---
+
+## Edge Cases
+
+### Test 20: Empty Message
+**Steps:**
+1. Try to send empty message
+2. Try to send whitespace only
+
+**Expected Result:**
+- ✅ Message is not sent
+- ✅ No error
+- ✅ Input remains empty
+
+**Pass/Fail:** ___
+
+---
+
+### Test 21: Very Long Message
+**Steps:**
+1. Type a very long message (500+ characters)
+2. Send it
+
+**Expected Result:**
+- ✅ Message is sent
+- ✅ Displays correctly
+- ✅ No truncation issues
+- ✅ AI responds appropriately
+
+**Pass/Fail:** ___
+
+---
+
+### Test 22: Special Characters
+**Steps:**
+1. Send message with emojis: "Create task 📚 for Math 🔢"
+2. Send message with symbols: "Assignment #1 @ 5pm"
+
+**Expected Result:**
+- ✅ Special characters display correctly
+- ✅ AI processes message correctly
+- ✅ No encoding issues
+
+**Pass/Fail:** ___
+
+---
+
+### Test 23: Rapid Button Taps
+**Steps:**
+1. Tap send button multiple times rapidly
+2. Tap action button multiple times
+
+**Expected Result:**
+- ✅ Only one message is sent
+- ✅ Only one task is created
+- ✅ No duplicate operations
+- ✅ Button is disabled during operation
+
+**Pass/Fail:** ___
+
+---
+
+## Accessibility Testing
+
+### Test 24: TalkBack Support
+**Steps:**
 1. Enable TalkBack
-2. Navigate to attachment button
-3. **Expected:** "Attach file" announced
-4. Open bottom sheet
-5. **Expected:** Each option properly announced
+2. Navigate AI Assistant
+3. Send messages
 
-### 7. Integration Tests
+**Expected Result:**
+- ✅ All elements are announced
+- ✅ Content descriptions are present
+- ✅ Navigation is logical
+- ✅ Actions are accessible
 
-#### Test 7.1: After Image Selection
-1. Select an image from gallery
-2. **Expected:** Toast shows with URI
-3. **Note:** Actual upload will be implemented in Task 15
+**Pass/Fail:** ___
 
-#### Test 7.2: After Document Selection
-1. Select a document
-2. **Expected:** Toast shows with URI
-3. **Note:** Actual upload will be implemented in Task 16
+---
 
-## Known Limitations (To Be Implemented)
+### Test 25: Large Text
+**Steps:**
+1. Enable large text in accessibility settings
+2. Open AI Assistant
+3. Send messages
 
-- ✅ Attachment picker UI complete
-- ✅ Permission handling complete
-- ✅ File selection complete
-- ⏳ Image upload (Task 15)
-- ⏳ Document upload (Task 16)
-- ⏳ Image compression (Task 15)
-- ⏳ Progress indicators (Task 15, 16)
-- ⏳ Message display with attachments (Task 15, 16)
+**Expected Result:**
+- ✅ Text scales appropriately
+- ✅ Layout doesn't break
+- ✅ All text is readable
+- ✅ Buttons are still accessible
 
-## Troubleshooting
+**Pass/Fail:** ___
 
-### Issue: Camera doesn't open
-**Solution:** Check that CAMERA permission is granted in app settings
+---
 
-### Issue: Gallery doesn't open
-**Solution:** 
-- Android 13+: Check READ_MEDIA_IMAGES permission
-- Android 12-: Check READ_EXTERNAL_STORAGE permission
+## Regression Testing
 
-### Issue: "Error opening camera" toast
-**Solution:** 
-- Check that device has a camera
-- Check that FileProvider is properly configured
-- Check that cache directory is accessible
+### Test 26: Tasks Screen Still Works
+**Steps:**
+1. Navigate to Tasks screen
+2. Verify all features work
+3. Create task manually
 
-### Issue: Document picker shows "No apps can perform this action"
-**Solution:** Install a file manager app (most devices have one pre-installed)
+**Expected Result:**
+- ✅ Tasks screen functions normally
+- ✅ No regressions introduced
+- ✅ AI Assistant button is visible
 
-### Issue: Bottom sheet doesn't appear
-**Solution:** 
-- Check that ChatRoomActivity is properly loaded
-- Check logcat for errors
-- Verify attachment button click listener is set
+**Pass/Fail:** ___
 
-## Success Criteria
+---
 
-All tests should pass with the following results:
-- ✅ Attachment button visible and clickable
-- ✅ Bottom sheet displays with three options
-- ✅ Camera permission requested and handled correctly
-- ✅ Storage permission requested and handled correctly (version-specific)
-- ✅ Document picker opens without permissions
-- ✅ Selected files return URIs to activity
-- ✅ Toast messages confirm selections
-- ✅ No crashes or errors
-- ✅ Proper error handling for denied permissions
-- ✅ Settings navigation works for permanently denied permissions
+### Test 27: Other Features Unaffected
+**Steps:**
+1. Test Groups, Calendar, Chat features
+2. Verify no issues
 
-## Next Steps After Testing
+**Expected Result:**
+- ✅ All features work as before
+- ✅ No crashes
+- ✅ No performance issues
 
-Once all tests pass:
-1. Proceed to Task 15: Implement image message sending
-2. Proceed to Task 16: Implement document message sending
+**Pass/Fail:** ___
 
-These tasks will use the URIs returned by this attachment picker to upload files to Firebase Storage and send messages with attachments.
+---
+
+## API Testing
+
+### Test 28: Valid API Response
+**Steps:**
+1. Send message
+2. Check logs for API response
+3. Verify parsing
+
+**Expected Result:**
+- ✅ API returns valid JSON
+- ✅ Response is parsed correctly
+- ✅ Message is extracted
+- ✅ Action is detected (if present)
+
+**Pass/Fail:** ___
+
+---
+
+### Test 29: Invalid API Response
+**Steps:**
+1. Mock invalid API response (if possible)
+2. Observe error handling
+
+**Expected Result:**
+- ✅ Error is caught
+- ✅ User-friendly message shown
+- ✅ App doesn't crash
+
+**Pass/Fail:** ___
+
+---
+
+### Test 30: API Timeout
+**Steps:**
+1. Simulate slow network
+2. Send message
+3. Wait for timeout
+
+**Expected Result:**
+- ✅ Timeout is handled
+- ✅ Error message shown
+- ✅ Can retry
+
+**Pass/Fail:** ___
+
+---
+
+## Test Summary
+
+### Overall Results
+- Total Tests: 30
+- Passed: ___
+- Failed: ___
+- Skipped: ___
+
+### Critical Issues Found
+1. ___
+2. ___
+3. ___
+
+### Minor Issues Found
+1. ___
+2. ___
+3. ___
+
+### Recommendations
+1. ___
+2. ___
+3. ___
+
+## Sign-Off
+
+**Tester Name:** _______________
+**Date:** _______________
+**Build Version:** _______________
+**Device:** _______________
+**Android Version:** _______________
+
+**Overall Assessment:** _______________
+
+**Ready for Production:** Yes / No
+
+**Notes:**
+_______________________________________________
+_______________________________________________
+_______________________________________________

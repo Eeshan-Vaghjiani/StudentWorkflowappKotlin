@@ -93,7 +93,8 @@ class TaskDetailsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 // Fetch task from Firestore
-                val tasks = taskRepository.getUserTasks()
+                val result = taskRepository.getUserTasks()
+                val tasks = result.getOrElse { emptyList() }
                 currentTask = tasks.find { it.id == taskId }
 
                 if (currentTask != null) {
@@ -260,9 +261,9 @@ class TaskDetailsActivity : AppCompatActivity() {
         showLoading(true)
         lifecycleScope.launch {
             try {
-                val success = taskRepository.deleteTask(taskId)
+                val result = taskRepository.deleteTask(taskId)
 
-                if (success) {
+                if (result.isSuccess) {
                     Toast.makeText(
                                     this@TaskDetailsActivity,
                                     "Task deleted successfully",

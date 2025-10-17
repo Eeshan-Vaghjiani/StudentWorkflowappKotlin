@@ -34,7 +34,8 @@ class TaskReminderWorker(context: Context, params: WorkerParameters) :
 
         // Verify task still exists and is not completed
         val taskRepository = TaskRepository()
-        val tasks = taskRepository.getUserTasks()
+        val tasksResult = taskRepository.getUserTasks()
+        val tasks = tasksResult.getOrElse { emptyList() }
         val task = tasks.find { it.id == taskId }
 
         if (task == null) {

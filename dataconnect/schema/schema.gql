@@ -1,0 +1,40 @@
+type User @table {
+  displayName: String!
+  email: String!
+  createdAt: Timestamp!
+  photoUrl: String
+}
+
+type Group @table {
+  name: String!
+  createdAt: Timestamp!
+  createdBy: User!
+  description: String
+  invitationCode: String
+}
+
+type GroupMembership @table(key: ["user", "group"]) {
+  user: User!
+  group: Group!
+  role: String!
+  joinedAt: Timestamp!
+}
+
+type Task @table {
+  group: Group!
+  assignedTo: User
+  title: String!
+  description: String!
+  createdAt: Timestamp!
+  dueDate: Timestamp!
+  priority: String!
+  completedAt: Timestamp
+}
+
+type Message @table {
+  group: Group!
+  sender: User!
+  content: String!
+  sentAt: Timestamp!
+  attachmentUrl: String
+}

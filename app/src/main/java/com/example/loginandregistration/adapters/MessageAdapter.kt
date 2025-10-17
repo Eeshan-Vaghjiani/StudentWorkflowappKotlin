@@ -32,6 +32,37 @@ class MessageAdapter(
         private const val VIEW_TYPE_SENT = 1
         private const val VIEW_TYPE_RECEIVED = 2
         private const val VIEW_TYPE_TIMESTAMP_HEADER = 3
+        
+        fun getDocumentIcon(fileName: String, mimeType: String? = null): Int {
+            // Check MIME type first if available
+            mimeType?.let {
+                when {
+                    it.startsWith("audio/") -> return android.R.drawable.ic_lock_silent_mode_off
+                    it.startsWith("video/") -> return android.R.drawable.ic_menu_slideshow
+                    it.startsWith("image/") -> return android.R.drawable.ic_menu_gallery
+                    it == "application/pdf" -> return android.R.drawable.ic_menu_save
+                    it.contains("word") || it.contains("document") -> return android.R.drawable.ic_menu_edit
+                    it.contains("sheet") || it.contains("excel") -> return android.R.drawable.ic_menu_sort_by_size
+                    it.contains("presentation") || it.contains("powerpoint") -> return android.R.drawable.ic_menu_slideshow
+                    it.contains("zip") || it.contains("compressed") -> return android.R.drawable.ic_menu_upload
+                    it == "text/plain" -> return android.R.drawable.ic_menu_edit
+                }
+            }
+            
+            // Fall back to file extension
+            return when (fileName.substringAfterLast('.', "").lowercase()) {
+                "pdf" -> android.R.drawable.ic_menu_save
+                "doc", "docx" -> android.R.drawable.ic_menu_edit
+                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
+                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
+                "zip", "rar" -> android.R.drawable.ic_menu_upload
+                "txt" -> android.R.drawable.ic_menu_edit
+                "mp3", "wav", "ogg", "m4a" -> android.R.drawable.ic_lock_silent_mode_off
+                "mp4", "avi", "mkv", "mov" -> android.R.drawable.ic_menu_slideshow
+                "jpg", "jpeg", "png", "gif" -> android.R.drawable.ic_menu_gallery
+                else -> android.R.drawable.ic_menu_save
+            }
+        }
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -94,6 +125,16 @@ class MessageAdapter(
         }
     }
 
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        // Clean up resources and listeners to prevent memory leaks and crashes
+        when (holder) {
+            is SentMessageViewHolder -> holder.cleanup()
+            is ReceivedMessageViewHolder -> holder.cleanup()
+            is TimestampHeaderViewHolder -> holder.cleanup()
+        }
+    }
+
     /**
      * Submit messages to the adapter with proper grouping. Uses MessageGrouper utility to group
      * consecutive messages from the same sender and add timestamp headers.
@@ -123,18 +164,20 @@ class MessageAdapter(
                 onDocumentClick: ((Message) -> Unit)?,
                 onMessageLongClick: ((Message, View) -> Unit)?
         ) {
-            // Handle document messages
-            if (message.hasDocument()) {
+            // Handle document messages (including audio and video as documents)
+            if (message.hasDocument() || message.hasAudio() || message.hasVideo()) {
                 documentContainer.visibility = View.VISIBLE
                 messageImageView.visibility = View.GONE
                 messageTextView.visibility =
                         if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
 
-                documentNameTextView.text = message.documentName ?: "Document"
+                documentNameTextView.text = message.resolveAttachmentFileName() ?: "Document"
                 documentSizeTextView.text = message.getFormattedFileSize()
 
-                // Set icon based on file type
-                documentIconImageView.setImageResource(getDocumentIcon(message.documentName ?: ""))
+                // Set icon based on file type or MIME type
+                documentIconImageView.setImageResource(
+                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                )
 
                 // Click to download/open document
                 documentContainer.setOnClickListener { onDocumentClick?.invoke(message) }
@@ -146,8 +189,9 @@ class MessageAdapter(
                 messageTextView.visibility =
                         if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
 
-                // Load image using Coil
-                messageImageView.load(message.imageUrl) {
+                // Load image using Coil (supports both legacy and new fields)
+                val imageUrl = message.resolveAttachmentUrl()
+                messageImageView.load(imageUrl) {
                     crossfade(true)
                     placeholder(android.R.drawable.ic_menu_gallery)
                     error(android.R.drawable.ic_menu_report_image)
@@ -157,7 +201,7 @@ class MessageAdapter(
                 messageImageView.setOnClickListener {
                     val intent =
                             Intent(itemView.context, ImageViewerActivity::class.java).apply {
-                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, message.imageUrl)
+                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, imageUrl)
                             }
                     itemView.context.startActivity(intent)
                 }
@@ -186,20 +230,19 @@ class MessageAdapter(
             }
         }
 
-        private fun getDocumentIcon(fileName: String): Int {
-            return when (fileName.substringAfterLast('.', "").lowercase()) {
-                "pdf" -> android.R.drawable.ic_menu_save
-                "doc", "docx" -> android.R.drawable.ic_menu_edit
-                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
-                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
-                "zip", "rar" -> android.R.drawable.ic_menu_upload
-                "txt" -> android.R.drawable.ic_menu_edit
-                else -> android.R.drawable.ic_menu_save
-            }
-        }
-
         private fun formatTime(timestamp: Long): String {
             return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
+        }
+
+        fun cleanup() {
+            // Clear click listeners to prevent memory leaks
+            messageImageView.setOnClickListener(null)
+            documentContainer.setOnClickListener(null)
+            itemView.setOnLongClickListener(null)
+            messageStatusView.setOnRetryClickListener { }
+            
+            // Clear image to free memory
+            messageImageView.setImageDrawable(null)
         }
     }
 
@@ -226,18 +269,20 @@ class MessageAdapter(
                 onDocumentClick: ((Message) -> Unit)?,
                 onMessageLongClick: ((Message, View) -> Unit)?
         ) {
-            // Handle document messages
-            if (message.hasDocument()) {
+            // Handle document messages (including audio and video as documents)
+            if (message.hasDocument() || message.hasAudio() || message.hasVideo()) {
                 documentContainer.visibility = View.VISIBLE
                 messageImageView.visibility = View.GONE
                 messageTextView.visibility =
                         if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
 
-                documentNameTextView.text = message.documentName ?: "Document"
+                documentNameTextView.text = message.resolveAttachmentFileName() ?: "Document"
                 documentSizeTextView.text = message.getFormattedFileSize()
 
-                // Set icon based on file type
-                documentIconImageView.setImageResource(getDocumentIcon(message.documentName ?: ""))
+                // Set icon based on file type or MIME type
+                documentIconImageView.setImageResource(
+                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                )
 
                 // Click to download/open document
                 documentContainer.setOnClickListener { onDocumentClick?.invoke(message) }
@@ -249,8 +294,9 @@ class MessageAdapter(
                 messageTextView.visibility =
                         if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
 
-                // Load image using Coil
-                messageImageView.load(message.imageUrl) {
+                // Load image using Coil (supports both legacy and new fields)
+                val imageUrl = message.resolveAttachmentUrl()
+                messageImageView.load(imageUrl) {
                     crossfade(true)
                     placeholder(android.R.drawable.ic_menu_gallery)
                     error(android.R.drawable.ic_menu_report_image)
@@ -260,7 +306,7 @@ class MessageAdapter(
                 messageImageView.setOnClickListener {
                     val intent =
                             Intent(itemView.context, ImageViewerActivity::class.java).apply {
-                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, message.imageUrl)
+                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, imageUrl)
                             }
                     itemView.context.startActivity(intent)
                 }
@@ -317,18 +363,6 @@ class MessageAdapter(
             }
         }
 
-        private fun getDocumentIcon(fileName: String): Int {
-            return when (fileName.substringAfterLast('.', "").lowercase()) {
-                "pdf" -> android.R.drawable.ic_menu_save
-                "doc", "docx" -> android.R.drawable.ic_menu_edit
-                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
-                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
-                "zip", "rar" -> android.R.drawable.ic_menu_upload
-                "txt" -> android.R.drawable.ic_menu_edit
-                else -> android.R.drawable.ic_menu_save
-            }
-        }
-
         private fun getInitials(name: String): String {
             val names = name.trim().split(" ")
             return when {
@@ -341,6 +375,17 @@ class MessageAdapter(
         private fun formatTime(timestamp: Long): String {
             return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
         }
+
+        fun cleanup() {
+            // Clear click listeners to prevent memory leaks
+            messageImageView.setOnClickListener(null)
+            documentContainer.setOnClickListener(null)
+            itemView.setOnLongClickListener(null)
+            
+            // Clear images to free memory
+            messageImageView.setImageDrawable(null)
+            senderProfileImageView.setImageDrawable(null)
+        }
     }
 
     class TimestampHeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -349,6 +394,10 @@ class MessageAdapter(
 
         fun bind(timestamp: String) {
             timestampHeaderTextView.text = timestamp
+        }
+
+        fun cleanup() {
+            // No resources to clean up for timestamp header
         }
     }
 
@@ -376,3 +425,4 @@ class MessageAdapter(
         }
     }
 }
+

@@ -46,6 +46,10 @@
     <color name="completed_color">@color/colorGreen</color>
     <color name="card_background">@color/colorCardBackground</color>
     
+    <!-- Material 3 Surface Colors -->
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F2F2F7</color>
+    
     <!-- Auth Screen Colors - Matching Mockup Spec -->
     <color name="auth_gradient_start">#007AFF</color>
     <color name="auth_gradient_end">#5856D6</color>

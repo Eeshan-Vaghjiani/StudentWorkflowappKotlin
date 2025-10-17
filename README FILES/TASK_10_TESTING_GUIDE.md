@@ -1,271 +1,333 @@
-# Task 10 Testing Guide: Quick Start
+# Task 10: Group Creation and Display - Testing Guide
 
-## Quick Test: Notification Permission
+## Automated Tests
 
-### Test on Android 13+ Device/Emulator
-
-1. **First Launch Test**
-   ```bash
-   # Uninstall app first
-   adb uninstall com.example.loginandregistration
-   
-   # Install and run
-   ./gradlew installDebug
-   ```
-   
-   - Open the app
-   - You should see a dialog titled "Enable Notifications"
-   - Dialog explains: "Stay connected with your team!"
-   - Lists benefits: messages, task reminders, group activities
-   - Tap "Allow" → System permission dialog appears
-   - Grant permission
-   - Check logcat: `adb logcat | grep FCM`
-   - Should see: "FCM token saved successfully"
-
-2. **Permission Denied Test**
-   ```bash
-   # Uninstall and reinstall
-   adb uninstall com.example.loginandregistration
-   ./gradlew installDebug
-   ```
-   
-   - Open app
-   - Tap "Not Now" on rationale dialog
-   - App should continue working normally
-   - Close and reopen app
-   - Rationale dialog appears again
-   - Deny permission in system dialog
-   - Close and reopen app 2-3 times
-   - After multiple denials, settings dialog should appear
-   - Tap "Open Settings" to verify it opens system settings
-
-3. **Already Granted Test**
-   - With permission already granted, close and reopen app
-   - No dialogs should appear
-   - App starts normally
-
-### Test on Android 12 or Lower
-
+### Run All Tests
 ```bash
-# Use Android 12 emulator
-# No permission dialogs should appear
-# FCM token should be saved automatically
+./gradlew test --tests "com.example.loginandregistration.GroupCreationAndDisplayTest"
 ```
 
-## Quick Test: Deep Linking
+### Test Coverage
 
-### Method 1: Using Firebase Console (Easiest)
+#### 1. Field Name Verification
+**Test**: `test FirebaseGroup has correct field names`
+- Verifies `memberIds` field exists
+- Verifies `members` field exists
+- Checks both arrays are populated correctly
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Select your project
-3. Navigate to: **Cloud Messaging** → **Send test message**
-4. Fill in:
-   - **Notification title**: "Test Chat"
-   - **Notification text**: "Hello from notification"
-   - **Target**: Select your device (must have app installed)
-5. Click **Advanced options** → **Custom data**
-6. Add key-value pairs:
-   ```
-   type: chat
-   chatId: test_chat_123
-   chatName: Test Chat
-   senderName: Test User
-   message: Hello from notification
-   ```
-7. Click **Test** → Select your device → **Test**
-8. Tap the notification on your device
-9. Verify ChatRoomActivity opens
+#### 2. Group Creation
+**Test**: `test group creation initializes all required fields`
+- Verifies all required fields are set
+- Checks owner is in `memberIds`
+- Validates owner role is "owner"
 
-### Method 2: Using ADB (For Quick Testing)
+#### 3. Public/Private Groups
+**Test**: `test group settings isPublic field`
+- Tests public group has `isPublic = true`
+- Tests private group has `isPublic = false`
 
-**Send Chat Notification:**
-```bash
-adb shell am start -n com.example.loginandregistration/.ChatRoomActivity \
-  --es chatId "test_chat_123" \
-  --es chatName "Test Chat" \
-  --ez fromNotification true
-```
+#### 4. Array Synchronization
+**Test**: `test memberIds and members arrays stay in sync`
+- Verifies both arrays have same size
+- Checks all memberIds have corresponding members
+- Validates all members have corresponding memberIds
 
-**Send Task Notification:**
-```bash
-adb shell am start -n com.example.loginandregistration/.MainActivity \
-  --es taskId "test_task_123" \
-  --ez fromNotification true
-```
+#### 5. Member Roles
+**Test**: `test group member roles`
+- Validates "owner" role
+- Validates "admin" role
+- Validates "member" role
 
-**Send Group Notification:**
-```bash
-adb shell am start -n com.example.loginandregistration/.MainActivity \
-  --es groupId "test_group_123" \
-  --es groupName "Test Group" \
-  --ez fromNotification true
-```
+#### 6. Firestore Compatibility
+**Test**: `test group no-arg constructor for Firestore`
+- Verifies no-arg constructor exists
+- Checks default values are correct
 
-### Method 3: Using Backend API (Most Realistic)
+#### 7. Join Code Format
+**Test**: `test join code format`
+- Validates 6-character length
+- Checks alphanumeric format
 
-If you have a backend that sends FCM notifications, use this payload:
+## Manual Testing
 
-**Chat Notification:**
-```json
-{
-  "to": "USER_FCM_TOKEN",
-  "data": {
-    "type": "chat",
-    "chatId": "actual_chat_id",
-    "chatName": "Project Team",
-    "senderName": "John Doe",
-    "message": "Hey, are you available?",
-    "senderImageUrl": "https://...",
-    "timestamp": "1234567890"
-  }
+### Test 1: Create a New Group
+
+**Steps**:
+1. Open the app and sign in
+2. Navigate to Groups tab
+3. Click "Create Group" button
+4. Fill in the form:
+   - Name: "Test Group 1"
+   - Description: "Testing group creation"
+   - Subject: "Computer Science"
+5. Click "Create"
+
+**Expected Results**:
+- ✅ Success message appears
+- ✅ Dialog closes
+- ✅ Group appears immediately in "My Groups" section
+- ✅ Group shows correct member count (1)
+- ✅ Group shows correct subject
+
+**Verification**:
+- Check Firestore console:
+  - Group document exists
+  - `memberIds` array contains your user ID
+  - `members` array contains your user details
+  - `owner` field is your user ID
+  - `settings.isPublic` is set correctly
+  - `isActive` is true
+
+### Test 2: Join Group by Code
+
+**Prerequisites**:
+- Have another user create a group and share the join code
+- OR use an existing group's join code
+
+**Steps**:
+1. Click "Join Group" button
+2. Enter the 6-character join code
+3. Click "Join"
+
+**Expected Results**:
+- ✅ Success message appears
+- ✅ Dialog closes
+- ✅ Group appears immediately in "My Groups" section
+- ✅ Member count increases by 1
+
+**Verification**:
+- Check Firestore console:
+  - Your user ID is in `memberIds` array
+  - Your user details are in `members` array
+  - Your role is "member"
+
+### Test 3: View Public Groups
+
+**Prerequisites**:
+- Have at least one public group you're not a member of
+
+**Steps**:
+1. Scroll to "Discover Groups" section
+2. Observe the list of public groups
+
+**Expected Results**:
+- ✅ Public groups are displayed
+- ✅ Groups you're already a member of are NOT shown
+- ✅ Each group shows member count and subject
+
+**Verification**:
+- Check Firestore console:
+  - Query for `settings.isPublic == true` returns groups
+  - Your user ID is NOT in their `memberIds` arrays
+
+### Test 4: Join Public Group
+
+**Steps**:
+1. In "Discover Groups" section, click "Join" on a group
+2. Wait for confirmation
+
+**Expected Results**:
+- ✅ Success message appears
+- ✅ Group moves from "Discover Groups" to "My Groups"
+- ✅ Group appears immediately without refresh
+
+**Verification**:
+- Check Firestore console:
+  - Your user ID is now in `memberIds` array
+  - Your user details are in `members` array
+
+### Test 5: Real-time Updates
+
+**Prerequisites**:
+- Two devices or users
+
+**Steps**:
+1. User A creates a group
+2. User A shares the join code with User B
+3. User B joins the group using the code
+4. User A observes their screen (without refreshing)
+
+**Expected Results**:
+- ✅ User A sees member count increase automatically
+- ✅ No manual refresh needed
+- ✅ Update happens within 1-2 seconds
+
+### Test 6: Error Handling - Invalid Join Code
+
+**Steps**:
+1. Click "Join Group" button
+2. Enter an invalid code (e.g., "XXXXXX")
+3. Click "Join"
+
+**Expected Results**:
+- ✅ Error message appears
+- ✅ Message is user-friendly
+- ✅ Dialog remains open for retry
+
+### Test 7: Error Handling - Empty Group Name
+
+**Steps**:
+1. Click "Create Group" button
+2. Leave name field empty
+3. Fill in other fields
+4. Click "Create"
+
+**Expected Results**:
+- ✅ Validation error appears
+- ✅ Message indicates name is required
+- ✅ Dialog remains open for correction
+
+### Test 8: Offline Behavior
+
+**Steps**:
+1. Turn off device internet connection
+2. Try to create a group
+3. Turn internet back on
+
+**Expected Results**:
+- ✅ Offline indicator appears
+- ✅ Error message indicates no connection
+- ✅ When online, retry works correctly
+
+## Security Rules Testing
+
+### Test 1: Member Can Read Group
+```javascript
+// In Firestore Rules Playground
+match /groups/{groupId} {
+  allow read: if request.auth.uid in resource.data.memberIds;
 }
+
+// Test with:
+// - Auth: User ID that's in memberIds
+// - Expected: ALLOW
 ```
 
-**Task Notification:**
-```json
-{
-  "to": "USER_FCM_TOKEN",
-  "data": {
-    "type": "task",
-    "taskId": "actual_task_id",
-    "taskTitle": "Complete Report",
-    "taskDescription": "Finish quarterly report",
-    "dueDate": "Tomorrow",
-    "priority": "High"
-  }
-}
+### Test 2: Non-member Cannot Read Private Group
+```javascript
+// Test with:
+// - Auth: User ID NOT in memberIds
+// - Group: settings.isPublic = false
+// - Expected: DENY
 ```
 
-**Group Notification:**
-```json
-{
-  "to": "USER_FCM_TOKEN",
-  "data": {
-    "type": "group",
-    "groupId": "actual_group_id",
-    "groupName": "Development Team",
-    "message": "New member added to the group",
-    "updateType": "member_added",
-    "actionUserName": "Jane Smith"
-  }
-}
+### Test 3: Anyone Can Read Public Group
+```javascript
+// Test with:
+// - Auth: Any authenticated user
+// - Group: settings.isPublic = true
+// - Expected: ALLOW
 ```
 
-## Expected Results
-
-### Permission Flow
-✅ Rationale dialog shows clear explanation  
-✅ System permission dialog appears after "Allow"  
-✅ FCM token saved to Firestore after grant  
-✅ App works without permission (no crashes)  
-✅ Settings dialog appears after multiple denials  
-
-### Deep Linking Flow
-✅ Chat notification opens ChatRoomActivity  
-✅ Correct chat loads with proper data  
-✅ Messages marked as read automatically  
-✅ Task notification navigates to tasks screen  
-✅ Group notification navigates to groups screen  
-✅ Back button navigation works correctly  
-
-## Common Issues & Solutions
-
-### Issue: Permission dialog doesn't appear
-**Solution:** Make sure you're testing on Android 13+ (API 33+)
-```bash
-# Check Android version
-adb shell getprop ro.build.version.sdk
-# Should be 33 or higher
+### Test 4: Authenticated User Can Create Group
+```javascript
+// Test with:
+// - Auth: Any authenticated user
+// - Operation: Create group with user in memberIds
+// - Expected: ALLOW
 ```
 
-### Issue: Notification doesn't appear
-**Solution:** Check if notifications are enabled
-```bash
-# Check notification settings
-adb shell dumpsys notification | grep "com.example.loginandregistration"
+### Test 5: Admin Can Update Group
+```javascript
+// Test with:
+// - Auth: User with role "admin" or "owner"
+// - Operation: Update group details
+// - Expected: ALLOW
 ```
 
-### Issue: Deep link doesn't work
-**Solution:** Check logcat for errors
-```bash
-adb logcat | grep -E "(MainActivity|ChatRoomActivity|NotificationHelper)"
+### Test 6: Member Cannot Update Group
+```javascript
+// Test with:
+// - Auth: User with role "member"
+// - Operation: Update group details
+// - Expected: DENY
 ```
 
-### Issue: FCM token not saved
-**Solution:** Check Firestore rules and authentication
-```bash
-# Check if user is authenticated
-adb logcat | grep "FirebaseAuth"
+## Performance Testing
+
+### Test 1: Large Member List
+**Steps**:
+1. Create a group with 50 members
+2. Observe load time and UI responsiveness
+
+**Expected**:
+- ✅ List loads in < 2 seconds
+- ✅ Scrolling is smooth
+- ✅ No UI lag
+
+### Test 2: Many Groups
+**Steps**:
+1. Join 20+ groups
+2. Navigate to Groups tab
+3. Observe load time
+
+**Expected**:
+- ✅ Groups load in < 3 seconds
+- ✅ Real-time updates don't cause lag
+- ✅ UI remains responsive
+
+## Regression Testing
+
+After making changes, verify:
+- ✅ Existing groups still display correctly
+- ✅ Group chat still works
+- ✅ Group tasks still work
+- ✅ Group activities still log correctly
+- ✅ Group settings can still be updated
+
+## Test Results Template
+
+```
+Test Date: ___________
+Tester: ___________
+Device: ___________
+OS Version: ___________
+
+| Test Case | Status | Notes |
+|-----------|--------|-------|
+| Create Group | ☐ Pass ☐ Fail | |
+| Join by Code | ☐ Pass ☐ Fail | |
+| View Public Groups | ☐ Pass ☐ Fail | |
+| Join Public Group | ☐ Pass ☐ Fail | |
+| Real-time Updates | ☐ Pass ☐ Fail | |
+| Error Handling | ☐ Pass ☐ Fail | |
+| Offline Behavior | ☐ Pass ☐ Fail | |
+| Security Rules | ☐ Pass ☐ Fail | |
+
+Overall Result: ☐ Pass ☐ Fail
+
+Issues Found:
+1. ___________
+2. ___________
+3. ___________
 ```
 
-## Debugging Tips
+## Troubleshooting
 
-### View Logcat Filtered
-```bash
-# View all app logs
-adb logcat | grep "com.example.loginandregistration"
+### Issue: Groups don't appear after creation
+**Check**:
+1. Firestore console - is group created?
+2. Is `memberIds` array populated?
+3. Are security rules deployed?
+4. Check app logs for errors
 
-# View FCM logs
-adb logcat | grep "FCM"
+### Issue: Permission denied errors
+**Check**:
+1. Are security rules deployed?
+2. Is user authenticated?
+3. Is user in `memberIds` array?
+4. Check Firestore Rules Playground
 
-# View notification logs
-adb logcat | grep "NotificationHelper"
+### Issue: Real-time updates not working
+**Check**:
+1. Is internet connection stable?
+2. Are listeners properly attached?
+3. Check for listener cleanup in onStop()
+4. Verify Flow collection is lifecycle-aware
 
-# View permission logs
-adb logcat | grep "NotificationPermission"
-```
-
-### Check Firestore Data
-1. Open Firebase Console
-2. Go to Firestore Database
-3. Navigate to `users` collection
-4. Find your user document
-5. Verify `fcmToken` field exists
-
-### Test Notification Channels
-```bash
-# List notification channels
-adb shell dumpsys notification | grep "com.example.loginandregistration"
-
-# Should see:
-# - chat_messages (HIGH importance)
-# - task_reminders (DEFAULT importance)
-# - group_updates (DEFAULT importance)
-```
-
-## Quick Verification (5 Minutes)
-
-1. **Install app** (1 min)
-   ```bash
-   ./gradlew installDebug
-   ```
-
-2. **Test permission** (2 min)
-   - Open app
-   - Grant notification permission
-   - Verify no crashes
-
-3. **Test deep linking** (2 min)
-   ```bash
-   # Send test intent
-   adb shell am start -n com.example.loginandregistration/.ChatRoomActivity \
-     --es chatId "test" --es chatName "Test" --ez fromNotification true
-   ```
-   - Verify ChatRoomActivity opens
-   - Verify no crashes
-
-✅ **If all above works, Task 10 is successfully implemented!**
-
-## Next Steps
-
-After verifying Task 10:
-1. Mark task as complete in tasks.md
-2. Proceed to Task 11: Integrate FCM token management
-3. Or test with real Firebase Cloud Messaging
-
-## Need Help?
-
-- Check `TASK_10_IMPLEMENTATION_SUMMARY.md` for detailed implementation
-- Check `TASK_10_VERIFICATION_CHECKLIST.md` for comprehensive testing
-- Review code comments in `NotificationPermissionHelper.kt`
-- Check Firebase Console for notification delivery logs
+### Issue: Public groups not showing
+**Check**:
+1. Query uses `settings.isPublic == true`
+2. Groups have `isActive == true`
+3. User is not already a member
+4. Security rules allow reading public groups

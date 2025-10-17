@@ -14,6 +14,8 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.storage.StorageException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -28,21 +30,21 @@ object ErrorHandler {
 
     /** Error types for categorization */
     sealed class AppError {
-        data class NetworkError(val message: String, val exception: Exception? = null) : AppError()
-        data class AuthError(val message: String, val exception: Exception? = null) : AppError()
+        data class NetworkError(val message: String, val exception: Throwable? = null) : AppError()
+        data class AuthError(val message: String, val exception: Throwable? = null) : AppError()
         data class PermissionError(val message: String, val permission: String? = null) :
                 AppError()
-        data class StorageError(val message: String, val exception: Exception? = null) : AppError()
+        data class StorageError(val message: String, val exception: Throwable? = null) : AppError()
         data class ValidationError(val message: String) : AppError()
-        data class FirestoreError(val message: String, val exception: Exception? = null) :
+        data class FirestoreError(val message: String, val exception: Throwable? = null) :
                 AppError()
-        data class UnknownError(val message: String, val exception: Exception? = null) : AppError()
+        data class UnknownError(val message: String, val exception: Throwable? = null) : AppError()
     }
 
     /** Handle any exception and show appropriate UI feedback */
     fun handleError(
             context: Context,
-            exception: Exception,
+            exception: Throwable,
             view: View? = null,
             onRetry: (() -> Unit)? = null
     ) {
@@ -52,7 +54,7 @@ object ErrorHandler {
     }
 
     /** Categorize exception into AppError types */
-    private fun categorizeError(exception: Exception): AppError {
+    private fun categorizeError(exception: Throwable): AppError {
         return when (exception) {
             // Network errors
             is UnknownHostException,
@@ -408,6 +410,34 @@ object ErrorHandler {
             showErrorSnackbar(context, view, message, onRetry)
         } else {
             showErrorToast(context, message)
+        }
+    }
+}
+
+/**
+ * Extension function for safe Firestore operations with automatic error handling.
+ * Wraps Firestore calls and converts exceptions to Result types.
+ *
+ * Usage:
+ * ```
+ * val result = safeFirestoreCall {
+ *     firestore.collection("users").document(userId).get().await()
+ * }
+ * ```
+ */
+suspend fun <T> safeFirestoreCall(block: suspend () -> T): Result<T> {
+    return withContext(Dispatchers.IO) {
+        try {
+            Result.success(block())
+        } catch (e: FirebaseFirestoreException) {
+            Log.e("SafeFirestoreCall", "Firestore error: ${e.code}", e)
+            Result.failure(e)
+        } catch (e: FirebaseNetworkException) {
+            Log.e("SafeFirestoreCall", "Network error", e)
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e("SafeFirestoreCall", "Unknown error", e)
+            Result.failure(e)
         }
     }
 }

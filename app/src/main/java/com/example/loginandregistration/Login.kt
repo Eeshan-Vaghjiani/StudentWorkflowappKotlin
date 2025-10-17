@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.loginandregistration.repository.NotificationRepository
+import com.example.loginandregistration.utils.ErrorHandler
 import com.example.loginandregistration.utils.GoogleSignInHelper
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
@@ -55,40 +56,37 @@ class Login : AppCompatActivity() {
 
     private val googleSignInLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == Activity.RESULT_OK) {
-                    val task = googleSignInHelper.handleSignInResult(result.data)
-                    task
-                            .addOnSuccessListener { account: GoogleSignInAccount ->
-                                Log.d(
-                                        TAG,
-                                        "Google sign-in successful, authenticating with Firebase"
-                                )
-                                authenticateWithFirebase(account)
-                            }
-                            .addOnFailureListener { e: Exception ->
-                                showLoading(false)
-                                Log.w(TAG, "Google sign in failed", e)
-                                val errorMessage =
-                                        if (e is ApiException) {
-                                            when (e.statusCode) {
-                                                12501 -> "Sign-in was cancelled"
-                                                12500 ->
-                                                        "Sign-in configuration error. Please contact support."
-                                                else -> "Google sign in failed: ${e.statusCode}"
-                                            }
-                                        } else {
-                                            "Google sign in failed: ${e.message}"
-                                        }
-                                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
-                            }
-                } else {
-                    showLoading(false)
-                    Log.w(
-                            TAG,
-                            "Google sign in cancelled or failed: resultCode=${result.resultCode}"
-                    )
-                    if (result.resultCode != Activity.RESULT_CANCELED) {
-                        Toast.makeText(this, "Google sign-in cancelled", Toast.LENGTH_SHORT).show()
+                when (result.resultCode) {
+                    Activity.RESULT_OK -> {
+                        val task = googleSignInHelper.handleSignInResult(result.data)
+                        task
+                                .addOnSuccessListener { account: GoogleSignInAccount ->
+                                    Log.d(
+                                            TAG,
+                                            "Google sign-in successful, authenticating with Firebase"
+                                    )
+                                    authenticateWithFirebase(account)
+                                }
+                                .addOnFailureListener { e: Exception ->
+                                    showLoading(false)
+                                    Log.w(TAG, "Google sign in failed", e)
+                                    handleGoogleSignInError(e)
+                                }
+                    }
+                    Activity.RESULT_CANCELED -> {
+                        // User cancelled the sign-in flow - handle gracefully
+                        showLoading(false)
+                        Log.d(TAG, "Google sign-in cancelled by user")
+                        // Don't show error message for user cancellation
+                    }
+                    else -> {
+                        // Unexpected result code
+                        showLoading(false)
+                        Log.w(TAG, "Google sign-in failed with result code: ${result.resultCode}")
+                        ErrorHandler.handleAuthError(
+                                this,
+                                "Sign-in failed. Please try again."
+                        )
                     }
                 }
             }
@@ -252,8 +250,6 @@ class Login : AppCompatActivity() {
         showLoading(true)
 
         auth.signInWithEmailAndPassword(email, password).addOnCompleteListener(this) { task ->
-            showLoading(false)
-
             if (task.isSuccessful) {
                 val user = auth.currentUser
                 if (user != null) {
@@ -264,22 +260,38 @@ class Login : AppCompatActivity() {
                             profileImageUrl = user.photoUrl?.toString() ?: ""
                     )
                     // Save FCM token after successful login
-                    saveFcmTokenAfterLogin()
-                }
-                Toast.makeText(this, "Login successful", Toast.LENGTH_SHORT).show()
-                navigateToDashboard()
-            } else {
-                Log.w(TAG, "signInWithEmail:failure", task.exception)
-                val errorMessage =
-                        when (task.exception?.message) {
-                            "The email address is badly formatted." -> "Invalid email format"
-                            "The password is invalid or the user does not have a password." ->
-                                    "Invalid password"
-                            "There is no user record corresponding to this identifier. The user may have been deleted." ->
-                                    "No account found with this email"
-                            else -> task.exception?.message ?: "Unknown error"
+                    saveFcmTokenAfterLogin { success ->
+                        showLoading(false)
+                        if (success) {
+                            Log.d(TAG, "FCM token saved successfully after email login")
+                        } else {
+                            Log.w(TAG, "Failed to save FCM token, but continuing with login")
                         }
-                Toast.makeText(this, "Login Failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        ErrorHandler.showSuccessMessage(
+                                this,
+                                findViewById(android.R.id.content),
+                                "Welcome back!"
+                        )
+                        navigateToDashboard()
+                    }
+                } else {
+                    showLoading(false)
+                    ErrorHandler.handleAuthError(this, "Login failed. Please try again.")
+                }
+            } else {
+                showLoading(false)
+                Log.w(TAG, "signInWithEmail:failure", task.exception)
+                
+                // Use ErrorHandler for better error messages
+                task.exception?.let { exception ->
+                    ErrorHandler.handleError(
+                            this,
+                            exception,
+                            findViewById(android.R.id.content)
+                    )
+                } ?: run {
+                    ErrorHandler.handleAuthError(this, "Login failed. Please try again.")
+                }
             }
         }
     }
@@ -290,24 +302,56 @@ class Login : AppCompatActivity() {
         googleSignInLauncher.launch(signInIntent)
     }
 
+    private fun handleGoogleSignInError(exception: Exception) {
+        val errorMessage = if (exception is ApiException) {
+            when (exception.statusCode) {
+                12501 -> {
+                    // User cancelled - don't show error
+                    Log.d(TAG, "User cancelled Google sign-in")
+                    return
+                }
+                12500 -> "Sign-in configuration error. Please contact support."
+                7 -> "Network error. Please check your connection and try again."
+                10 -> "Developer error. Please contact support."
+                else -> "Sign-in failed (Error ${exception.statusCode}). Please try again."
+            }
+        } else {
+            "Sign-in failed: ${exception.message ?: "Unknown error"}"
+        }
+        
+        ErrorHandler.handleAuthError(this, errorMessage)
+    }
+
     private fun authenticateWithFirebase(account: GoogleSignInAccount) {
         showLoading(true)
 
         googleSignInHelper.authenticateWithFirebase(
                 account = account,
                 onSuccess = { userId: String ->
-                    showLoading(false)
                     Log.d(TAG, "Firebase authentication successful for user: $userId")
                     // Save FCM token after successful Google login
-                    saveFcmTokenAfterLogin()
-                    Toast.makeText(this, "Google login successful", Toast.LENGTH_SHORT).show()
-                    navigateToDashboard()
+                    saveFcmTokenAfterLogin { success ->
+                        showLoading(false)
+                        if (success) {
+                            Log.d(TAG, "FCM token saved successfully after Google sign-in")
+                        } else {
+                            Log.w(TAG, "Failed to save FCM token, but continuing with login")
+                        }
+                        ErrorHandler.showSuccessMessage(
+                                this,
+                                findViewById(android.R.id.content),
+                                "Welcome back!"
+                        )
+                        navigateToDashboard()
+                    }
                 },
                 onFailure = { errorMessage: String ->
                     showLoading(false)
                     Log.e(TAG, "Firebase authentication failed: $errorMessage")
-                    Toast.makeText(this, "Google login failed: $errorMessage", Toast.LENGTH_LONG)
-                            .show()
+                    ErrorHandler.handleAuthError(
+                            this,
+                            "Google sign-in failed: $errorMessage"
+                    )
                 }
         )
     }
@@ -331,56 +375,90 @@ class Login : AppCompatActivity() {
                                         "photoUrl" to profileImageUrl,
                                         "profileImageUrl" to profileImageUrl,
                                         "lastActive" to com.google.firebase.Timestamp.now(),
-                                        "isOnline" to true
+                                        "isOnline" to true,
+                                        "authProvider" to "email"
                                 )
 
                         userRef.update(updates)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document updated successfully")
+                                    Log.d(TAG, "User document updated successfully for user: $userId")
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error updating user document", e)
+                                    // Don't block login flow if Firestore update fails
                                 }
                     } else {
-                        // User doesn't exist, create new document
+                        // User doesn't exist, create new document with all required fields
                         val userData =
                                 hashMapOf(
+                                        // Core identity fields
                                         "uid" to userId,
                                         "email" to email,
                                         "displayName" to displayName,
                                         "photoUrl" to profileImageUrl,
                                         "profileImageUrl" to profileImageUrl,
                                         "authProvider" to "email",
+                                        
+                                        // Timestamps
                                         "createdAt" to com.google.firebase.Timestamp.now(),
                                         "lastActive" to com.google.firebase.Timestamp.now(),
+                                        
+                                        // Status fields
                                         "isOnline" to true,
                                         "fcmToken" to "",
+                                        
+                                        // AI features
                                         "aiPromptsUsed" to 0,
-                                        "aiPromptsLimit" to 10
+                                        "aiPromptsLimit" to 10,
+                                        
+                                        // Additional profile fields
+                                        "bio" to "",
+                                        "phoneNumber" to "",
+                                        
+                                        // Preferences
+                                        "notificationsEnabled" to true,
+                                        "emailNotifications" to true,
+                                        
+                                        // Statistics
+                                        "tasksCompleted" to 0,
+                                        "groupsJoined" to 0
                                 )
 
                         userRef.set(userData)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document created successfully")
+                                    Log.d(TAG, "User document created successfully with all required fields for user: $userId")
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error creating user document", e)
+                                    // Don't block login flow if Firestore creation fails
                                 }
                     }
                 }
-                .addOnFailureListener { e -> Log.e(TAG, "Error checking user document", e) }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Error checking user document existence", e)
+                    // Don't block login flow if Firestore check fails
+                }
     }
 
-    private fun saveFcmTokenAfterLogin() {
+    private fun saveFcmTokenAfterLogin(onComplete: ((Boolean) -> Unit)? = null) {
         loginScope.launch {
-            val result = notificationRepository.saveFcmToken()
-            if (result.isSuccess) {
-                Log.d(TAG, "FCM token saved successfully after login")
-            } else {
-                Log.w(
-                        TAG,
-                        "Failed to save FCM token after login: ${result.exceptionOrNull()?.message}"
-                )
+            try {
+                val result = notificationRepository.saveFcmToken()
+                if (result.isSuccess) {
+                    Log.d(TAG, "FCM token saved successfully after login: ${result.getOrNull()}")
+                    onComplete?.invoke(true)
+                } else {
+                    Log.w(
+                            TAG,
+                            "Failed to save FCM token after login: ${result.exceptionOrNull()?.message}"
+                    )
+                    // Don't block login flow if FCM token save fails
+                    onComplete?.invoke(false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception while saving FCM token", e)
+                // Don't block login flow if FCM token save fails
+                onComplete?.invoke(false)
             }
         }
     }

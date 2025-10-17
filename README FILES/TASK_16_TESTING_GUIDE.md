@@ -1,369 +1,451 @@
-# Task 16: Document Message Sending - Testing Guide
-
-## Prerequisites
-
-Before testing, ensure:
-- ✅ App is built and installed on device/emulator
-- ✅ User is logged in
-- ✅ At least one chat exists (group or direct)
-- ✅ Device has some document files available
-- ✅ Internet connection is available
-- ✅ Firebase Storage is properly configured
-
-## Test Scenarios
-
-### 1. Basic Document Sending
-
-**Steps:**
-1. Open the app and navigate to Chat tab
-2. Open any existing chat
-3. Tap the attachment button (📎)
-4. Select "Documents" option
-5. Choose a PDF file from device storage
-6. Observe the progress dialog
-
-**Expected Results:**
-- ✅ Attachment bottom sheet appears with three options
-- ✅ Document picker opens with file browser
-- ✅ Progress dialog shows "Uploading Document"
-- ✅ Progress updates from 0% to 100%
-- ✅ Dialog dismisses automatically
-- ✅ Document appears in chat with PDF icon
-- ✅ File name is displayed correctly
-- ✅ File size is shown (e.g., "2.5 MB")
-- ✅ Success toast appears
-- ✅ Chat list shows "📄 filename.pdf" as last message
-
-### 2. Different File Types
-
-**Test each file type:**
-
-#### PDF Files
-- Select a PDF document
-- Verify icon shows save/document icon
-- Verify file displays correctly
-
-#### Word Documents (.doc, .docx)
-- Select a Word document
-- Verify icon shows edit icon
-- Verify file displays correctly
-
-#### Excel Spreadsheets (.xls, .xlsx)
-- Select an Excel file
-- Verify icon shows sort/table icon
-- Verify file displays correctly
-
-#### PowerPoint Presentations (.ppt, .pptx)
-- Select a PowerPoint file
-- Verify icon shows slideshow icon
-- Verify file displays correctly
-
-#### Text Files (.txt)
-- Select a text file
-- Verify icon shows edit icon
-- Verify file displays correctly
-
-#### ZIP Archives (.zip)
-- Select a ZIP file
-- Verify icon shows upload/archive icon
-- Verify file displays correctly
-
-**Expected Results:**
-- ✅ Each file type displays with appropriate icon
-- ✅ All files upload successfully
-- ✅ File names and sizes are correct
-- ✅ Messages appear in correct order
-
-### 3. Large File Upload
-
-**Steps:**
-1. Open a chat
-2. Tap attachment button
-3. Select a document close to 10MB
-4. Observe upload progress
-
-**Expected Results:**
-- ✅ Progress dialog shows and updates smoothly
-- ✅ Upload completes successfully
-- ✅ File appears in chat
-- ✅ File size shows correctly (e.g., "9.8 MB")
-
-### 4. File Size Limit Exceeded
-
-**Steps:**
-1. Open a chat
-2. Tap attachment button
-3. Try to select a document larger than 10MB
-4. Observe the result
-
-**Expected Results:**
-- ✅ Error message appears: "Document size exceeds maximum allowed size"
-- ✅ Upload is prevented
-- ✅ No message is created
-- ✅ User can try again with smaller file
-
-### 5. Long File Names
-
-**Steps:**
-1. Create or find a file with a very long name (50+ characters)
-2. Send it in a chat
-3. Observe how it displays
-
-**Expected Results:**
-- ✅ File name is truncated with ellipsis (...)
-- ✅ Full name is still stored in database
-- ✅ Layout doesn't break
-- ✅ File size is still visible
-
-### 6. Multiple Documents in Sequence
-
-**Steps:**
-1. Open a chat
-2. Send 3 different documents one after another
-3. Wait for each to complete before sending next
-
-**Expected Results:**
-- ✅ All three documents upload successfully
-- ✅ They appear in correct chronological order
-- ✅ Each has correct icon, name, and size
-- ✅ No messages are lost or duplicated
-
-### 7. Document + Text Message
-
-**Steps:**
-1. Open a chat
-2. Send a document
-3. Immediately send a text message
-4. Send another document
-
-**Expected Results:**
-- ✅ Document appears first
-- ✅ Text message appears second
-- ✅ Second document appears third
-- ✅ All messages are properly separated
-- ✅ Timestamps are correct
-
-### 8. Receiving Documents
-
-**Steps:**
-1. Have another user send you a document
-2. Observe how it appears in your chat
-
-**Expected Results:**
-- ✅ Document appears on left side (received)
-- ✅ Sender's avatar/initials are shown
-- ✅ Sender's name is shown (if first in group)
-- ✅ Document icon, name, and size are displayed
-- ✅ Timestamp is shown
-- ✅ Real-time update (no refresh needed)
-
-### 9. Offline Document Sending
-
-**Steps:**
-1. Open a chat
-2. Turn on airplane mode
-3. Try to send a document
-4. Observe the behavior
-5. Turn off airplane mode
-
-**Expected Results:**
-- ✅ Document is queued for sending
-- ✅ Message shows "SENDING" status
-- ✅ Toast shows offline message
-- ✅ When online, document uploads automatically
-- ✅ Status changes to "SENT"
-- ✅ Recipient receives the document
-
-### 10. Upload Failure Handling
-
-**Steps:**
-1. Open a chat
-2. Start uploading a large document
-3. Turn on airplane mode during upload
-4. Observe the error handling
-
-**Expected Results:**
-- ✅ Progress dialog shows error
-- ✅ Error toast appears with message
-- ✅ Message shows "FAILED" status
-- ✅ User can tap to retry
-- ✅ Retry dialog appears with options
-
-### 11. Progress Indicator Accuracy
-
-**Steps:**
-1. Open a chat
-2. Send a medium-sized document (2-5 MB)
-3. Watch the progress dialog closely
-
-**Expected Results:**
-- ✅ Progress starts at 0%
-- ✅ Progress updates smoothly (not jumping)
-- ✅ Progress reaches 100% before dismissing
-- ✅ Dialog doesn't freeze or hang
-- ✅ Percentage is accurate
-
-### 12. Chat List Update
-
-**Steps:**
-1. Send a document in a chat
-2. Go back to chat list
-3. Observe the last message preview
-
-**Expected Results:**
-- ✅ Chat shows "📄 filename.pdf" as last message
-- ✅ Timestamp is updated
-- ✅ Chat moves to top of list
-- ✅ Unread count doesn't increase for sender
-
-### 13. Notification Trigger
-
-**Steps:**
-1. Send a document to another user
-2. Check if they receive a notification (if they're not in the chat)
-
-**Expected Results:**
-- ✅ Recipient receives push notification
-- ✅ Notification shows "📄 filename.pdf"
-- ✅ Tapping notification opens the chat
-- ✅ Document is visible in chat
-
-### 14. Special Characters in File Name
-
-**Steps:**
-1. Create or find a file with special characters (e.g., "Report #1 (Final).pdf")
-2. Send it in a chat
-3. Observe how it displays
-
-**Expected Results:**
-- ✅ File name displays correctly with special characters
-- ✅ Upload succeeds
-- ✅ No encoding issues
-- ✅ File can be identified correctly
-
-### 15. Rapid Document Sending
-
-**Steps:**
-1. Open a chat
-2. Quickly send 5 documents without waiting for uploads to complete
-3. Observe the behavior
-
-**Expected Results:**
-- ✅ All documents are queued
-- ✅ Progress dialogs appear for each
-- ✅ All uploads complete successfully
-- ✅ Documents appear in correct order
-- ✅ No crashes or freezes
-
-## Performance Testing
-
-### Upload Speed Test
-1. Send a 5MB document
-2. Measure time from selection to completion
-3. Expected: < 30 seconds on good connection
-
-### UI Responsiveness Test
-1. Send a document
-2. Try to scroll messages during upload
-3. Expected: UI remains responsive, no lag
-
-### Memory Usage Test
-1. Send 10 documents in a row
-2. Monitor app memory usage
-3. Expected: No memory leaks, stable memory usage
-
-## Edge Cases
-
-### Empty File
-- Try to send a 0-byte file
-- Expected: Should upload but show "0 B" size
-
-### File Without Extension
-- Send a file without extension
-- Expected: Shows default icon, uploads successfully
-
-### Very Small File
-- Send a 1KB text file
-- Expected: Shows "1 KB", uploads instantly
-
-### Duplicate File Names
-- Send same file twice
-- Expected: Both upload with unique storage paths
-
-## Regression Testing
-
-Ensure existing features still work:
-- ✅ Text messages send correctly
-- ✅ Image messages send correctly
-- ✅ Typing indicators work
-- ✅ Read receipts work
-- ✅ Message pagination works
-- ✅ Offline message queue works
-
-## Device Compatibility
-
-Test on:
-- ✅ Android 13+ (with new storage permissions)
-- ✅ Android 10-12 (with legacy permissions)
-- ✅ Android 7-9 (minimum supported)
-- ✅ Different screen sizes
-- ✅ Different manufacturers (Samsung, Google, etc.)
-
-## Known Issues to Watch For
-
-1. **Permission Denied**: If document picker doesn't open, check storage permissions
-2. **Upload Timeout**: Very large files on slow connections may timeout
-3. **File Not Found**: If file is deleted before upload completes
-4. **Storage Full**: If device storage is full
-
-## Troubleshooting
-
-### Document Picker Doesn't Open
-- Check if app has storage permissions
-- Try restarting the app
-- Check if file manager app is installed
-
-### Upload Fails Immediately
-- Check internet connection
-- Verify Firebase Storage is configured
-- Check Firebase console for errors
-- Verify Storage security rules allow uploads
-
-### Progress Stuck at 0%
-- Check network connection
-- Verify file exists and is accessible
-- Check Firebase Storage quota
-
-### Document Doesn't Appear
-- Check Firestore console for message document
-- Verify chat ID is correct
-- Check for JavaScript errors in Firebase console
-
-## Success Criteria
-
-Task 16 is considered successful if:
-- ✅ All basic document sending scenarios work
-- ✅ All file types are supported and display correctly
-- ✅ Progress indicator works accurately
-- ✅ Error handling is robust
-- ✅ Offline queuing works
-- ✅ UI is responsive during uploads
-- ✅ No crashes or memory leaks
-- ✅ Documents appear for both sender and recipient
-- ✅ Chat list updates correctly
-- ✅ Notifications are triggered
-
-## Reporting Issues
-
-If you find any issues during testing:
-1. Note the exact steps to reproduce
-2. Capture screenshots or screen recording
-3. Check logcat for error messages
-4. Note device model and Android version
-5. Report with all details
-
-## Next Steps
-
-After successful testing of Task 16:
-- Proceed to Task 17: Image viewer and document download
-- This will add the ability to view images full-screen and download/open documents
+# Task 16: Gemini API Configuration - Testing Guide
+
+## 🧪 Test Overview
+
+This guide covers testing the Gemini API configuration to ensure proper setup and connectivity.
+
+## 📋 Pre-Test Checklist
+
+- [ ] API key obtained from https://makersuite.google.com/app/apikey
+- [ ] API key added to `local.properties`
+- [ ] Gradle project synced
+- [ ] No build errors
+
+## 🔬 Automated Tests
+
+### Test Suite: GeminiAPIConnectivityTest
+
+Location: `app/src/test/java/com/example/loginandregistration/GeminiAPIConnectivityTest.kt`
+
+### Test 1: API Key Configuration ✅
+
+**Purpose**: Verify API key is properly configured
+
+**Command**:
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest."test API key is configured"
+```
+
+**Expected Result**:
+```
+✅ PASSED
+- API key is not null
+- API key is not the placeholder value
+- API key is not empty
+```
+
+**What It Tests**:
+- BuildConfig.GEMINI_API_KEY exists
+- Value is not "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+- Value is not empty string
+
+**Troubleshooting**:
+```
+❌ FAILED: "API key should be configured in local.properties"
+→ Solution: Add GEMINI_API_KEY to local.properties
+→ Sync Gradle and rebuild
+```
+
+---
+
+### Test 2: API Connectivity ✅
+
+**Purpose**: Verify API can be reached and responds
+
+**Command**:
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest."test API connectivity with simple request"
+```
+
+**Expected Result**:
+```
+✅ PASSED
+✅ API connectivity test passed
+📝 Response: [AI response text]
+```
+
+**What It Tests**:
+- HTTP request succeeds
+- Response is received
+- Response contains valid content
+- JSON parsing works
+
+**Troubleshooting**:
+```
+⚠️ Skipping API connectivity test - API key not configured
+→ Solution: Configure API key in local.properties
+
+❌ FAILED: "API call failed: 401 Unauthorized"
+→ Solution: Check API key is correct and enabled
+
+❌ FAILED: "API call failed: 429 Too Many Requests"
+→ Solution: Rate limit exceeded, wait and retry
+```
+
+---
+
+### Test 3: Error Handling ✅
+
+**Purpose**: Verify graceful handling of invalid API keys
+
+**Command**:
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest."test error handling with invalid API key"
+```
+
+**Expected Result**:
+```
+✅ PASSED
+✅ Error handling test passed
+📝 Expected error: [Error message]
+```
+
+**What It Tests**:
+- Invalid API key is rejected
+- Error is caught and handled
+- Error message is informative
+- App doesn't crash
+
+**Expected Behavior**:
+- API call fails (as expected)
+- Result.isFailure returns true
+- Error message is not null
+
+---
+
+### Test 4: Response Parsing ✅
+
+**Purpose**: Verify API responses are parsed correctly
+
+**Command**:
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest."test API response parsing"
+```
+
+**Expected Result**:
+```
+✅ PASSED
+✅ API response parsing test passed
+📝 Response: [Parsed assignment data]
+```
+
+**What It Tests**:
+- Complex prompts are handled
+- JSON responses are parsed
+- Assignment data is extracted
+- Content structure is valid
+
+---
+
+### Test 5: Conversation History ✅
+
+**Purpose**: Verify multi-turn conversations work
+
+**Command**:
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest."test conversation history handling"
+```
+
+**Expected Result**:
+```
+✅ PASSED
+✅ Conversation history test passed
+📝 Response: [Context-aware response]
+```
+
+**What It Tests**:
+- Conversation context is preserved
+- Follow-up messages work
+- History is properly formatted
+- Context influences responses
+
+---
+
+## 🎯 Running All Tests
+
+### Run Complete Test Suite
+```bash
+./gradlew test --tests GeminiAPIConnectivityTest
+```
+
+### Expected Output
+```
+GeminiAPIConnectivityTest > test API key is configured PASSED
+GeminiAPIConnectivityTest > test API connectivity with simple request PASSED
+GeminiAPIConnectivityTest > test error handling with invalid API key PASSED
+GeminiAPIConnectivityTest > test API response parsing PASSED
+GeminiAPIConnectivityTest > test conversation history handling PASSED
+
+BUILD SUCCESSFUL in 15s
+5 tests completed, 5 passed
+```
+
+---
+
+## 🧪 Manual Testing
+
+### Test 1: Verify BuildConfig Access
+
+**Steps**:
+1. Open `GeminiAssistantService.kt`
+2. Add temporary log:
+   ```kotlin
+   Log.d("GeminiAPI", "API Key configured: ${BuildConfig.GEMINI_API_KEY.take(10)}...")
+   ```
+3. Run the app
+4. Check Logcat for the log message
+
+**Expected**: Log shows first 10 characters of API key
+
+---
+
+### Test 2: Test in AI Assistant UI
+
+**Steps**:
+1. Run the app
+2. Navigate to AI Assistant
+3. Send message: "Hello, can you help me?"
+4. Wait for response
+
+**Expected**:
+- Loading indicator appears
+- Response received within 5 seconds
+- Response is relevant to message
+- No error messages
+
+**Troubleshooting**:
+```
+❌ "API Error: Invalid API key"
+→ Check API key in local.properties
+
+❌ "Network Error"
+→ Check internet connection
+→ Verify API endpoint is accessible
+
+❌ "Timeout"
+→ Check network speed
+→ Retry the request
+```
+
+---
+
+### Test 3: Test Assignment Creation
+
+**Steps**:
+1. Open AI Assistant
+2. Send message:
+   ```
+   Create an assignment:
+   - Title: Math Homework
+   - Subject: Mathematics
+   - Due: Tomorrow
+   - Description: Complete chapter 5
+   ```
+3. Wait for response
+4. Check if task is created
+
+**Expected**:
+- AI acknowledges request
+- Task is created in database
+- Task appears in tasks list
+- All fields are populated
+
+---
+
+## 📊 Test Results Interpretation
+
+### All Tests Pass ✅
+```
+Status: Configuration is correct
+Action: Proceed to next task
+```
+
+### Some Tests Fail ⚠️
+```
+Status: Partial configuration
+Action: Review failed tests
+Action: Fix issues and retest
+```
+
+### All Tests Fail ❌
+```
+Status: Configuration incomplete
+Action: Review setup steps
+Action: Check API key
+Action: Sync Gradle
+```
+
+---
+
+## 🔍 Debugging Tests
+
+### Enable Verbose Logging
+
+Add to test:
+```kotlin
+@Before
+fun setup() {
+    // Enable OkHttp logging
+    val logging = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+    }
+    
+    val client = OkHttpClient.Builder()
+        .addInterceptor(logging)
+        .build()
+}
+```
+
+### Check API Request/Response
+
+Add logging in `GeminiAssistantService.kt`:
+```kotlin
+private suspend fun callGeminiAPI(prompt: String): AIResponse {
+    Log.d("GeminiAPI", "Request: $prompt")
+    val response = client.newCall(request).execute()
+    val body = response.body?.string()
+    Log.d("GeminiAPI", "Response: $body")
+    return parseGeminiResponse(body)
+}
+```
+
+---
+
+## 🐛 Common Test Failures
+
+### Failure: "API key should be configured"
+```
+Cause: API key not set or still placeholder
+Fix: 
+1. Open local.properties
+2. Set GEMINI_API_KEY=your_actual_key
+3. Sync Gradle
+4. Rerun tests
+```
+
+### Failure: "API call failed: 401"
+```
+Cause: Invalid or expired API key
+Fix:
+1. Verify API key in Google Cloud Console
+2. Generate new API key if needed
+3. Update local.properties
+4. Rerun tests
+```
+
+### Failure: "API call failed: 429"
+```
+Cause: Rate limit exceeded
+Fix:
+1. Wait 1-2 minutes
+2. Rerun tests
+3. Consider implementing rate limiting
+```
+
+### Failure: "Connection timeout"
+```
+Cause: Network issues or slow connection
+Fix:
+1. Check internet connection
+2. Increase timeout in OkHttpClient
+3. Retry the test
+```
+
+---
+
+## 📈 Performance Benchmarks
+
+### Expected Response Times
+
+| Test | Expected Time | Acceptable Range |
+|------|---------------|------------------|
+| API Key Check | < 1ms | Instant |
+| Simple Request | 2-5s | 1-10s |
+| Error Handling | < 1s | Instant |
+| Response Parsing | 2-5s | 1-10s |
+| Conversation | 3-7s | 2-15s |
+
+### If Tests Are Slow
+- Check network speed
+- Verify API endpoint latency
+- Consider caching responses
+- Implement request timeouts
+
+---
+
+## ✅ Test Completion Checklist
+
+- [ ] All 5 automated tests pass
+- [ ] BuildConfig access verified
+- [ ] Manual UI test successful
+- [ ] Assignment creation works
+- [ ] Error handling verified
+- [ ] Response times acceptable
+- [ ] No memory leaks detected
+- [ ] Logs show correct behavior
+
+---
+
+## 🎯 Success Criteria
+
+### Configuration Complete When:
+1. ✅ All automated tests pass
+2. ✅ API key is properly configured
+3. ✅ API connectivity verified
+4. ✅ Error handling works
+5. ✅ Response parsing successful
+6. ✅ Manual tests pass
+7. ✅ No security issues
+8. ✅ Documentation complete
+
+---
+
+## 📝 Test Report Template
+
+```markdown
+# Gemini API Configuration Test Report
+
+**Date**: [Date]
+**Tester**: [Name]
+**Environment**: [Debug/Release]
+
+## Automated Tests
+- [ ] API Key Configuration: PASS/FAIL
+- [ ] API Connectivity: PASS/FAIL
+- [ ] Error Handling: PASS/FAIL
+- [ ] Response Parsing: PASS/FAIL
+- [ ] Conversation History: PASS/FAIL
+
+## Manual Tests
+- [ ] BuildConfig Access: PASS/FAIL
+- [ ] UI Integration: PASS/FAIL
+- [ ] Assignment Creation: PASS/FAIL
+
+## Issues Found
+[List any issues]
+
+## Notes
+[Additional observations]
+
+## Status
+[COMPLETE / NEEDS WORK]
+```
+
+---
+
+## 🚀 Next Steps After Testing
+
+1. ✅ All tests pass → Mark task complete
+2. ⚠️ Some tests fail → Fix issues and retest
+3. ❌ All tests fail → Review configuration
+4. 📝 Document any issues found
+5. 🎯 Proceed to Task 17
+
+---
+
+## 📚 Additional Resources
+
+- [Gemini API Documentation](https://ai.google.dev/docs)
+- [OkHttp Testing Guide](https://square.github.io/okhttp/)
+- [Gson Documentation](https://github.com/google/gson)
+- [Android Testing Guide](https://developer.android.com/training/testing)

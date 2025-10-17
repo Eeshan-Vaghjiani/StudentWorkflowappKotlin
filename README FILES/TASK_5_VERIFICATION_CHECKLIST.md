@@ -1,257 +1,227 @@
-# Task 5 Verification Checklist
+# Task 5: Profile Picture Upload - Verification Checklist
+
+## Quick Verification Guide
+
+Use this checklist to verify that Task 5 (Profile Picture Upload) is working correctly.
 
 ## Pre-Testing Setup
-- [ ] Ensure Firebase project is configured
-- [ ] Ensure user is logged in
-- [ ] Ensure Firestore has some test tasks with various categories
-- [ ] Ensure some tasks have due dates for calendar testing
 
-## TaskRepository Verification
+- [ ] App is built and installed on device/emulator
+- [ ] User is logged in with Google account
+- [ ] Internet connection is available
+- [ ] Camera permission can be granted (for camera test)
+- [ ] Gallery has at least one image (for gallery test)
 
-### getUserTasks(category) Method
-- [ ] Method exists and returns Flow<List<FirebaseTask>>
-- [ ] Accepts optional category parameter
-- [ ] Filters by category when specified
-- [ ] Returns all tasks when category is "all" or null
-- [ ] Uses real-time Firestore listener (addSnapshotListener)
-- [ ] Properly handles authentication (checks for current user)
-- [ ] Orders tasks by dueDate ascending
+## Functional Tests
 
-### getTasksForDate(date) Method
-- [ ] Method exists and returns Flow<List<FirebaseTask>>
-- [ ] Accepts LocalDate parameter
-- [ ] Filters tasks by date range (start to end of day)
-- [ ] Uses real-time Firestore listener
-- [ ] Properly handles authentication
-- [ ] Returns empty list when no tasks for date
+### 1. Gallery Upload Flow
+- [ ] Navigate to Profile tab
+- [ ] Tap the camera FAB button on profile picture
+- [ ] Bottom sheet appears with three options
+- [ ] Tap "Choose from Gallery"
+- [ ] System gallery picker opens
+- [ ] Select an image
+- [ ] Progress bar appears showing upload percentage
+- [ ] Status text shows "Uploading... X%"
+- [ ] Upload completes successfully
+- [ ] New profile picture displays in circular frame
+- [ ] Success toast message appears
+- [ ] Profile picture persists after app restart
 
-### getDatesWithTasks() Method
-- [ ] Method exists and returns Flow<Set<LocalDate>>
-- [ ] Returns set of all dates that have tasks
-- [ ] Uses real-time Firestore listener
-- [ ] Properly handles authentication
-- [ ] Converts Timestamp to LocalDate correctly
+### 2. Camera Upload Flow
+- [ ] Navigate to Profile tab
+- [ ] Tap the camera FAB button
+- [ ] Bottom sheet appears
+- [ ] Tap "Take Photo"
+- [ ] Camera permission dialog appears (if first time)
+- [ ] Grant camera permission
+- [ ] Camera app launches
+- [ ] Take a photo
+- [ ] Confirm/accept the photo
+- [ ] Progress bar appears
+- [ ] Upload completes successfully
+- [ ] New profile picture displays
+- [ ] Success toast message appears
 
-## TasksFragment Verification
+### 3. Cancel Flow
+- [ ] Tap camera FAB button
+- [ ] Bottom sheet appears
+- [ ] Tap "Cancel"
+- [ ] Bottom sheet dismisses
+- [ ] No upload occurs
+- [ ] Profile picture remains unchanged
 
-### Real-time Updates
-- [ ] Fragment uses getUserTasks(category) with Flow collection
-- [ ] Uses collectWithLifecycle for proper lifecycle management
-- [ ] Tasks update automatically when Firestore data changes
-- [ ] No manual refresh needed (though pull-to-refresh works)
+### 4. Permission Denied Flow
+- [ ] Deny camera permission when prompted
+- [ ] Toast message appears: "Camera permission is required to take photos"
+- [ ] No crash occurs
+- [ ] Can still use gallery option
 
-### Category Filtering
-- [ ] "All Tasks" button shows all tasks
-- [ ] "Personal" button shows only personal category tasks
-- [ ] "Group" button shows only group category tasks
-- [ ] "Assignments" button shows only assignment category tasks
-- [ ] Filter updates trigger new Flow collection
+### 5. Error Handling
+- [ ] Turn off internet connection
+- [ ] Try to upload a profile picture
+- [ ] Error toast appears with appropriate message
+- [ ] Progress indicators hide
+- [ ] FAB button re-enables
+- [ ] App remains stable
 
-### Empty State
-- [ ] Empty state view exists in layout (empty_state_layout)
-- [ ] Empty state shows when no tasks match filter
-- [ ] Empty state text changes based on current filter
-- [ ] Empty state hides when tasks are present
-- [ ] RecyclerView hides when empty state is shown
+## UI Verification
 
-### Demo Data Removal
-- [ ] getDummyTasks() method is completely removed
-- [ ] No hardcoded task data in fragment
-- [ ] All tasks come from Firestore
+### Profile Fragment Layout
+- [ ] Profile picture displays in circular frame with border
+- [ ] Camera FAB button positioned at bottom-right of picture
+- [ ] Progress bar hidden by default
+- [ ] Status text hidden by default
+- [ ] User name displays below picture
+- [ ] Email displays correctly
+- [ ] User ID displays correctly
+- [ ] Logout button present and functional
 
-### UI Updates
-- [ ] Task stats (overdue, due today, completed) update in real-time
-- [ ] Task list updates in real-time
-- [ ] Pull-to-refresh works correctly
-- [ ] Loading indicator shows during refresh
+### Bottom Sheet
+- [ ] Title: "Change Profile Picture"
+- [ ] Three buttons with icons:
+  - [ ] Take Photo (camera icon)
+  - [ ] Choose from Gallery (gallery icon)
+  - [ ] Cancel
+- [ ] Buttons are properly styled
+- [ ] Bottom sheet dismisses after selection
 
-## CalendarViewModel Verification
+### Progress Indicators
+- [ ] Progress bar appears during upload
+- [ ] Progress bar shows actual progress (0-100%)
+- [ ] Status text shows percentage
+- [ ] Both hide after upload completes
+- [ ] FAB button disables during upload
+- [ ] FAB button re-enables after upload
 
-### Real-time Listeners
-- [ ] setupRealTimeListeners() method exists
-- [ ] Collects from getUserTasks(null) Flow
-- [ ] Collects from getDatesWithTasks() Flow
-- [ ] Runs in viewModelScope
-- [ ] Updates _allTasks StateFlow
-- [ ] Updates _datesWithTasks StateFlow
+## Backend Verification
 
-### Filter Support
-- [ ] ALL filter shows all tasks
-- [ ] MY_TASKS filter shows only user's tasks (userId matches)
-- [ ] GROUP_TASKS filter shows only tasks with groupId
-- [ ] Filter changes update tasksForSelectedDate
+### Firebase Storage
+- [ ] Open Firebase Console → Storage
+- [ ] Navigate to `profile_images/{userId}/`
+- [ ] Uploaded image file exists
+- [ ] File name format: `{timestamp}.jpg`
+- [ ] File size is reasonable (< 500KB)
+- [ ] Metadata includes:
+  - [ ] contentType: "image/jpeg"
+  - [ ] uploadedBy: user's UID
+  - [ ] uploadedAt: timestamp
 
-### Date Selection
-- [ ] selectDate() updates selected date
-- [ ] Updates tasksForSelectedDate based on selected date
-- [ ] Tasks filtered by both date and current filter
+### Firestore
+- [ ] Open Firebase Console → Firestore
+- [ ] Navigate to `users/{userId}` document
+- [ ] `photoUrl` field contains Firebase Storage URL
+- [ ] URL format: `https://firebasestorage.googleapis.com/...`
+- [ ] URL is accessible (can open in browser)
 
-## CalendarFragment Verification
+## Code Quality Checks
 
-### Calendar Display
-- [ ] Calendar view displays correctly
-- [ ] Month/year header shows current month
-- [ ] Previous/next month buttons work
-- [ ] Swipe gestures work for month navigation
+- [x] No compiler errors
+- [x] No diagnostic warnings
+- [x] Proper error handling implemented
+- [x] Memory leaks prevented (ViewBinding cleanup)
+- [x] Coroutines properly scoped
+- [x] Permissions declared in manifest
+- [x] FileProvider configured correctly
 
-### Dot Indicators
-- [ ] Dots appear on dates that have tasks
-- [ ] Dots update when tasks are added/removed
-- [ ] Dots respect current filter (All/My/Group)
-- [ ] No dots on dates without tasks
+## Performance Checks
 
-### Task List for Selected Date
-- [ ] Selecting a date shows tasks for that date
-- [ ] Task list updates when date changes
-- [ ] Task list respects current filter
-- [ ] Task list shows correct task details
-
-### Empty State
-- [ ] Empty state shows when no tasks for selected date
-- [ ] Empty state message is appropriate
-- [ ] Empty state hides when tasks are present
-- [ ] RecyclerView hides when empty state is shown
-
-### Filter Chips
-- [ ] "All Tasks" chip shows all tasks
-- [ ] "My Tasks" chip shows only user's tasks
-- [ ] "Group Tasks" chip shows only group tasks
-- [ ] Filter changes update both dots and task list
-
-## Integration Testing
-
-### Real-time Updates
-- [ ] Create a new task → appears immediately in Tasks screen
-- [ ] Create a new task → dot appears on calendar date
-- [ ] Update task due date → calendar updates immediately
-- [ ] Delete a task → disappears from Tasks screen
-- [ ] Delete a task → dot removed from calendar if no other tasks
-- [ ] Complete a task → status updates in real-time
-
-### Cross-Screen Consistency
-- [ ] Task created in Tasks screen appears in Calendar
-- [ ] Task updated in one screen reflects in other
-- [ ] Filter changes work independently in each screen
-- [ ] Navigation between screens maintains data consistency
-
-### Category Filtering
-- [ ] Create personal task → appears in "Personal" filter
-- [ ] Create group task → appears in "Group" filter
-- [ ] Create assignment → appears in "Assignments" filter
-- [ ] All tasks appear in "All Tasks" filter
-
-### Multi-User Testing (if possible)
-- [ ] User A creates task → User B sees it (if in same group)
-- [ ] User A updates task → User B sees update
-- [ ] User A deletes task → User B sees deletion
+- [ ] Image compression works (file size < 500KB)
+- [ ] Upload completes in reasonable time (< 10 seconds on good connection)
+- [ ] No UI freezing during upload
+- [ ] Progress updates smoothly
+- [ ] No memory leaks after multiple uploads
 
 ## Edge Cases
 
-### No Data Scenarios
-- [ ] New user with no tasks sees empty state
-- [ ] Filtering to category with no tasks shows empty state
-- [ ] Selecting date with no tasks shows empty state
-- [ ] Empty state messages are user-friendly
+### Large Images
+- [ ] Select a very large image (> 5MB original)
+- [ ] Image is compressed before upload
+- [ ] Upload succeeds
+- [ ] Final file size is reasonable
 
-### Network Scenarios
-- [ ] Offline mode shows cached data
-- [ ] Coming back online syncs changes
-- [ ] Network errors handled gracefully
-- [ ] No crashes on network issues
+### Multiple Uploads
+- [ ] Upload a profile picture
+- [ ] Immediately upload another one
+- [ ] Second upload replaces first
+- [ ] Old image remains in Storage (not deleted)
+- [ ] Firestore URL updates to new image
 
-### Date/Time Scenarios
-- [ ] Tasks with past due dates appear correctly
-- [ ] Tasks with future due dates appear correctly
-- [ ] Tasks with today's date appear correctly
-- [ ] Tasks without due dates don't appear in calendar
+### Rotation/Orientation
+- [ ] Upload image in portrait mode
+- [ ] Rotate device to landscape
+- [ ] Profile picture still displays correctly
+- [ ] Upload another image in landscape
+- [ ] Both orientations work correctly
 
-### Authentication Scenarios
-- [ ] Only user's own tasks are shown
-- [ ] Logging out clears task data
-- [ ] Logging in loads correct user's tasks
-- [ ] No data leakage between users
+### App Lifecycle
+- [ ] Start upload
+- [ ] Press home button (app goes to background)
+- [ ] Return to app
+- [ ] Upload continues or shows appropriate state
+- [ ] No crash occurs
 
-## Performance Testing
+## Accessibility
 
-### Load Time
-- [ ] Tasks screen loads quickly (< 2 seconds)
-- [ ] Calendar screen loads quickly (< 2 seconds)
-- [ ] Filter changes are instant
-- [ ] Date selection is instant
+- [ ] Camera FAB has content description
+- [ ] Profile picture ImageView has content description
+- [ ] Bottom sheet buttons have proper labels
+- [ ] Screen reader can navigate all elements
 
-### Memory
-- [ ] No memory leaks when navigating away
-- [ ] Listeners properly cleaned up on Fragment destroy
-- [ ] No excessive memory usage with many tasks
+## Common Issues & Solutions
 
-### Battery
-- [ ] Real-time listeners don't drain battery excessively
-- [ ] Listeners pause when app is in background
-- [ ] Listeners resume when app comes to foreground
+### Issue: Camera doesn't launch
+**Solution:** Check camera permission in app settings
 
-## UI/UX Testing
+### Issue: Gallery picker doesn't open
+**Solution:** Check storage permission in app settings (Android 12 and below)
 
-### Visual Consistency
-- [ ] Empty state icons display correctly (📋, 📅)
-- [ ] Task cards display correctly
-- [ ] Calendar dots are visible and clear
-- [ ] Loading indicators show during operations
+### Issue: Upload fails with permission error
+**Solution:** Check Firebase Storage security rules are deployed
 
-### User Feedback
-- [ ] Toast messages show for filter changes
-- [ ] Pull-to-refresh provides visual feedback
-- [ ] Loading states are clear
-- [ ] Error messages are user-friendly
+### Issue: Image doesn't display after upload
+**Solution:** 
+1. Check internet connection
+2. Verify URL in Firestore is valid
+3. Check Coil dependency is included
 
-### Accessibility
-- [ ] Content descriptions present on buttons
-- [ ] Text is readable (size, contrast)
-- [ ] Touch targets are adequate size
-- [ ] Screen reader compatible
+### Issue: Progress bar doesn't show
+**Solution:** Check layout XML has progress_upload and tv_upload_status views
 
-## Code Quality
+## Test Results Template
 
-### Architecture
-- [ ] Follows MVVM pattern
-- [ ] Repository pattern used correctly
-- [ ] Proper separation of concerns
-- [ ] No business logic in UI layer
+```
+Date: ___________
+Tester: ___________
+Device: ___________
+Android Version: ___________
 
-### Best Practices
-- [ ] Uses Kotlin Flow for reactive data
-- [ ] Lifecycle-aware components
-- [ ] Proper error handling
-- [ ] No hardcoded strings (uses resources)
+Gallery Upload: [ ] PASS [ ] FAIL
+Camera Upload: [ ] PASS [ ] FAIL
+Cancel Flow: [ ] PASS [ ] FAIL
+Permission Denied: [ ] PASS [ ] FAIL
+Error Handling: [ ] PASS [ ] FAIL
+UI Display: [ ] PASS [ ] FAIL
+Backend Storage: [ ] PASS [ ] FAIL
+Backend Firestore: [ ] PASS [ ] FAIL
 
-### Code Cleanliness
-- [ ] No unused imports
-- [ ] No unused variables
-- [ ] Proper naming conventions
-- [ ] Comments where needed
+Notes:
+_________________________________
+_________________________________
+_________________________________
+```
 
-## Documentation
+## Success Criteria
 
-- [ ] Implementation summary document created
-- [ ] Verification checklist created
-- [ ] Code changes documented
-- [ ] Requirements mapped to implementation
+Task 5 is considered successfully verified when:
+- ✅ All functional tests pass
+- ✅ UI displays correctly
+- ✅ Backend data is stored properly
+- ✅ No crashes or errors occur
+- ✅ Performance is acceptable
+- ✅ Edge cases are handled gracefully
 
-## Final Verification
+## Next Task
 
-- [ ] All sub-tasks completed
-- [ ] No compilation errors
-- [ ] No runtime crashes
-- [ ] All requirements satisfied (5.1 - 5.7)
-- [ ] Ready for user testing
-
-## Sign-off
-
-- [ ] Developer testing complete
-- [ ] Code review complete (if applicable)
-- [ ] Ready to mark task as complete
-- [ ] Ready to proceed to next task
-
----
-
-## Notes
-Use this checklist to systematically verify all aspects of Task 5 implementation. Check off items as you verify them. Any issues found should be documented and fixed before marking the task as complete.
+After verification is complete, proceed to:
+**Task 6: Update ChatRoomActivity to support file attachments**

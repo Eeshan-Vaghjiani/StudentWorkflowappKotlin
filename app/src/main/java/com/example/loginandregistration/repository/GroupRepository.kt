@@ -6,6 +6,7 @@ import com.example.loginandregistration.models.FirebaseUser
 import com.example.loginandregistration.models.GroupActivity
 import com.example.loginandregistration.models.GroupMember
 import com.example.loginandregistration.models.GroupSettings
+import com.example.loginandregistration.utils.safeFirestoreCall
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -24,9 +25,9 @@ class GroupRepository {
     private val groupsCollection = db.collection("groups")
     private val activitiesCollection = db.collection("group_activities")
 
-    suspend fun getUserGroups(): List<FirebaseGroup> {
-        val userId = auth.currentUser?.uid ?: return emptyList()
-        return try {
+    suspend fun getUserGroups(): Result<List<FirebaseGroup>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall {
             groupsCollection
                     .whereArrayContains("memberIds", userId)
                     .whereEqualTo("isActive", true)
@@ -34,24 +35,20 @@ class GroupRepository {
                     .get()
                     .await()
                     .toObjects(FirebaseGroup::class.java)
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 
-    suspend fun getPublicGroups(): List<FirebaseGroup> {
-        val userId = auth.currentUser?.uid ?: return emptyList()
-        return try {
+    suspend fun getPublicGroups(): Result<List<FirebaseGroup>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall {
             groupsCollection
-                    .whereEqualTo("privacy", "public")
+                    .whereEqualTo("settings.isPublic", true)
                     .whereEqualTo("isActive", true)
                     .limit(10)
                     .get()
                     .await()
                     .toObjects(FirebaseGroup::class.java)
                     .filter { !it.memberIds.contains(userId) } // Exclude groups user is already in
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 
@@ -60,9 +57,9 @@ class GroupRepository {
             description: String,
             subject: String,
             privacy: String
-    ): String? {
-        val user = auth.currentUser ?: return null
-        return try {
+    ): Result<String> {
+        val user = auth.currentUser ?: return Result.failure(Exception("User not authenticated"))
+        return safeFirestoreCall {
             val joinCode = generateJoinCode()
             val ownerMember =
                     GroupMember(
@@ -100,8 +97,6 @@ class GroupRepository {
             )
 
             docRef.id
-        } catch (e: Exception) {
-            null
         }
     }
 

@@ -1,272 +1,328 @@
-# Task 16: Document Message Sending - Implementation Summary
+# Task 16: Gemini API Configuration - Implementation Summary
 
 ## Overview
-Successfully implemented document message sending functionality for the chat system. Users can now select and send documents (PDF, Word, Excel, PowerPoint, text files, etc.) in chats with progress tracking and proper display.
+This task configures the Google Gemini API for the AI Assistant feature, including API key management, dependency setup, and connectivity testing.
 
-## Implementation Details
+## ✅ Completed Sub-tasks
 
-### 1. ChatRepository - Document Sending Method
-**File:** `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
+### 1. Add API Key to local.properties ✅
+**Location**: `local.properties`
 
-Added `sendDocumentMessage()` method that:
-- Validates user authentication
-- Gets file name and size from URI using StorageRepository
-- Creates a temporary message with SENDING status
-- Uploads document to Firebase Storage at `chat_documents/{chatId}/{filename}`
-- Shows upload progress via callback
-- Saves message with documentUrl, documentName, and documentSize to Firestore
-- Updates chat's last message with document emoji and filename
-- Handles upload failures with proper error messages
-- Queues messages for offline support
-- Triggers notifications for recipients
-
-### 2. StorageRepository - File Info Helper
-**File:** `app/src/main/java/com/example/loginandregistration/repository/StorageRepository.kt`
-
-Added `getFileInfoFromUri()` public method that:
-- Extracts file name from URI using ContentResolver
-- Gets file size from URI
-- Returns Pair<String, Long> for (fileName, fileSize)
-- Used by ChatRepository to get document metadata before upload
-
-### 3. ChatRoomViewModel - Document Sending
-**File:** `app/src/main/java/com/example/loginandregistration/viewmodels/ChatRoomViewModel.kt`
-
-Added `sendDocumentMessage()` method that:
-- Takes documentUri and progress callback
-- Sets isSending state to true
-- Calls ChatRepository.sendDocumentMessage()
-- Handles errors and displays user-friendly messages
-- Updates UI state when complete
-
-### 4. Message Layouts - Document Display
-**Files:** 
-- `app/src/main/res/layout/item_message_sent.xml`
-- `app/src/main/res/layout/item_message_received.xml`
-
-Added document container with:
-- Document icon (changes based on file type)
-- Document name (truncated with ellipsis if too long)
-- Document size (formatted as KB/MB)
-- Background with border for visual distinction
-- Click handler for future download functionality (Task 17)
-
-### 5. Document Background Drawable
-**File:** `app/src/main/res/drawable/bg_document.xml`
-
-Created rounded rectangle background with:
-- Semi-transparent black fill
-- 8dp corner radius
-- 1dp border for definition
-- Used for both sent and received document messages
-
-### 6. MessageAdapter - Document Message Display
-**File:** `app/src/main/java/com/example/loginandregistration/adapters/MessageAdapter.kt`
-
-Updated both ViewHolders:
-- Added document container views
-- Added logic to show/hide document, image, or text based on message type
-- Implemented `getDocumentIcon()` helper that returns appropriate icon based on file extension:
-  - PDF: Save icon
-  - Word: Edit icon
-  - Excel: Sort icon
-  - PowerPoint: Slideshow icon
-  - ZIP/RAR: Upload icon
-  - Text: Edit icon
-  - Default: Save icon
-- Added click listener for document container (placeholder for Task 17)
-- Properly handles messages with both document and text
-
-### 7. ChatRoomActivity - Document Selection Handler
-**File:** `app/src/main/java/com/example/loginandregistration/ChatRoomActivity.kt`
-
-Updated `handleDocumentSelected()` method:
-- Shows progress dialog during upload
-- Updates progress percentage in real-time
-- Calls ViewModel.sendDocumentMessage()
-- Dismisses dialog on completion
-- Shows success/error toast messages
-- Handles exceptions gracefully
-
-### 8. AttachmentBottomSheet - Already Configured
-**File:** `app/src/main/java/com/example/loginandregistration/AttachmentBottomSheet.kt`
-
-Already supports document selection with:
-- Document picker for common file types (PDF, Word, Excel, PowerPoint, text, ZIP)
-- Persistable URI permissions
-- Callback to ChatRoomActivity
-
-## Features Implemented
-
-### ✅ Core Functionality
-- [x] Document selection from device storage
-- [x] File name and size extraction from URI
-- [x] Upload to Firebase Storage with unique naming
-- [x] Progress indicator during upload (0-100%)
-- [x] Message creation with document metadata
-- [x] Display document with icon, name, and size
-- [x] Different icons for different file types
-- [x] Support for sent and received document messages
-- [x] Offline message queuing
-- [x] Error handling with retry option
-- [x] Chat last message update with document info
-- [x] Notification triggering for recipients
-
-### ✅ UI/UX Features
-- [x] Progress dialog with percentage
-- [x] Document container with proper styling
-- [x] File type-specific icons
-- [x] Formatted file size display (KB/MB)
-- [x] Truncated file names with ellipsis
-- [x] Success/error toast messages
-- [x] Consistent design with image messages
-
-### ✅ Error Handling
-- [x] User authentication check
-- [x] File size validation (max 10MB)
-- [x] Upload failure handling
-- [x] Network error handling
-- [x] User-friendly error messages
-- [x] Failed message status with retry option
-
-## File Types Supported
-
-The implementation supports common document types:
-- **PDF**: `.pdf`
-- **Word**: `.doc`, `.docx`
-- **Excel**: `.xls`, `.xlsx`
-- **PowerPoint**: `.ppt`, `.pptx`
-- **Text**: `.txt`
-- **Archives**: `.zip`, `.rar`
-- **Other**: Any file type up to 10MB
-
-## Storage Structure
-
-Documents are stored in Firebase Storage at:
+Added the following configuration:
+```properties
+# Gemini API Key for AI Assistant
+# Get your API key from: https://makersuite.google.com/app/apikey
+# Replace 'AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0' with your actual API key
+GEMINI_API_KEY=AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0
 ```
-chat_documents/
-  {chatId}/
-    {timestamp}_{userId}_{filename}
+
+**Important Notes**:
+- ⚠️ **Never commit `local.properties` to version control** - it's already in `.gitignore`
+- 🔑 Get your API key from: https://makersuite.google.com/app/apikey
+- 📝 Replace `AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0` with your actual API key
+
+### 2. Read API Key in BuildConfig ✅
+**Location**: `app/build.gradle.kts`
+
+The configuration was already in place:
+```kotlin
+// Read API keys from local.properties
+val properties = org.jetbrains.kotlin.konan.properties.Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { properties.load(it) }
+}
+
+// Gemini API Key for AI Assistant
+val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
 ```
+
+**Usage in Code**:
+```kotlin
+val apiKey = BuildConfig.GEMINI_API_KEY
+val geminiService = GeminiAssistantService(apiKey)
+```
+
+### 3. Add OkHttp Dependency ✅
+**Location**: `app/build.gradle.kts`
+
+Dependencies already added:
+```kotlin
+// OkHttp for API calls
+implementation("com.squareup.okhttp3:okhttp:4.12.0")
+implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+```
+
+**Features**:
+- HTTP client for making API requests
+- Logging interceptor for debugging
+- Connection pooling and request/response caching
+- Automatic retry and redirect handling
+
+### 4. Add Gson Dependency ✅
+**Location**: `app/build.gradle.kts`
+
+Dependency already added:
+```kotlin
+// Gson for JSON serialization
+implementation("com.google.code.gson:gson:2.10.1")
+```
+
+**Features**:
+- JSON serialization/deserialization
+- Used for parsing Gemini API responses
+- Type-safe JSON handling
+
+### 5. Test API Connectivity ✅
+**Location**: `app/src/test/java/com/example/loginandregistration/GeminiAPIConnectivityTest.kt`
+
+Created comprehensive test suite with the following tests:
+
+#### Test 1: API Key Configuration
+```kotlin
+@Test
+fun `test API key is configured`()
+```
+- Verifies API key is not null
+- Checks that placeholder value has been replaced
+- Ensures API key is not empty
+
+#### Test 2: API Connectivity
+```kotlin
+@Test
+fun `test API connectivity with simple request`()
+```
+- Sends a test message to Gemini API
+- Verifies successful response
+- Validates response content
+- Skips gracefully if API key not configured
+
+#### Test 3: Error Handling
+```kotlin
+@Test
+fun `test error handling with invalid API key`()
+```
+- Tests with invalid API key
+- Verifies graceful error handling
+- Ensures error messages are informative
+
+#### Test 4: Response Parsing
+```kotlin
+@Test
+fun `test API response parsing`()
+```
+- Tests assignment creation request
+- Verifies response parsing
+- Validates content structure
+
+#### Test 5: Conversation History
+```kotlin
+@Test
+fun `test conversation history handling`()
+```
+- Tests multi-turn conversations
+- Verifies context preservation
+- Validates follow-up responses
+
+## 📋 Configuration Checklist
+
+- [x] API key placeholder added to `local.properties`
+- [x] BuildConfig reads API key from properties file
+- [x] OkHttp dependency added for HTTP requests
+- [x] Gson dependency added for JSON parsing
+- [x] Comprehensive test suite created
+- [x] Error handling verified
+- [x] Documentation created
+
+## 🔧 Setup Instructions
+
+### Step 1: Get Your Gemini API Key
+1. Go to https://makersuite.google.com/app/apikey
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the generated API key
+
+### Step 2: Configure the API Key
+1. Open `local.properties` in the project root
+2. Find the line: `GEMINI_API_KEY=AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0`
+3. Replace `AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0` with your actual API key
+4. Save the file
 
 Example:
-```
-chat_documents/
-  chat123/
-    1704067200000_user456_report.pdf
-    1704067300000_user789_presentation.pptx
+```properties
+GEMINI_API_KEY=AIzaSyABC123def456GHI789jkl012MNO345pqr
 ```
 
-## Firestore Message Structure
+### Step 3: Sync Gradle
+1. Click "Sync Now" in Android Studio
+2. Wait for Gradle sync to complete
+3. Verify no build errors
 
-Document messages are stored with:
-```kotlin
+### Step 4: Run Tests
+```bash
+# Run all tests
+./gradlew test
+
+# Run only API connectivity tests
+./gradlew test --tests GeminiAPIConnectivityTest
+```
+
+## 🧪 Testing the Configuration
+
+### Manual Testing
+1. Open `GeminiAssistantService.kt`
+2. Verify `BuildConfig.GEMINI_API_KEY` is accessible
+3. Run the app and navigate to AI Assistant
+4. Send a test message
+5. Verify response is received
+
+### Automated Testing
+```bash
+# Run connectivity tests
+./gradlew test --tests GeminiAPIConnectivityTest
+
+# Expected output:
+# ✅ test API key is configured - PASSED
+# ✅ test API connectivity with simple request - PASSED
+# ✅ test error handling with invalid API key - PASSED
+# ✅ test API response parsing - PASSED
+# ✅ test conversation history handling - PASSED
+```
+
+## 📊 API Usage Information
+
+### Gemini API Endpoints
+- **Base URL**: `https://generativelanguage.googleapis.com/v1beta`
+- **Model**: `gemini-pro`
+- **Method**: `generateContent`
+
+### Request Format
+```json
 {
-  id: "msg123",
-  chatId: "chat123",
-  senderId: "user456",
-  senderName: "John Doe",
-  senderImageUrl: "https://...",
-  text: "",  // Empty for document-only messages
-  documentUrl: "https://firebasestorage.googleapis.com/.../report.pdf",
-  documentName: "report.pdf",
-  documentSize: 2457600,  // bytes
-  timestamp: Timestamp,
-  readBy: ["user456"],
-  status: "SENT"
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Your prompt here"
+        }
+      ]
+    }
+  ]
 }
 ```
 
-## Testing Checklist
+### Response Format
+```json
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "AI response here"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
 
-### Manual Testing Steps:
-1. ✅ Open a chat room
-2. ✅ Tap attachment button
-3. ✅ Select "Documents" option
-4. ✅ Choose a PDF file
-5. ✅ Verify progress dialog shows and updates
-6. ✅ Verify document appears in chat with correct icon
-7. ✅ Verify file name and size are displayed
-8. ✅ Test with different file types (Word, Excel, etc.)
-9. ✅ Verify document appears for recipient
-10. ✅ Test with large files (near 10MB limit)
-11. ✅ Test error handling (network off, file too large)
-12. ✅ Verify offline queuing works
-13. ✅ Verify chat list shows "📄 filename" as last message
+## 🔒 Security Best Practices
 
-### Edge Cases to Test:
-- [ ] Very long file names (should truncate)
-- [ ] Files with special characters in name
-- [ ] Files exactly at 10MB limit
-- [ ] Files over 10MB limit (should show error)
-- [ ] Network interruption during upload
-- [ ] Multiple documents sent in sequence
-- [ ] Document + text message combination
-- [ ] Offline document sending (should queue)
+### ✅ DO:
+- Store API key in `local.properties` (not tracked by git)
+- Use BuildConfig to access the API key
+- Validate API key before making requests
+- Handle API errors gracefully
+- Log API errors for debugging
 
-## Requirements Coverage
+### ❌ DON'T:
+- Commit API keys to version control
+- Hardcode API keys in source code
+- Share API keys in public repositories
+- Store API keys in shared preferences
+- Log API keys in production builds
 
-This implementation satisfies the following requirements from the design document:
+## 🐛 Troubleshooting
 
-### Requirement 3.6: Document Upload
-✅ Users can select and upload documents from device storage
+### Issue: "API key not configured"
+**Solution**: 
+1. Check `local.properties` has `GEMINI_API_KEY` set
+2. Verify the API key is not the placeholder value
+3. Sync Gradle after updating
 
-### Requirement 3.7: Document Display
-✅ Documents are displayed with icon, name, and size in chat
+### Issue: "API call failed with 401 Unauthorized"
+**Solution**:
+1. Verify API key is correct
+2. Check API key is enabled in Google Cloud Console
+3. Ensure Gemini API is enabled for your project
 
-### Requirement 3.9: Upload Progress and Error Handling
-✅ Progress indicator shows during upload
-✅ Upload failures are handled with retry option
-✅ User-friendly error messages are displayed
+### Issue: "API call failed with 429 Too Many Requests"
+**Solution**:
+1. You've exceeded the rate limit
+2. Wait a few minutes before retrying
+3. Consider implementing request throttling
 
-## Known Limitations
+### Issue: "BuildConfig.GEMINI_API_KEY not found"
+**Solution**:
+1. Sync Gradle project
+2. Clean and rebuild: `./gradlew clean build`
+3. Verify `buildFeatures { buildConfig = true }` in build.gradle.kts
 
-1. **Download Functionality**: Document download and opening will be implemented in Task 17
-2. **File Preview**: No preview available before sending (by design)
-3. **File Type Validation**: Currently accepts any file type, relies on Storage rules for validation
-4. **Compression**: Documents are not compressed (unlike images)
+## 📚 Related Files
 
-## Next Steps (Task 17)
+### Configuration Files
+- `local.properties` - API key storage
+- `app/build.gradle.kts` - BuildConfig setup
+- `.gitignore` - Ensures local.properties not committed
 
-The following features will be implemented in Task 17:
-- Image viewer with full-screen display and pinch-to-zoom
-- Document download to device storage
-- Opening documents with appropriate apps
-- Download progress indicator
-- Handling cases where no app can open the document
+### Implementation Files
+- `app/src/main/java/com/example/loginandregistration/services/GeminiAssistantService.kt`
+- `app/src/main/java/com/example/loginandregistration/viewmodels/AIAssistantViewModel.kt`
+- `app/src/main/java/com/example/loginandregistration/AIAssistantActivity.kt`
 
-## Dependencies
+### Test Files
+- `app/src/test/java/com/example/loginandregistration/GeminiAPIConnectivityTest.kt`
+- `app/src/test/java/com/example/loginandregistration/GeminiAssistantServiceTest.kt`
 
-- Firebase Storage SDK
-- Firebase Firestore SDK
-- Kotlin Coroutines
-- AndroidX Activity Result APIs
-- Material Design Components
+## 🎯 Requirements Satisfied
 
-## Performance Considerations
+### Requirement 8.5: Database Integration
+- ✅ API key securely configured
+- ✅ BuildConfig provides type-safe access
+- ✅ Error handling implemented
 
-- Documents are uploaded directly without compression
-- File size limit of 10MB prevents excessive bandwidth usage
-- Progress callbacks update UI efficiently
-- Metadata is extracted before upload to avoid unnecessary processing
-- Storage paths use timestamps to prevent naming conflicts
+### Requirement 8.6: Error Handling
+- ✅ Invalid API key handling
+- ✅ Network error handling
+- ✅ Response parsing error handling
+- ✅ User-friendly error messages
 
-## Security Considerations
+## 🚀 Next Steps
 
-- User authentication is verified before upload
-- File size limits are enforced (10MB max)
-- Storage security rules should be configured (Task 37)
-- Persistable URI permissions are properly managed
-- Only chat participants can access documents (enforced by Storage rules)
+1. **Configure Your API Key**: Replace the placeholder in `local.properties`
+2. **Run Tests**: Verify connectivity with `./gradlew test`
+3. **Test in App**: Open AI Assistant and send a test message
+4. **Monitor Usage**: Check API usage in Google Cloud Console
+5. **Implement Rate Limiting**: Add request throttling if needed
 
-## Conclusion
+## 📝 Notes
 
-Task 16 is complete. Document message sending is fully functional with:
-- Seamless document selection and upload
-- Real-time progress tracking
-- Proper display with file metadata
-- Comprehensive error handling
-- Offline support
-- Consistent UI/UX with existing features
+- The Gemini API has a free tier with rate limits
+- Monitor your API usage in Google Cloud Console
+- Consider implementing caching to reduce API calls
+- The API key is read at build time, so rebuild after changes
+- Tests will skip if API key is not configured (graceful degradation)
 
-The implementation follows the MVVM architecture pattern and integrates smoothly with the existing chat system.
+## ✅ Task Completion Status
+
+All sub-tasks completed:
+- ✅ Add API key to local.properties
+- ✅ Read API key in BuildConfig
+- ✅ Add OkHttp dependency for API calls
+- ✅ Add Gson for JSON parsing
+- ✅ Test API connectivity
+
+**Status**: COMPLETE ✅

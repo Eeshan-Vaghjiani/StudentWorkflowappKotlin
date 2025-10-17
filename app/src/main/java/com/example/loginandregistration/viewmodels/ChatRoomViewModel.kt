@@ -220,9 +220,14 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             try {
-                chatRepository.updateTypingStatus(chatId, isTyping)
+                val result = chatRepository.setTypingStatus(chatId, isTyping)
+                if (result.isFailure) {
+                    // Log but don't show error to user - typing indicators are not critical
+                    Log.w(TAG, "Failed to update typing status: ${result.exceptionOrNull()?.message}")
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating typing status", e)
+                // Log but don't show error to user - typing indicators are not critical
+                Log.w(TAG, "Error updating typing status", e)
             }
         }
     }

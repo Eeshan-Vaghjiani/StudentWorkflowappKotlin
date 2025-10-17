@@ -107,7 +107,7 @@ class GoogleSignInHelper(private val activity: Activity) {
     }
 
     /**
-     * Create or update user document in Firestore
+     * Create or update user document in Firestore with all required fields
      * @param userId Firebase user ID
      * @param email User email
      * @param displayName User display name
@@ -130,8 +130,6 @@ class GoogleSignInHelper(private val activity: Activity) {
         // First check if user exists
         userRef.get()
                 .addOnSuccessListener { document ->
-                    val currentTime = System.currentTimeMillis()
-
                     if (document.exists()) {
                         // User exists, update only necessary fields
                         val updates =
@@ -140,50 +138,70 @@ class GoogleSignInHelper(private val activity: Activity) {
                                         "photoUrl" to profileImageUrl,
                                         "profileImageUrl" to profileImageUrl,
                                         "lastActive" to com.google.firebase.Timestamp.now(),
-                                        "isOnline" to true
+                                        "isOnline" to true,
+                                        "authProvider" to authProvider
                                 )
 
                         userRef.update(updates)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document updated successfully")
+                                    Log.d(TAG, "User document updated successfully for user: $userId")
                                     onSuccess()
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error updating user document", e)
-                                    onFailure(e.message ?: "Failed to update user")
+                                    onFailure(e.message ?: "Failed to update user profile")
                                 }
                     } else {
-                        // User doesn't exist, create new document
+                        // User doesn't exist, create new document with all required fields
                         val userData =
                                 hashMapOf(
+                                        // Core identity fields
                                         "uid" to userId,
                                         "email" to email,
                                         "displayName" to displayName,
                                         "photoUrl" to profileImageUrl,
                                         "profileImageUrl" to profileImageUrl,
                                         "authProvider" to authProvider,
+                                        
+                                        // Timestamps
                                         "createdAt" to com.google.firebase.Timestamp.now(),
                                         "lastActive" to com.google.firebase.Timestamp.now(),
+                                        
+                                        // Status fields
                                         "isOnline" to true,
                                         "fcmToken" to "",
+                                        
+                                        // AI features
                                         "aiPromptsUsed" to 0,
-                                        "aiPromptsLimit" to 10
+                                        "aiPromptsLimit" to 10,
+                                        
+                                        // Additional profile fields
+                                        "bio" to "",
+                                        "phoneNumber" to "",
+                                        
+                                        // Preferences
+                                        "notificationsEnabled" to true,
+                                        "emailNotifications" to true,
+                                        
+                                        // Statistics
+                                        "tasksCompleted" to 0,
+                                        "groupsJoined" to 0
                                 )
 
                         userRef.set(userData)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document created successfully")
+                                    Log.d(TAG, "User document created successfully with all required fields for user: $userId")
                                     onSuccess()
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error creating user document", e)
-                                    onFailure(e.message ?: "Failed to create user")
+                                    onFailure(e.message ?: "Failed to create user profile")
                                 }
                     }
                 }
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Error checking user document", e)
-                    onFailure(e.message ?: "Failed to check user")
+                    Log.e(TAG, "Error checking user document existence", e)
+                    onFailure(e.message ?: "Failed to verify user profile")
                 }
     }
 
