@@ -1,139 +1,322 @@
-# Task 2: Build Chat List Screen - Verification Checklist
+# Task 2: Google Sign-In Integration - Verification Checklist
 
-## ✅ Implementation Checklist
+## Pre-Testing Setup
 
-### Layout Files
-- [x] `fragment_chat.xml` - Main layout with all required components
-  - [x] Search bar (EditText in MaterialCardView)
-  - [x] Tab layout (All, Groups, Direct)
-  - [x] SwipeRefreshLayout
-  - [x] RecyclerView for chat list
-  - [x] Empty state layout
-  - [x] Floating Action Button
+### Firebase Console Configuration
+- [ ] Navigate to Firebase Console (https://console.firebase.google.com)
+- [ ] Select project: android-logreg
+- [ ] Go to Authentication > Sign-in method
+- [ ] Verify Google provider is enabled
+- [ ] Check OAuth consent screen is configured
 
-- [x] `item_chat.xml` - Chat list item layout
-  - [x] Profile image view
-  - [x] Avatar text view (for initials)
-  - [x] Chat name text view
-  - [x] Last message text view
-  - [x] Timestamp text view
-  - [x] Unread badge text view
+### SHA-1 Fingerprint Configuration
+- [ ] Get debug SHA-1 fingerprint:
+  ```bash
+  cd android
+  ./gradlew signingReport
+  ```
+  Or on Windows:
+  ```cmd
+  gradlew signingReport
+  ```
+- [ ] Copy SHA-1 from output (look for "Variant: debug" section)
+- [ ] Add SHA-1 to Firebase Console:
+  - Project Settings > Your apps > Android app
+  - Click "Add fingerprint"
+  - Paste SHA-1 and save
+- [ ] Download updated `google-services.json`
+- [ ] Replace `app/google-services.json` with new file
 
-- [x] `circle_background.xml` - Drawable for avatars
+### Build and Install
+- [ ] Clean and rebuild project:
+  ```bash
+  ./gradlew clean
+  ./gradlew assembleDebug
+  ```
+- [ ] Install on device/emulator:
+  ```bash
+  ./gradlew installDebug
+  ```
 
-### Kotlin Files
-- [x] `ChatAdapter.kt` - RecyclerView adapter
-  - [x] ViewHolder implementation
-  - [x] Profile image loading with Coil
-  - [x] Avatar generation with initials
-  - [x] Color generation for avatars
-  - [x] Timestamp formatting
-  - [x] Unread badge display
-  - [x] Click listener
-  - [x] DiffUtil callback
+## Functional Testing
 
-- [x] `ChatViewModel.kt` - ViewModel
-  - [x] Flow for all chats
-  - [x] Search query state
-  - [x] Selected tab state
-  - [x] Filtered chats flow
-  - [x] Loading state
-  - [x] Error state
-  - [x] Refresh function
+### Test Case 1: First-Time Google Sign-In
+**Steps:**
+1. Launch app
+2. Navigate to Login screen
+3. Click "Login with Google" button
+4. Select a Google account from picker
+5. Grant permissions if requested
 
-- [x] `ChatFragment.kt` - Fragment implementation
-  - [x] View initialization
-  - [x] RecyclerView setup
-  - [x] Search listener
-  - [x] Tab selection listener
-  - [x] Pull-to-refresh listener
-  - [x] FAB click listener
-  - [x] ViewModel observation
-  - [x] Empty state handling
-  - [x] Chat click handling
+**Expected Results:**
+- [ ] Google account picker appears
+- [ ] Loading indicator shows during authentication
+- [ ] Success toast: "Google Login Successful"
+- [ ] App navigates to dashboard
+- [ ] User document created in Firestore with:
+  - uid
+  - email
+  - displayName
+  - photoUrl/profileImageUrl
+  - authProvider: "google"
+  - createdAt timestamp
+  - isOnline: true
+  - aiPromptsUsed: 0
+  - aiPromptsLimit: 10
 
-- [x] `ChatRepository.kt` - Repository update
-  - [x] getCurrentUserId() method added
+### Test Case 2: Subsequent Google Sign-In
+**Steps:**
+1. Sign out from app
+2. Return to Login screen
+3. Click "Login with Google" button
+4. Select same Google account
 
-## ✅ Feature Verification
+**Expected Results:**
+- [ ] Authentication succeeds
+- [ ] User document updated (not duplicated)
+- [ ] Existing data preserved (aiPromptsUsed, etc.)
+- [ ] lastActive timestamp updated
+- [ ] isOnline set to true
 
-### Core Features
-- [x] Display list of chats from Firestore
-- [x] Show chat name (group or participant name)
-- [x] Show last message preview
-- [x] Show formatted timestamp
-- [x] Show unread count badge
-- [x] Real-time updates using Flow
-- [x] Search functionality
-- [x] Tab filtering (All, Groups, Direct)
-- [x] Pull-to-refresh
-- [x] Click to open chat (placeholder)
-- [x] Empty state display
+### Test Case 3: Auto-Login
+**Steps:**
+1. Sign in with Google
+2. Close app completely
+3. Reopen app
 
-### UI/UX Features
-- [x] Material Design components
-- [x] Profile pictures with Coil
-- [x] Generated avatars with initials
-- [x] Color-coded avatars
-- [x] Intelligent timestamp formatting
-- [x] Unread badges
-- [x] Search icon
-- [x] Floating Action Button
+**Expected Results:**
+- [ ] App automatically navigates to dashboard
+- [ ] No login screen shown
+- [ ] User session restored
 
-### Technical Features
-- [x] MVVM architecture
-- [x] Kotlin Coroutines & Flow
-- [x] ListAdapter with DiffUtil
-- [x] Lifecycle-aware components
-- [x] Type-safe view access
-- [x] Null safety
-- [x] Memory leak prevention
+### Test Case 4: Cancel Sign-In
+**Steps:**
+1. Click "Login with Google" button
+2. Press back button or cancel in account picker
 
-## ✅ Code Quality
-- [x] No compilation errors
-- [x] Follows Kotlin conventions
-- [x] Proper package structure
-- [x] Consistent naming
-- [x] Proper imports
-- [x] Comments where needed
-- [x] Error handling
+**Expected Results:**
+- [ ] Loading indicator disappears
+- [ ] No error toast shown (expected behavior)
+- [ ] User remains on Login screen
+- [ ] Can retry sign-in
 
-## ✅ Requirements Coverage (Requirement 1.1)
-1. [x] WHEN a user opens the chat screen THEN the system SHALL display a list of all group chats and direct message conversations
-2. [x] Real-time updates implemented with Firestore listeners and Flow
-3. [x] Search functionality for filtering chats
-4. [x] Tab filtering for All/Groups/Direct
-5. [x] Pull-to-refresh functionality
-6. [x] Click handling for opening chat rooms
-7. [x] Empty state when no chats exist
+### Test Case 5: Network Error
+**Steps:**
+1. Disable internet connection
+2. Click "Login with Google" button
+3. Try to sign in
 
-## 📝 Sub-tasks Completed
-- [x] Update `ChatFragment.kt` to display list of chats
-- [x] Create `adapters/ChatAdapter.kt` for RecyclerView
-- [x] Show chat name, last message, timestamp, unread count
-- [x] Implement real-time updates using Flow
-- [x] Add search bar for filtering chats
-- [x] Add tabs for "All", "Groups", "Direct Messages"
-- [x] Implement pull-to-refresh
-- [x] Handle click to open chat room
-- [x] Show empty state when no chats exist
+**Expected Results:**
+- [ ] Error message displayed
+- [ ] User-friendly error text
+- [ ] Loading indicator disappears
+- [ ] Can retry when network restored
 
-## 🎯 Testing Status
-- [x] Code compiles without errors
-- [x] All diagnostics pass
-- [x] Ready for manual testing
-- [ ] Manual testing pending (requires running app)
-- [ ] Integration testing pending (requires Task 3)
+### Test Case 6: Multiple Accounts
+**Steps:**
+1. Have multiple Google accounts on device
+2. Click "Login with Google" button
+3. Select different accounts on different attempts
 
-## 📋 Dependencies
-- ✅ Task 1 completed (Chat data models and repository)
-- ⏳ Task 3 pending (Chat room screen for navigation)
-- ⏳ Task 5 pending (User search for FAB)
+**Expected Results:**
+- [ ] Each account creates separate user document
+- [ ] Correct account information stored
+- [ ] No data mixing between accounts
 
-## 🚀 Ready for Next Task
-The implementation is complete and ready for:
-1. Manual testing in the app
-2. Integration with Task 3 (Chat room screen)
-3. Integration with Task 5 (User search dialog)
+### Test Case 7: Profile Picture
+**Steps:**
+1. Sign in with Google account that has profile picture
+2. Navigate to profile/dashboard
 
-All code is production-ready and follows best practices!
+**Expected Results:**
+- [ ] Profile picture URL stored in Firestore
+- [ ] Picture displays in app (if implemented)
+- [ ] URL is accessible and valid
+
+## Code Verification
+
+### GoogleSignInHelper.kt
+- [ ] File exists at correct path
+- [ ] All methods properly documented
+- [ ] Error handling implemented
+- [ ] Logging statements present
+- [ ] No compilation errors
+
+### Login.kt
+- [ ] GoogleSignInHelper imported and initialized
+- [ ] Missing imports added (TextWatcher, Patterns, View, Editable)
+- [ ] authenticateWithFirebase() method implemented
+- [ ] Error handling with specific status codes
+- [ ] createOrUpdateUserInFirestore() checks if user exists
+- [ ] No compilation errors
+
+### Layout
+- [ ] Google Sign-In button visible in activity_login.xml
+- [ ] Button has correct ID: btnGoogleLogin
+- [ ] Google icon displays correctly
+- [ ] Button styling matches mockup
+
+### Dependencies
+- [ ] play-services-auth dependency present in build.gradle.kts
+- [ ] Version 21.2.0 or higher
+- [ ] google-services plugin applied
+
+## Firestore Verification
+
+### User Document Structure
+Check Firestore Console for created user document:
+- [ ] Document ID matches Firebase Auth UID
+- [ ] All required fields present:
+  - uid (String)
+  - email (String)
+  - displayName (String)
+  - photoUrl (String)
+  - profileImageUrl (String)
+  - authProvider (String) = "google"
+  - createdAt (Timestamp)
+  - lastActive (Timestamp)
+  - isOnline (Boolean)
+  - fcmToken (String)
+  - aiPromptsUsed (Number)
+  - aiPromptsLimit (Number)
+
+### Security Rules
+- [ ] Users can read their own document
+- [ ] Users can write their own document
+- [ ] Users cannot access other users' documents
+
+## Error Scenarios
+
+### Test Error Handling
+- [ ] Status code 12501 (cancelled): Appropriate message
+- [ ] Status code 12500 (config error): Support contact message
+- [ ] Network timeout: Retry option available
+- [ ] Invalid credentials: Clear error message
+- [ ] Firestore write failure: Logged but doesn't block auth
+
+## Performance
+
+### Loading Times
+- [ ] Google Sign-In picker appears within 2 seconds
+- [ ] Authentication completes within 5 seconds
+- [ ] Firestore write completes within 3 seconds
+- [ ] Dashboard navigation is smooth
+
+### Memory
+- [ ] No memory leaks after sign-in
+- [ ] Profile pictures loaded efficiently
+- [ ] No excessive object creation
+
+## Logs Verification
+
+### Check Logcat for:
+- [ ] "Google sign-in successful, authenticating with Firebase"
+- [ ] "firebaseAuthWithGoogle: [account_id]"
+- [ ] "signInWithCredential:success - userId: [uid]"
+- [ ] "User document created successfully" OR "User document updated successfully"
+- [ ] No error logs during successful flow
+
+### Error Logs (if applicable):
+- [ ] Clear error messages
+- [ ] Stack traces for debugging
+- [ ] No sensitive information logged
+
+## Integration Testing
+
+### With Other Features
+- [ ] Email login still works
+- [ ] Registration still works
+- [ ] Sign out works for Google accounts
+- [ ] Profile screen displays Google account info
+- [ ] Dashboard shows correct user data
+
+## Regression Testing
+
+### Verify No Breaking Changes
+- [ ] Email/password login unaffected
+- [ ] Registration flow unaffected
+- [ ] Forgot password link still works
+- [ ] Remember me checkbox still works
+- [ ] Form validation still works
+- [ ] Loading overlay still works
+
+## Documentation
+
+- [ ] Implementation summary created
+- [ ] Code comments added
+- [ ] README updated (if applicable)
+- [ ] Known limitations documented
+
+## Sign-Off
+
+### Developer Checklist
+- [ ] All code reviewed
+- [ ] No compilation errors
+- [ ] No lint warnings
+- [ ] Code follows project conventions
+- [ ] Error handling comprehensive
+- [ ] Logging appropriate
+
+### Testing Checklist
+- [ ] All test cases passed
+- [ ] Edge cases tested
+- [ ] Error scenarios tested
+- [ ] Performance acceptable
+- [ ] No regressions found
+
+### Deployment Checklist
+- [ ] SHA-1 configured for release build
+- [ ] OAuth consent screen production-ready
+- [ ] Privacy policy linked (if required)
+- [ ] Terms of service linked (if required)
+- [ ] Google Play Services version compatible
+
+## Common Issues and Solutions
+
+### Issue: "Sign-in failed: 12500"
+**Solution:** 
+- Verify SHA-1 fingerprint is added to Firebase Console
+- Ensure google-services.json is up to date
+- Check package name matches in Firebase and app
+
+### Issue: "Sign-in failed: 10"
+**Solution:**
+- Update Google Play Services on device
+- Clear Google Play Services cache
+- Reinstall app
+
+### Issue: User document not created
+**Solution:**
+- Check Firestore security rules
+- Verify internet connection
+- Check Firestore logs in Firebase Console
+
+### Issue: Profile picture not loading
+**Solution:**
+- Verify photoUrl is stored correctly
+- Check image loading library (Coil) configuration
+- Ensure URL is accessible
+
+## Notes
+
+- Google Sign-In requires Google Play Services
+- Won't work on emulators without Google Play
+- SHA-1 must be configured for each build variant
+- Test on real device for best results
+
+## Status
+
+**Overall Status:** ⬜ Not Started | ⬜ In Progress | ⬜ Complete | ⬜ Failed
+
+**Tested By:** _______________
+**Date:** _______________
+**Build Version:** _______________
+**Device/Emulator:** _______________
+
+## Additional Comments
+
+_Add any observations, issues, or notes here:_
+
+---
+
+**Task 2 Implementation Complete** ✅
