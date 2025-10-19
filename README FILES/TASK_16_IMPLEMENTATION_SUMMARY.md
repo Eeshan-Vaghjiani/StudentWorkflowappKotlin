@@ -12,14 +12,14 @@ Added the following configuration:
 ```properties
 # Gemini API Key for AI Assistant
 # Get your API key from: https://makersuite.google.com/app/apikey
-# Replace 'AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0' with your actual API key
-GEMINI_API_KEY=AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0
+# Replace 'your_gemini_api_key_here' with your actual API key
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 **Important Notes**:
 - ⚠️ **Never commit `local.properties` to version control** - it's already in `.gitignore`
 - 🔑 Get your API key from: https://makersuite.google.com/app/apikey
-- 📝 Replace `AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0` with your actual API key
+- 📝 Replace `your_gemini_api_key_here` with your actual API key
 
 ### 2. Read API Key in BuildConfig ✅
 **Location**: `app/build.gradle.kts`
@@ -34,7 +34,7 @@ if (localPropertiesFile.exists()) {
 }
 
 // Gemini API Key for AI Assistant
-val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "your_gemini_api_key_here"
 buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
 ```
 
@@ -145,8 +145,8 @@ fun `test conversation history handling`()
 
 ### Step 2: Configure the API Key
 1. Open `local.properties` in the project root
-2. Find the line: `GEMINI_API_KEY=AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0`
-3. Replace `AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0` with your actual API key
+2. Find the line: `GEMINI_API_KEY=your_gemini_api_key_here`
+3. Replace `your_gemini_api_key_here` with your actual API key
 4. Save the file
 
 Example:

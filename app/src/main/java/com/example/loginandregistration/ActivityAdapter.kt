@@ -6,13 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 
-class ActivityAdapter(
-        private val activities: List<Activity>,
-        private val onActivityClick: (Activity) -> Unit
-) : RecyclerView.Adapter<ActivityAdapter.ActivityViewHolder>() {
+class ActivityAdapter(private val onActivityClick: (Activity) -> Unit) :
+        ListAdapter<Activity, ActivityAdapter.ActivityViewHolder>(ActivityDiffCallback()) {
 
     class ActivityViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val iconBackground: MaterialCardView =
@@ -29,7 +29,7 @@ class ActivityAdapter(
     }
 
     override fun onBindViewHolder(holder: ActivityViewHolder, position: Int) {
-        val activity = activities[position]
+        val activity = getItem(position)
 
         holder.activityTitle.text = activity.title
         holder.activityDetails.text = activity.details
@@ -48,5 +48,19 @@ class ActivityAdapter(
         holder.itemView.setOnClickListener { onActivityClick(activity) }
     }
 
-    override fun getItemCount(): Int = activities.size
+    override fun onViewRecycled(holder: ActivityViewHolder) {
+        super.onViewRecycled(holder)
+        // Clear click listener to prevent memory leaks
+        holder.itemView.setOnClickListener(null)
+    }
+
+    class ActivityDiffCallback : DiffUtil.ItemCallback<Activity>() {
+        override fun areItemsTheSame(oldItem: Activity, newItem: Activity): Boolean {
+            return oldItem.title == newItem.title && oldItem.details == newItem.details
+        }
+
+        override fun areContentsTheSame(oldItem: Activity, newItem: Activity): Boolean {
+            return oldItem == newItem
+        }
+    }
 }

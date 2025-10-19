@@ -31,7 +31,8 @@ class GeminiAssistantService(
     
     companion object {
         private const val TAG = "GeminiAssistantService"
-        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        private const val MODEL_NAME = "gemini-1.5-flash"
+        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent"
         private const val TIMEOUT_SECONDS = 30L
     }
     
@@ -186,13 +187,14 @@ class GeminiAssistantService(
                         put("temperature", 0.7)
                         put("topK", 40)
                         put("topP", 0.95)
-                        put("maxOutputTokens", 1024)
+                        put("maxOutputTokens", 2048) // Increased for better responses
                     })
                 }
                 
                 val request = Request.Builder()
                     .url("$BASE_URL?key=$apiKey")
                     .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
+                    .addHeader("Content-Type", "application/json")
                     .build()
                 
                 val response = client.newCall(request).execute()
@@ -200,28 +202,60 @@ class GeminiAssistantService(
                 
                 if (!response.isSuccessful) {
                     Log.e(TAG, "API call failed: ${response.code} - $responseBody")
+                    
+                    // Enhanced error handling with user-friendly messages
+                    val errorMessage = when (response.code) {
+                        400 -> "Invalid request. Please try rephrasing your message."
+                        401, 403 -> "AI service authentication failed. Please contact support."
+                        404 -> "AI model not found. The service may be temporarily unavailable."
+                        429 -> "Too many requests. Please wait a moment and try again."
+                        500, 502, 503 -> "AI service is temporarily unavailable. Please try again later."
+                        else -> "Unable to reach AI assistant. Please try again."
+                    }
+                    
                     return@withContext AIResponse(
-                        message = "Sorry, I encountered an error. Please try again.",
+                        message = errorMessage,
                         success = false,
-                        error = "API Error: ${response.code}"
+                        error = "HTTP ${response.code}: ${response.message}"
                     )
                 }
                 
                 if (responseBody == null) {
                     return@withContext AIResponse(
-                        message = "Sorry, I received an empty response.",
+                        message = "AI assistant returned an empty response. Please try again.",
                         success = false,
-                        error = "Empty response"
+                        error = "Empty response body"
                     )
                 }
                 
                 parseGeminiResponse(responseBody)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error calling Gemini API", e)
+            } catch (e: java.net.SocketTimeoutException) {
+                Log.e(TAG, "Request timeout", e)
                 AIResponse(
-                    message = "Sorry, I'm having trouble connecting. Please check your internet connection.",
+                    message = "Request timed out. Please check your internet connection and try again.",
                     success = false,
-                    error = e.message
+                    error = "Timeout: ${e.message}"
+                )
+            } catch (e: java.net.UnknownHostException) {
+                Log.e(TAG, "Network error - no internet connection", e)
+                AIResponse(
+                    message = "No internet connection. Please check your network and try again.",
+                    success = false,
+                    error = "Network error: ${e.message}"
+                )
+            } catch (e: java.io.IOException) {
+                Log.e(TAG, "Network I/O error", e)
+                AIResponse(
+                    message = "Network error occurred. Please check your connection and try again.",
+                    success = false,
+                    error = "I/O error: ${e.message}"
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected error calling Gemini API", e)
+                AIResponse(
+                    message = "An unexpected error occurred. Please try again later.",
+                    success = false,
+                    error = "Unexpected error: ${e.message}"
                 )
             }
         }

@@ -25,10 +25,9 @@ service cloud.firestore {
     // Check if user is a group admin or owner
     function isGroupAdmin(groupId) {
       let group = get(/databases/$(database)/documents/groups/$(groupId)).data;
-      let userMember = group.members.filter(m => m.userId == request.auth.uid)[0];
       return isAuthenticated() && 
         request.auth.uid in group.memberIds &&
-        (userMember.role == 'admin' || userMember.role == 'owner' || group.owner == request.auth.uid);
+        (group.owner == request.auth.uid);
     }
     
     // Check if user is a participant in a chat
@@ -85,17 +84,19 @@ service cloud.firestore {
     // ============================================
     
     match /tasks/{taskId} {
-      // Users can read tasks they created (userId field)
+      // Users can read tasks they created OR are assigned to
       allow read: if isAuthenticated() && 
-        isOwner(resource.data.userId);
+        (isOwner(resource.data.userId) ||
+         (resource.data.assignedTo != null && request.auth.uid in resource.data.assignedTo));
       
       // Any authenticated user can create tasks
       allow create: if isAuthenticated() && 
         request.auth.uid == request.resource.data.userId;
       
-      // Only task creator can update
+      // Task creator or assigned users can update
       allow update: if isAuthenticated() && 
-        isOwner(resource.data.userId);
+        (isOwner(resource.data.userId) ||
+         (resource.data.assignedTo != null && request.auth.uid in resource.data.assignedTo));
       
       // Only task creator can delete
       allow delete: if isAuthenticated() && 
@@ -133,9 +134,11 @@ service cloud.firestore {
         allow create: if isAuthenticated() && 
           request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         
-        // Only message sender can update their own messages (for editing, status updates)
+        // Message sender can update their own messages (for editing)
+        // OR participants can update for read status
         allow update: if isAuthenticated() && 
-          isOwner(resource.data.senderId);
+          (isOwner(resource.data.senderId) ||
+           request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
         
         // Only message sender can delete their own messages
         allow delete: if isAuthenticated() && 

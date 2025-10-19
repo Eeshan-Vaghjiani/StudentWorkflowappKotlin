@@ -43,6 +43,9 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val _currentFilter = MutableStateFlow(TaskFilter.ALL)
     val currentFilter: StateFlow<TaskFilter> = _currentFilter.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         loadTasks()
         setupRealTimeListeners()
@@ -66,6 +69,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     fun loadTasks() {
         viewModelScope.launch {
             _isLoading.value = true
+            _error.value = null
             try {
                 // Initial load - real-time listeners will handle updates
                 taskRepository.getUserTasks(null).collect { tasks ->
@@ -76,6 +80,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 }
             } catch (e: Exception) {
                 // Handle error
+                _error.value = e.message ?: "Failed to load tasks"
                 _allTasks.value = emptyList()
                 _tasks.value = emptyList()
                 _datesWithTasks.value = emptySet()

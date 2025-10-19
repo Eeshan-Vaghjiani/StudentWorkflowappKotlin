@@ -17,6 +17,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.utils.ErrorHandler
+import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.utils.ThemeUtils
 import com.example.loginandregistration.utils.collectWithLifecycle
 import com.example.loginandregistration.viewmodels.TasksViewModel
@@ -64,15 +65,9 @@ class TasksFragment : Fragment() {
         }
 
         private fun setupRecyclerView(view: View) {
-                taskAdapter =
-                        TaskAdapter(emptyList()) { task ->
-                                Toast.makeText(
-                                                context,
-                                                getString(R.string.task_clicked, task.title),
-                                                Toast.LENGTH_SHORT
-                                        )
-                                        .show()
-                        }
+                taskAdapter = TaskAdapter { task ->
+                        Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
+                }
 
                 recyclerTasks.apply {
                         layoutManager = LinearLayoutManager(context)
@@ -85,15 +80,25 @@ class TasksFragment : Fragment() {
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.tasks.collect { firebaseTasks ->
                                 Log.d(TAG, "Received ${firebaseTasks.size} tasks from ViewModel")
-                                
+
                                 // Filter tasks based on current filter
-                                val filteredTasks = when (currentFilter) {
-                                        "personal" -> firebaseTasks.filter { it.category == "personal" }
-                                        "group" -> firebaseTasks.filter { it.category == "group" }
-                                        "assignment" -> firebaseTasks.filter { it.category == "assignment" }
-                                        else -> firebaseTasks
-                                }
-                                
+                                val filteredTasks =
+                                        when (currentFilter) {
+                                                "personal" ->
+                                                        firebaseTasks.filter {
+                                                                it.category == "personal"
+                                                        }
+                                                "group" ->
+                                                        firebaseTasks.filter {
+                                                                it.category == "group"
+                                                        }
+                                                "assignment" ->
+                                                        firebaseTasks.filter {
+                                                                it.category == "assignment"
+                                                        }
+                                                else -> firebaseTasks
+                                        }
+
                                 updateTasksList(filteredTasks)
                                 showEmptyStateIfNeeded(filteredTasks.isEmpty())
                                 swipeRefreshLayout.isRefreshing = false
@@ -127,8 +132,10 @@ class TasksFragment : Fragment() {
                         }
                 }
 
-                // Real-time listener for task statistics (still using repository directly for stats)
-                taskRepository.getTaskStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats ->
+                // Real-time listener for task statistics (still using repository directly for
+                // stats)
+                taskRepository.getTaskStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats
+                        ->
                         Log.d(
                                 TAG,
                                 "Received task stats: overdue=${stats.overdue}, dueToday=${stats.dueToday}, completed=${stats.completed}"
@@ -144,18 +151,35 @@ class TasksFragment : Fragment() {
 
         private fun showError(error: ErrorHandler.AppError) {
                 currentView?.let { view ->
-                        val message = when (error) {
-                                is ErrorHandler.AppError.PermissionError -> 
-                                        "Permission denied: ${error.message}"
-                                is ErrorHandler.AppError.NetworkError -> 
-                                        "Network error: ${error.message}"
-                                is ErrorHandler.AppError.FirestoreError -> 
-                                        "Database error: ${error.message}"
-                                is ErrorHandler.AppError.UnknownError -> 
-                                        "Error: ${error.message}"
-                                else -> "An error occurred"
-                        }
-                        
+                        val message =
+                                when (error) {
+                                        is ErrorHandler.AppError.PermissionError ->
+                                                ErrorMessages.PERMISSION_DENIED
+                                        is ErrorHandler.AppError.NetworkError ->
+                                                ErrorMessages.NETWORK_ERROR
+                                        is ErrorHandler.AppError.FirestoreError -> {
+                                                // Check if this is a FAILED_PRECONDITION error
+                                                // (missing index)
+                                                val exception = error.exception
+                                                if (exception is
+                                                                com.google.firebase.firestore.FirebaseFirestoreException &&
+                                                                exception.code ==
+                                                                        com.google.firebase
+                                                                                .firestore
+                                                                                .FirebaseFirestoreException
+                                                                                .Code
+                                                                                .FAILED_PRECONDITION
+                                                ) {
+                                                        ErrorMessages.INDEX_MISSING
+                                                } else {
+                                                        ErrorMessages.TASK_LOAD_FAILED
+                                                }
+                                        }
+                                        is ErrorHandler.AppError.UnknownError ->
+                                                ErrorMessages.GENERIC_ERROR
+                                        else -> ErrorMessages.UNEXPECTED_ERROR
+                                }
+
                         Snackbar.make(view, message, Snackbar.LENGTH_LONG)
                                 .setAction("Retry") { viewModel.loadUserTasks() }
                                 .show()
@@ -200,15 +224,10 @@ class TasksFragment : Fragment() {
                                 )
                         }
 
-                taskAdapter =
-                        TaskAdapter(displayTasks) { task ->
-                                Toast.makeText(
-                                                context,
-                                                getString(R.string.task_clicked, task.title),
-                                                Toast.LENGTH_SHORT
-                                        )
-                                        .show()
-                        }
+                taskAdapter = TaskAdapter { task ->
+                        Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
+                }
+                taskAdapter.submitList(displayTasks)
                 recyclerTasks.adapter = taskAdapter
         }
 
@@ -278,7 +297,8 @@ class TasksFragment : Fragment() {
                 view.findViewById<MaterialButton>(R.id.btn_personal)?.setOnClickListener {
                         currentFilter = "personal"
                         // Trigger UI update with filtered tasks
-                        val filteredTasks = viewModel.tasks.value.filter { it.category == "personal" }
+                        val filteredTasks =
+                                viewModel.tasks.value.filter { it.category == "personal" }
                         updateTasksList(filteredTasks)
                         showEmptyStateIfNeeded(filteredTasks.isEmpty())
                         Toast.makeText(
@@ -306,7 +326,8 @@ class TasksFragment : Fragment() {
                 view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
                         currentFilter = "assignment"
                         // Trigger UI update with filtered tasks
-                        val filteredTasks = viewModel.tasks.value.filter { it.category == "assignment" }
+                        val filteredTasks =
+                                viewModel.tasks.value.filter { it.category == "assignment" }
                         updateTasksList(filteredTasks)
                         showEmptyStateIfNeeded(filteredTasks.isEmpty())
                         Toast.makeText(
@@ -352,7 +373,11 @@ class TasksFragment : Fragment() {
 
                 view.findViewById<MaterialButton>(R.id.btn_ai_assistant)?.setOnClickListener {
                         // Launch AI Assistant Activity
-                        val intent = android.content.Intent(requireContext(), AIAssistantActivity::class.java)
+                        val intent =
+                                android.content.Intent(
+                                        requireContext(),
+                                        AIAssistantActivity::class.java
+                                )
                         startActivity(intent)
                 }
 
@@ -433,7 +458,8 @@ class TasksFragment : Fragment() {
 
                 val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btn_cancel)
                 val btnCreate = dialogView.findViewById<MaterialButton>(R.id.btn_create_task)
-                val btnCreateWithAI = dialogView.findViewById<MaterialButton>(R.id.btn_create_with_ai)
+                val btnCreateWithAI =
+                        dialogView.findViewById<MaterialButton>(R.id.btn_create_with_ai)
 
                 // Setup group selection visibility
                 chipGroupCategory.setOnCheckedStateChangeListener { _, checkedIds ->
@@ -497,10 +523,11 @@ class TasksFragment : Fragment() {
                 btnCreateWithAI.setOnClickListener {
                         if (!viewModel.isAIServiceAvailable()) {
                                 Toast.makeText(
-                                        context,
-                                        "AI Assistant is not configured. Please add GEMINI_API_KEY to local.properties",
-                                        Toast.LENGTH_LONG
-                                ).show()
+                                                context,
+                                                "AI Assistant is not configured. Please add GEMINI_API_KEY to local.properties",
+                                                Toast.LENGTH_LONG
+                                        )
+                                        .show()
                                 return@setOnClickListener
                         }
 
@@ -561,15 +588,16 @@ class TasksFragment : Fragment() {
                         }
 
                         // Create task using ViewModel
-                        val task = com.example.loginandregistration.models.FirebaseTask(
-                                title = title,
-                                description = description,
-                                subject = subject,
-                                category = category,
-                                status = "pending",
-                                priority = priority,
-                                dueDate = dueDate
-                        )
+                        val task =
+                                com.example.loginandregistration.models.FirebaseTask(
+                                        title = title,
+                                        description = description,
+                                        subject = subject,
+                                        category = category,
+                                        status = "pending",
+                                        priority = priority,
+                                        dueDate = dueDate
+                                )
 
                         viewModel.createTask(task)
                         dialog.dismiss()
@@ -579,33 +607,37 @@ class TasksFragment : Fragment() {
                 dialog.show()
         }
 
-        /**
-         * Show AI prompt dialog for creating tasks with AI assistance
-         */
+        /** Show AI prompt dialog for creating tasks with AI assistance */
         private fun showAIPromptDialog(parentDialog: android.app.AlertDialog) {
-                val aiDialogView = LayoutInflater.from(context).inflate(R.layout.dialog_ai_prompt, null)
-                val aiDialog = android.app.AlertDialog.Builder(requireContext())
-                        .setView(aiDialogView)
-                        .create()
+                val aiDialogView =
+                        LayoutInflater.from(context).inflate(R.layout.dialog_ai_prompt, null)
+                val aiDialog =
+                        android.app.AlertDialog.Builder(requireContext())
+                                .setView(aiDialogView)
+                                .create()
 
-                val etAIPrompt = aiDialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_ai_prompt)
+                val etAIPrompt =
+                        aiDialogView.findViewById<
+                                com.google.android.material.textfield.TextInputEditText>(
+                                R.id.et_ai_prompt
+                        )
                 val btnAICancel = aiDialogView.findViewById<MaterialButton>(R.id.btn_ai_cancel)
                 val btnAICreate = aiDialogView.findViewById<MaterialButton>(R.id.btn_ai_create)
-                val progressBar = aiDialogView.findViewById<android.widget.ProgressBar>(R.id.progress_bar)
+                val progressBar =
+                        aiDialogView.findViewById<android.widget.ProgressBar>(R.id.progress_bar)
 
-                btnAICancel.setOnClickListener { 
-                        aiDialog.dismiss() 
-                }
+                btnAICancel.setOnClickListener { aiDialog.dismiss() }
 
                 btnAICreate.setOnClickListener {
                         val prompt = etAIPrompt.text.toString().trim()
-                        
+
                         if (prompt.isEmpty()) {
                                 Toast.makeText(
-                                        context,
-                                        "Please describe the task you want to create",
-                                        Toast.LENGTH_SHORT
-                                ).show()
+                                                context,
+                                                "Please describe the task you want to create",
+                                                Toast.LENGTH_SHORT
+                                        )
+                                        .show()
                                 return@setOnClickListener
                         }
 
@@ -617,12 +649,12 @@ class TasksFragment : Fragment() {
 
                         // Create task from AI
                         viewModel.createTaskFromAI(prompt)
-                        
+
                         // Observe the result
                         viewLifecycleOwner.lifecycleScope.launch {
                                 // Wait a bit for the operation to complete
                                 kotlinx.coroutines.delay(500)
-                                
+
                                 // Check if loading is done
                                 viewModel.isLoading.collect { isLoading ->
                                         if (!isLoading) {
@@ -630,7 +662,7 @@ class TasksFragment : Fragment() {
                                                 btnAICreate.isEnabled = true
                                                 btnAICancel.isEnabled = true
                                                 etAIPrompt.isEnabled = true
-                                                
+
                                                 // Close both dialogs on success
                                                 if (viewModel.successMessage.value != null) {
                                                         aiDialog.dismiss()

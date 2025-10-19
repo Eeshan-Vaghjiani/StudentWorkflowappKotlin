@@ -14,11 +14,11 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.storage.StorageException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Centralized error handling utility for the app. Provides user-friendly error messages and
@@ -84,6 +84,12 @@ object ErrorHandler {
                     }
                     FirebaseFirestoreException.Code.UNAUTHENTICATED -> {
                         AppError.AuthError("Please sign in to continue.", exception)
+                    }
+                    FirebaseFirestoreException.Code.FAILED_PRECONDITION -> {
+                        AppError.FirestoreError(
+                                "Database is being configured. This may take a few minutes. Please try again shortly.",
+                                exception
+                        )
                     }
                     else -> {
                         AppError.FirestoreError(
@@ -415,8 +421,8 @@ object ErrorHandler {
 }
 
 /**
- * Extension function for safe Firestore operations with automatic error handling.
- * Wraps Firestore calls and converts exceptions to Result types.
+ * Extension function for safe Firestore operations with automatic error handling. Wraps Firestore
+ * calls and converts exceptions to Result types.
  *
  * Usage:
  * ```

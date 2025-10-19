@@ -45,7 +45,7 @@ class AIAssistantActivity : AppCompatActivity() {
         // Get API key from BuildConfig or local.properties
         val apiKey = BuildConfig.GEMINI_API_KEY
 
-        if (apiKey.isEmpty() || apiKey == "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0") {
+        if (apiKey.isEmpty() || apiKey == "your_gemini_api_key_here") {
             Toast.makeText(
                 this,
                 "Please configure Gemini API key in local.properties",

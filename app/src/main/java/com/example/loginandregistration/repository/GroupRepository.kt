@@ -13,11 +13,14 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class GroupRepository {
     private val db = FirebaseFirestore.getInstance()
@@ -25,183 +28,196 @@ class GroupRepository {
     private val groupsCollection = db.collection("groups")
     private val activitiesCollection = db.collection("group_activities")
 
-    suspend fun getUserGroups(): Result<List<FirebaseGroup>> {
-        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
-        return safeFirestoreCall {
-            groupsCollection
-                    .whereArrayContains("memberIds", userId)
-                    .whereEqualTo("isActive", true)
-                    .orderBy("updatedAt", Query.Direction.DESCENDING)
-                    .get()
-                    .await()
-                    .toObjects(FirebaseGroup::class.java)
-        }
-    }
+    suspend fun getUserGroups(): Result<List<FirebaseGroup>> =
+            withContext(Dispatchers.IO) {
+                val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
+                return@withContext safeFirestoreCall {
+                    groupsCollection
+                            .whereArrayContains("memberIds", userId)
+                            .whereEqualTo("isActive", true)
+                            .orderBy("updatedAt", Query.Direction.DESCENDING)
+                            .get()
+                            .await()
+                            .toObjects(FirebaseGroup::class.java)
+                }
+            }
 
-    suspend fun getPublicGroups(): Result<List<FirebaseGroup>> {
-        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
-        return safeFirestoreCall {
-            groupsCollection
-                    .whereEqualTo("settings.isPublic", true)
-                    .whereEqualTo("isActive", true)
-                    .limit(10)
-                    .get()
-                    .await()
-                    .toObjects(FirebaseGroup::class.java)
-                    .filter { !it.memberIds.contains(userId) } // Exclude groups user is already in
-        }
-    }
+    suspend fun getPublicGroups(): Result<List<FirebaseGroup>> =
+            withContext(Dispatchers.IO) {
+                val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
+                return@withContext safeFirestoreCall {
+                    groupsCollection
+                            .whereEqualTo("settings.isPublic", true)
+                            .whereEqualTo("isActive", true)
+                            .limit(10)
+                            .get()
+                            .await()
+                            .toObjects(FirebaseGroup::class.java)
+                            .filter {
+                                !it.memberIds.contains(userId)
+                            } // Exclude groups user is already in
+                }
+            }
 
     suspend fun createGroup(
             name: String,
             description: String,
             subject: String,
             privacy: String
-    ): Result<String> {
-        val user = auth.currentUser ?: return Result.failure(Exception("User not authenticated"))
-        return safeFirestoreCall {
-            val joinCode = generateJoinCode()
-            val ownerMember =
-                    GroupMember(
-                            userId = user.uid,
-                            email = user.email ?: "",
-                            displayName = user.displayName ?: "Unknown",
-                            role = "owner",
-                            joinedAt = Timestamp.now()
+    ): Result<String> =
+            withContext(Dispatchers.IO) {
+                val user =
+                        auth.currentUser
+                                ?: return@withContext Result.failure(
+                                        Exception("User not authenticated")
+                                )
+                return@withContext safeFirestoreCall {
+                    val joinCode = generateJoinCode()
+                    val ownerMember =
+                            GroupMember(
+                                    userId = user.uid,
+                                    email = user.email ?: "",
+                                    displayName = user.displayName ?: "Unknown",
+                                    role = "owner",
+                                    joinedAt = Timestamp.now()
+                            )
+
+                    val group =
+                            FirebaseGroup(
+                                    name = name,
+                                    description = description,
+                                    subject = subject,
+                                    owner = user.uid,
+                                    joinCode = joinCode,
+                                    createdAt = Timestamp.now(),
+                                    updatedAt = Timestamp.now(),
+                                    members = listOf(ownerMember),
+                                    memberIds = listOf(user.uid),
+                                    tasks = emptyList(),
+                                    settings = GroupSettings(isPublic = privacy == "public"),
+                                    isActive = true
+                            )
+
+                    val docRef = groupsCollection.add(group).await()
+
+                    // Add activity for group creation
+                    addGroupActivity(
+                            groupId = docRef.id,
+                            type = "group_created",
+                            title = "Group created",
+                            description = "Group \"$name\" was created"
                     )
 
-            val group =
-                    FirebaseGroup(
-                            name = name,
-                            description = description,
-                            subject = subject,
-                            owner = user.uid,
-                            joinCode = joinCode,
-                            createdAt = Timestamp.now(),
-                            updatedAt = Timestamp.now(),
-                            members = listOf(ownerMember),
-                            memberIds = listOf(user.uid),
-                            tasks = emptyList(),
-                            settings = GroupSettings(isPublic = privacy == "public"),
-                            isActive = true
-                    )
-
-            val docRef = groupsCollection.add(group).await()
-
-            // Add activity for group creation
-            addGroupActivity(
-                    groupId = docRef.id,
-                    type = "group_created",
-                    title = "Group created",
-                    description = "Group \"$name\" was created"
-            )
-
-            docRef.id
-        }
-    }
+                    docRef.id
+                }
+            }
 
     private fun generateJoinCode(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         return (1..6).map { chars[Random.nextInt(chars.length)] }.joinToString("")
     }
 
-    suspend fun joinGroupByCode(code: String): Boolean {
-        val user = auth.currentUser ?: return false
-        return try {
-            val querySnapshot =
-                    groupsCollection
-                            .whereEqualTo("joinCode", code)
-                            .whereEqualTo("isActive", true)
-                            .get()
+    suspend fun joinGroupByCode(code: String): Boolean =
+            withContext(Dispatchers.IO) {
+                val user = auth.currentUser ?: return@withContext false
+                return@withContext try {
+                    val querySnapshot =
+                            groupsCollection
+                                    .whereEqualTo("joinCode", code)
+                                    .whereEqualTo("isActive", true)
+                                    .get()
+                                    .await()
+
+                    if (querySnapshot.isEmpty) return@withContext false
+
+                    val groupDoc = querySnapshot.documents.first()
+                    val group =
+                            groupDoc.toObject(FirebaseGroup::class.java) ?: return@withContext false
+
+                    // Check if user is already a member
+                    if (group.memberIds.contains(user.uid)) return@withContext true
+
+                    val newMember =
+                            GroupMember(
+                                    userId = user.uid,
+                                    email = user.email ?: "",
+                                    displayName = user.displayName ?: "Unknown",
+                                    role = "member",
+                                    joinedAt = Timestamp.now()
+                            )
+
+                    // Update the group with the new member
+                    groupDoc.reference
+                            .update(
+                                    mapOf(
+                                            "members" to FieldValue.arrayUnion(newMember),
+                                            "memberIds" to FieldValue.arrayUnion(user.uid),
+                                            "updatedAt" to Timestamp.now()
+                                    )
+                            )
                             .await()
 
-            if (querySnapshot.isEmpty) return false
-
-            val groupDoc = querySnapshot.documents.first()
-            val group = groupDoc.toObject(FirebaseGroup::class.java) ?: return false
-
-            // Check if user is already a member
-            if (group.memberIds.contains(user.uid)) return true
-
-            val newMember =
-                    GroupMember(
-                            userId = user.uid,
-                            email = user.email ?: "",
-                            displayName = user.displayName ?: "Unknown",
-                            role = "member",
-                            joinedAt = Timestamp.now()
+                    // Add activity for joining
+                    addGroupActivity(
+                            groupId = groupDoc.id,
+                            type = "member_joined",
+                            title = "New member joined",
+                            description = "${user.displayName ?: "A new member"} joined the group"
                     )
 
-            // Update the group with the new member
-            groupDoc.reference
-                    .update(
-                            mapOf(
-                                    "members" to FieldValue.arrayUnion(newMember),
-                                    "memberIds" to FieldValue.arrayUnion(user.uid),
-                                    "updatedAt" to Timestamp.now()
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
+
+    suspend fun joinGroup(groupId: String): Boolean =
+            withContext(Dispatchers.IO) {
+                val user = auth.currentUser ?: return@withContext false
+                return@withContext try {
+                    val groupDoc = groupsCollection.document(groupId).get().await()
+                    val group =
+                            groupDoc.toObject(FirebaseGroup::class.java) ?: return@withContext false
+
+                    // Check if user is already a member
+                    if (group.memberIds.contains(user.uid)) return@withContext true
+
+                    // Check if group is public
+                    if (!group.settings.isPublic) return@withContext false
+
+                    val newMember =
+                            GroupMember(
+                                    userId = user.uid,
+                                    email = user.email ?: "",
+                                    displayName = user.displayName ?: "Unknown",
+                                    role = "member",
+                                    joinedAt = Timestamp.now()
                             )
-                    )
-                    .await()
 
-            // Add activity for joining
-            addGroupActivity(
-                    groupId = groupDoc.id,
-                    type = "member_joined",
-                    title = "New member joined",
-                    description = "${user.displayName ?: "A new member"} joined the group"
-            )
-
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    suspend fun joinGroup(groupId: String): Boolean {
-        val user = auth.currentUser ?: return false
-        return try {
-            val groupDoc = groupsCollection.document(groupId).get().await()
-            val group = groupDoc.toObject(FirebaseGroup::class.java) ?: return false
-
-            // Check if user is already a member
-            if (group.memberIds.contains(user.uid)) return true
-
-            // Check if group is public
-            if (!group.settings.isPublic) return false
-
-            val newMember =
-                    GroupMember(
-                            userId = user.uid,
-                            email = user.email ?: "",
-                            displayName = user.displayName ?: "Unknown",
-                            role = "member",
-                            joinedAt = Timestamp.now()
-                    )
-
-            // Update the group with the new member
-            groupDoc.reference
-                    .update(
-                            mapOf(
-                                    "members" to FieldValue.arrayUnion(newMember),
-                                    "memberIds" to FieldValue.arrayUnion(user.uid),
-                                    "updatedAt" to Timestamp.now()
+                    // Update the group with the new member
+                    groupDoc.reference
+                            .update(
+                                    mapOf(
+                                            "members" to FieldValue.arrayUnion(newMember),
+                                            "memberIds" to FieldValue.arrayUnion(user.uid),
+                                            "updatedAt" to Timestamp.now()
+                                    )
                             )
+                            .await()
+
+                    // Add activity for joining
+                    addGroupActivity(
+                            groupId = groupId,
+                            type = "member_joined",
+                            title = "New member joined",
+                            description = "${user.displayName ?: "A new member"} joined the group"
                     )
-                    .await()
 
-            // Add activity for joining
-            addGroupActivity(
-                    groupId = groupId,
-                    type = "member_joined",
-                    title = "New member joined",
-                    description = "${user.displayName ?: "A new member"} joined the group"
-            )
-
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
 
     private suspend fun addGroupActivity(
             groupId: String,
@@ -227,124 +243,150 @@ class GroupRepository {
         }
     }
 
-    suspend fun leaveGroup(groupId: String): Boolean {
-        val user = auth.currentUser ?: return false
-        return try {
-            val groupDoc = groupsCollection.document(groupId).get().await()
-            val group = groupDoc.toObject(FirebaseGroup::class.java) ?: return false
+    suspend fun leaveGroup(groupId: String): Boolean =
+            withContext(Dispatchers.IO) {
+                val user = auth.currentUser ?: return@withContext false
+                return@withContext try {
+                    val groupDoc = groupsCollection.document(groupId).get().await()
+                    val group =
+                            groupDoc.toObject(FirebaseGroup::class.java) ?: return@withContext false
 
-            // Check if user is a member
-            if (!group.memberIds.contains(user.uid)) return true
+                    // Check if user is a member
+                    if (!group.memberIds.contains(user.uid)) return@withContext true
 
-            // Check if user is the owner
-            if (group.owner == user.uid) {
-                // Owner can't leave, they must delete or transfer ownership
-                return false
+                    // Check if user is the owner
+                    if (group.owner == user.uid) {
+                        // Owner can't leave, they must delete or transfer ownership
+                        return@withContext false
+                    }
+
+                    // Find the member to remove
+                    val memberToRemove = group.members.find { it.userId == user.uid }
+
+                    // Update the group by removing the member
+                    groupDoc.reference
+                            .update(
+                                    mapOf(
+                                            "members" to FieldValue.arrayRemove(memberToRemove),
+                                            "memberIds" to FieldValue.arrayRemove(user.uid),
+                                            "updatedAt" to Timestamp.now()
+                                    )
+                            )
+                            .await()
+
+                    // Add activity for leaving
+                    addGroupActivity(
+                            groupId = groupId,
+                            type = "member_left",
+                            title = "Member left",
+                            description = "${user.displayName ?: "A member"} left the group"
+                    )
+
+                    true
+                } catch (e: Exception) {
+                    false
+                }
             }
 
-            // Find the member to remove
-            val memberToRemove = group.members.find { it.userId == user.uid }
+    suspend fun deleteGroup(groupId: String): Boolean =
+            withContext(Dispatchers.IO) {
+                val user = auth.currentUser ?: return@withContext false
+                return@withContext try {
+                    val groupDoc = groupsCollection.document(groupId).get().await()
+                    val group =
+                            groupDoc.toObject(FirebaseGroup::class.java) ?: return@withContext false
 
-            // Update the group by removing the member
-            groupDoc.reference
-                    .update(
-                            mapOf(
-                                    "members" to FieldValue.arrayRemove(memberToRemove),
-                                    "memberIds" to FieldValue.arrayRemove(user.uid),
-                                    "updatedAt" to Timestamp.now()
-                            )
-                    )
-                    .await()
+                    // Check if user is the owner
+                    if (group.owner != user.uid) return@withContext false
 
-            // Add activity for leaving
-            addGroupActivity(
-                    groupId = groupId,
-                    type = "member_left",
-                    title = "Member left",
-                    description = "${user.displayName ?: "A member"} left the group"
-            )
+                    // Soft delete by marking as inactive
+                    groupDoc.reference
+                            .update(mapOf("isActive" to false, "updatedAt" to Timestamp.now()))
+                            .await()
 
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
 
-    suspend fun deleteGroup(groupId: String): Boolean {
-        val user = auth.currentUser ?: return false
-        return try {
-            val groupDoc = groupsCollection.document(groupId).get().await()
-            val group = groupDoc.toObject(FirebaseGroup::class.java) ?: return false
-
-            // Check if user is the owner
-            if (group.owner != user.uid) return false
-
-            // Soft delete by marking as inactive
-            groupDoc.reference
-                    .update(mapOf("isActive" to false, "updatedAt" to Timestamp.now()))
-                    .await()
-
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    fun getUserGroupsFlow(): Flow<List<FirebaseGroup>> = callbackFlow {
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            Log.d("GroupRepository", "No authenticated user, returning empty list")
-            trySend(emptyList())
-            close()
-            return@callbackFlow
-        }
-
-        Log.d("GroupRepository", "Setting up real-time listener for user groups: $userId")
-
-        val listener =
-                groupsCollection
-                        .whereArrayContains("memberIds", userId)
-                        .whereEqualTo("isActive", true)
-                        .orderBy("updatedAt", Query.Direction.DESCENDING)
-                        .addSnapshotListener { snapshot, error ->
-                            if (error != null) {
-                                Log.e(
-                                        "GroupRepository",
-                                        "Error getting user groups: ${error.message}",
-                                        error
-                                )
-                                trySend(emptyList())
-                                return@addSnapshotListener
-                            }
-
-                            val groups =
-                                    snapshot?.documents?.mapNotNull { doc ->
-                                        try {
-                                            doc.toObject(FirebaseGroup::class.java)
-                                                    ?.copy(id = doc.id)
-                                        } catch (e: Exception) {
-                                            Log.e(
-                                                    "GroupRepository",
-                                                    "Error parsing group document: ${doc.id}",
-                                                    e
-                                            )
-                                            null
-                                        }
-                                    }
-                                            ?: emptyList()
-
-                            Log.d(
-                                    "GroupRepository",
-                                    "Received ${groups.size} groups from Firestore"
-                            )
-                            trySend(groups)
+    fun getUserGroupsFlow(): Flow<List<FirebaseGroup>> =
+            callbackFlow {
+                        val userId = auth.currentUser?.uid
+                        if (userId == null) {
+                            Log.d("GroupRepository", "No authenticated user, returning empty list")
+                            trySend(emptyList())
+                            close()
+                            return@callbackFlow
                         }
 
-        awaitClose {
-            Log.d("GroupRepository", "Removing groups listener")
-            listener.remove()
-        }
-    }
+                        Log.d(
+                                "GroupRepository",
+                                "Setting up real-time listener for user groups: $userId"
+                        )
+
+                        val listener =
+                                groupsCollection
+                                        .whereArrayContains("memberIds", userId)
+                                        .whereEqualTo("isActive", true)
+                                        .orderBy("updatedAt", Query.Direction.DESCENDING)
+                                        .addSnapshotListener { snapshot, error ->
+                                            if (error != null) {
+                                                Log.e(
+                                                        "GroupRepository",
+                                                        "Error getting user groups: ${error.message}",
+                                                        error
+                                                )
+                                                // Check for permission denied errors
+                                                if (error.message?.contains(
+                                                                "PERMISSION_DENIED",
+                                                                ignoreCase = true
+                                                        ) == true
+                                                ) {
+                                                    Log.e(
+                                                            "GroupRepository",
+                                                            "PERMISSION_DENIED: User does not have access to groups collection"
+                                                    )
+                                                    // Close the flow with an error for permission
+                                                    // denied
+                                                    close(error)
+                                                } else {
+                                                    // For other errors, send empty list and
+                                                    // continue listening
+                                                    trySend(emptyList())
+                                                }
+                                                return@addSnapshotListener
+                                            }
+
+                                            val groups =
+                                                    snapshot?.documents?.mapNotNull { doc ->
+                                                        try {
+                                                            doc.toObject(FirebaseGroup::class.java)
+                                                                    ?.copy(id = doc.id)
+                                                        } catch (e: Exception) {
+                                                            Log.e(
+                                                                    "GroupRepository",
+                                                                    "Error parsing group document: ${doc.id}",
+                                                                    e
+                                                            )
+                                                            null
+                                                        }
+                                                    }
+                                                            ?: emptyList()
+
+                                            Log.d(
+                                                    "GroupRepository",
+                                                    "Received ${groups.size} groups from Firestore"
+                                            )
+                                            trySend(groups)
+                                        }
+
+                        awaitClose {
+                            Log.d("GroupRepository", "Removing groups listener")
+                            listener.remove()
+                        }
+                    }
+                    .flowOn(Dispatchers.IO)
 
     fun getGroupStatsFlow(): Flow<GroupStats> = callbackFlow {
         val userId = auth.currentUser?.uid
@@ -361,8 +403,27 @@ class GroupRepository {
                         .whereEqualTo("isActive", true)
                         .addSnapshotListener { groupSnapshot, error ->
                             if (error != null) {
-                                Log.e("GroupRepository", "Error getting groups: ${error.message}")
-                                trySend(GroupStats())
+                                Log.e(
+                                        "GroupRepository",
+                                        "Error getting groups: ${error.message}",
+                                        error
+                                )
+                                // Check for permission denied errors
+                                if (error.message?.contains(
+                                                "PERMISSION_DENIED",
+                                                ignoreCase = true
+                                        ) == true
+                                ) {
+                                    Log.e(
+                                            "GroupRepository",
+                                            "PERMISSION_DENIED: User does not have access to groups collection"
+                                    )
+                                    // Close the flow with an error for permission denied
+                                    close(error)
+                                } else {
+                                    // For other errors, send empty stats and continue listening
+                                    trySend(GroupStats())
+                                }
                                 return@addSnapshotListener
                             }
 
@@ -431,14 +492,15 @@ class GroupRepository {
     }
 
     // Helper method to get a group by ID
-    suspend fun getGroupById(groupId: String): FirebaseGroup? {
-        return try {
-            val document = groupsCollection.document(groupId).get().await()
-            document.toObject(FirebaseGroup::class.java)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getGroupById(groupId: String): FirebaseGroup? =
+            withContext(Dispatchers.IO) {
+                return@withContext try {
+                    val document = groupsCollection.document(groupId).get().await()
+                    document.toObject(FirebaseGroup::class.java)
+                } catch (e: Exception) {
+                    null
+                }
+            }
 
     // Helper method to check if a user is an admin of a group
     suspend fun isUserGroupAdmin(groupId: String, userId: String): Boolean {
@@ -454,20 +516,21 @@ class GroupRepository {
     }
 
     // Get recent group activities
-    suspend fun getGroupActivities(limit: Int = 20): List<GroupActivity> {
-        val userId = auth.currentUser?.uid ?: return emptyList()
-        return try {
-            activitiesCollection
-                    .orderBy("createdAt", Query.Direction.DESCENDING)
-                    .limit(limit.toLong())
-                    .get()
-                    .await()
-                    .toObjects(GroupActivity::class.java)
-        } catch (e: Exception) {
-            Log.e("GroupRepository", "Error getting activities: ${e.message}")
-            emptyList()
-        }
-    }
+    suspend fun getGroupActivities(limit: Int = 20): List<GroupActivity> =
+            withContext(Dispatchers.IO) {
+                val userId = auth.currentUser?.uid ?: return@withContext emptyList()
+                return@withContext try {
+                    activitiesCollection
+                            .orderBy("createdAt", Query.Direction.DESCENDING)
+                            .limit(limit.toLong())
+                            .get()
+                            .await()
+                            .toObjects(GroupActivity::class.java)
+                } catch (e: Exception) {
+                    Log.e("GroupRepository", "Error getting activities: ${e.message}")
+                    emptyList()
+                }
+            }
 
     suspend fun getGroupAdminInfo(groupId: String): Pair<FirebaseGroup?, String?> {
         val userId = auth.currentUser?.uid ?: return Pair(null, null)

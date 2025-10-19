@@ -33,7 +33,7 @@ class GeminiAPIConnectivityTest {
         assertNotNull("API key should not be null", BuildConfig.GEMINI_API_KEY)
         assertNotEquals(
             "API key should be configured in local.properties",
-            "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0",
+            "your_gemini_api_key_here",
             BuildConfig.GEMINI_API_KEY
         )
         assertTrue(
@@ -45,7 +45,7 @@ class GeminiAPIConnectivityTest {
     @Test
     fun `test API connectivity with simple request`() = runBlocking {
         // Skip this test if API key is not configured
-        if (BuildConfig.GEMINI_API_KEY == "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0") {
+        if (BuildConfig.GEMINI_API_KEY == "your_gemini_api_key_here") {
             println("⚠️ Skipping API connectivity test - API key not configured")
             println("ℹ️ Add your Gemini API key to local.properties as GEMINI_API_KEY")
             return@runBlocking
@@ -102,7 +102,7 @@ class GeminiAPIConnectivityTest {
     @Test
     fun `test API response parsing`() = runBlocking {
         // Skip this test if API key is not configured
-        if (BuildConfig.GEMINI_API_KEY == "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0") {
+        if (BuildConfig.GEMINI_API_KEY == "your_gemini_api_key_here") {
             println("⚠️ Skipping API response parsing test - API key not configured")
             return@runBlocking
         }
@@ -137,7 +137,7 @@ class GeminiAPIConnectivityTest {
     @Test
     fun `test conversation history handling`() = runBlocking {
         // Skip this test if API key is not configured
-        if (BuildConfig.GEMINI_API_KEY == "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0") {
+        if (BuildConfig.GEMINI_API_KEY == "your_gemini_api_key_here") {
             println("⚠️ Skipping conversation history test - API key not configured")
             return@runBlocking
         }

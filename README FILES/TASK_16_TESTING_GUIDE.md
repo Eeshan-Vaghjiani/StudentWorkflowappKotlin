@@ -36,7 +36,7 @@ Location: `app/src/test/java/com/example/loginandregistration/GeminiAPIConnectiv
 
 **What It Tests**:
 - BuildConfig.GEMINI_API_KEY exists
-- Value is not "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+- Value is not "your_gemini_api_key_here"
 - Value is not empty string
 
 **Troubleshooting**:

@@ -116,8 +116,6 @@ class MessageAdapter(
                                     onMessageLongClick
                             )
                 }
-                // Add fade-in animation for new messages
-                AnimationUtils.fadeIn(holder.itemView, duration = 200)
             }
             is MessageGrouper.MessageItem.TimestampHeader -> {
                 (holder as TimestampHeaderViewHolder).bind(item.timestamp)
@@ -127,6 +125,9 @@ class MessageAdapter(
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
+        // Clear any pending animations to prevent attachment issues
+        holder.itemView.clearAnimation()
+        
         // Clean up resources and listeners to prevent memory leaks and crashes
         when (holder) {
             is SentMessageViewHolder -> holder.cleanup()

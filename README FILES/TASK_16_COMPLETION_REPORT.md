@@ -142,7 +142,7 @@ if (localPropertiesFile.exists()) {
 }
 
 // Gemini API Key for AI Assistant
-val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "AIzaSyBWn5wPqt6OeqiBxlevwzQGz00P7Oc4ZP0"
+val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: "your_gemini_api_key_here"
 buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
 ```
 
