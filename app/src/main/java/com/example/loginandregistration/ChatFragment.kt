@@ -7,22 +7,19 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.loginandregistration.adapters.ChatAdapter
+import com.example.loginandregistration.databinding.FragmentChatBinding
 import com.example.loginandregistration.models.Chat
 import com.example.loginandregistration.repository.ChatRepository
 import com.example.loginandregistration.utils.collectWithLifecycle
 import com.example.loginandregistration.viewmodels.ChatViewModel
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class ChatFragment : Fragment() {
@@ -31,36 +28,36 @@ class ChatFragment : Fragment() {
         private const val TAG = "ChatFragment"
     }
 
+    private var _binding: FragmentChatBinding? = null
+    private val binding: FragmentChatBinding?
+        get() = _binding
+
     private lateinit var viewModel: ChatViewModel
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var chatRepository: ChatRepository
+    private lateinit var errorStateManager: com.example.loginandregistration.utils.ErrorStateManager
 
-    // Views
-    private lateinit var searchEditText: EditText
-    private lateinit var chatTabLayout: TabLayout
-    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-    private lateinit var chatsRecyclerView: RecyclerView
-    private lateinit var skeletonRecyclerView: RecyclerView
-    private lateinit var emptyStateView: com.example.loginandregistration.views.EmptyStateView
-    private lateinit var fabNewChat: FloatingActionButton
+    private var ensureChatsJob: Job? = null
 
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.fragment_chat, container, false)
+    ): View {
+        Log.d(TAG, "onCreateView")
+        _binding = FragmentChatBinding.inflate(inflater, container, false)
+        return _binding!!.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        Log.d(TAG, "onViewCreated")
 
         // Initialize repository and ViewModel
         chatRepository = ChatRepository()
         viewModel = ViewModelProvider(this)[ChatViewModel::class.java]
-
-        // Initialize views
-        initializeViews(view)
+        errorStateManager =
+                com.example.loginandregistration.utils.ErrorStateManager(requireContext())
 
         // Setup RecyclerView
         setupRecyclerView()
@@ -72,51 +69,59 @@ class ChatFragment : Fragment() {
         observeViewModel()
 
         // Ensure group chats exist for all user's groups
-        lifecycleScope.launch {
-            val result = chatRepository.ensureGroupChatsExist()
-            if (result.isSuccess) {
-                val count = result.getOrNull() ?: 0
-                if (count > 0) {
-                    android.util.Log.d("ChatFragment", "Created $count group chats")
+        ensureChatsJob =
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val result = chatRepository.ensureGroupChatsExist()
+                    if (result.isSuccess) {
+                        val count = result.getOrNull() ?: 0
+                        if (count > 0) {
+                            Log.d(TAG, "Created $count group chats")
+                        }
+                    } else {
+                        val exception = result.exceptionOrNull()
+                        Log.e(TAG, "Failed to ensure group chats: ${exception?.message}")
+
+                        // Only show error if view still exists
+                        if (_binding != null && isAdded) {
+                            showGroupChatsError(exception)
+                        } else {
+                            Log.d(TAG, "View destroyed, skipping error UI update")
+                        }
+                    }
                 }
-            } else {
-                android.util.Log.e(
-                        "ChatFragment",
-                        "Failed to ensure group chats: ${result.exceptionOrNull()?.message}"
-                )
-            }
+    }
+
+    private fun showGroupChatsError(exception: Throwable?) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot show group chats error: view is destroyed")
+                            return
+                        }
+
+        // Use ErrorStateManager for consistent error handling
+        exception?.let {
+            val errorState = errorStateManager.categorizeError(it)
+            errorStateManager.showError(errorState, binding.root, null)
         }
     }
 
-    private fun initializeViews(view: View) {
-        searchEditText = view.findViewById(R.id.searchEditText)
-        chatTabLayout = view.findViewById(R.id.chatTabLayout)
-        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
-        chatsRecyclerView = view.findViewById(R.id.chatsRecyclerView)
-        skeletonRecyclerView = view.findViewById(R.id.skeletonRecyclerView)
-        emptyStateView = view.findViewById(R.id.emptyStateView)
-        fabNewChat = view.findViewById(R.id.fabNewChat)
+    private fun setupRecyclerView() {
+        val binding = _binding ?: return
 
-        // Setup skeleton loader
-        setupSkeletonLoader()
-    }
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    private fun setupSkeletonLoader() {
-        skeletonRecyclerView.apply {
+        chatAdapter = ChatAdapter(currentUserId) { chat -> onChatClick(chat) }
+
+        binding.skeletonRecyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter =
                     com.example.loginandregistration.utils.SkeletonLoaderHelper
                             .createSkeletonAdapter(R.layout.item_chat_skeleton, 5)
             setHasFixedSize(true)
         }
-    }
 
-    private fun setupRecyclerView() {
-        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-
-        chatAdapter = ChatAdapter(currentUserId) { chat -> onChatClick(chat) }
-
-        chatsRecyclerView.apply {
+        binding.chatsRecyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = chatAdapter
             setHasFixedSize(true)
@@ -124,8 +129,10 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupListeners() {
+        val binding = _binding ?: return
+
         // Search functionality
-        searchEditText.addTextChangedListener(
+        binding.searchEditText.addTextChangedListener(
                 object : TextWatcher {
                     override fun beforeTextChanged(
                             s: CharSequence?,
@@ -148,7 +155,7 @@ class ChatFragment : Fragment() {
         )
 
         // Tab selection
-        chatTabLayout.addOnTabSelectedListener(
+        binding.chatTabLayout.addOnTabSelectedListener(
                 object : TabLayout.OnTabSelectedListener {
                     override fun onTabSelected(tab: TabLayout.Tab?) {
                         tab?.position?.let { position -> viewModel.setSelectedTab(position) }
@@ -160,10 +167,10 @@ class ChatFragment : Fragment() {
         )
 
         // Pull to refresh
-        swipeRefreshLayout.setOnRefreshListener { viewModel.refresh() }
+        binding.swipeRefreshLayout.setOnRefreshListener { viewModel.refresh() }
 
         // FAB for new chat
-        fabNewChat.setOnClickListener {
+        binding.fabNewChat.setOnClickListener {
             val dialog = UserSearchDialog.newInstance()
             dialog.show(parentFragmentManager, UserSearchDialog.TAG)
         }
@@ -175,49 +182,102 @@ class ChatFragment : Fragment() {
 
         // Observe filtered chats
         viewModel.filteredChats.collectWithLifecycle(viewLifecycleOwner) { chats ->
-            Log.d(TAG, "Received ${chats.size} chats")
-            chatAdapter.submitList(chats)
-
-            // Show/hide empty state
-            if (chats.isEmpty()) {
-                emptyStateView.visibility = View.VISIBLE
-                emptyStateView.showNoChats {
-                    // Open user search dialog when action button clicked
-                    val dialog = UserSearchDialog.newInstance()
-                    dialog.show(parentFragmentManager, UserSearchDialog.TAG)
-                }
-                chatsRecyclerView.visibility = View.GONE
-            } else {
-                emptyStateView.visibility = View.GONE
-                chatsRecyclerView.visibility = View.VISIBLE
+            // Only update UI if view exists
+            if (_binding == null || !isAdded) {
+                Log.d(TAG, "View destroyed, skipping chats UI update")
+                return@collectWithLifecycle
             }
+
+            Log.d(TAG, "Received ${chats.size} chats")
+            updateChatsUI(chats)
         }
 
         // Observe loading state
         viewModel.isLoading.collectWithLifecycle(viewLifecycleOwner) { isLoading ->
-            swipeRefreshLayout.isRefreshing = isLoading
-
-            // Show skeleton loader on initial load, hide on subsequent refreshes
-            if (isLoading && chatAdapter.itemCount == 0) {
-                com.example.loginandregistration.utils.SkeletonLoaderHelper.showSkeleton(
-                        skeletonRecyclerView,
-                        chatsRecyclerView
-                )
-            } else if (!isLoading) {
-                com.example.loginandregistration.utils.SkeletonLoaderHelper.showContent(
-                        skeletonRecyclerView,
-                        chatsRecyclerView
-                )
+            // Only update UI if view exists
+            if (_binding == null || !isAdded) {
+                Log.d(TAG, "View destroyed, skipping loading UI update")
+                return@collectWithLifecycle
             }
+
+            updateLoadingUI(isLoading)
         }
 
         // Observe errors
         viewModel.error.collectWithLifecycle(viewLifecycleOwner) { error ->
+            // Only show error if view exists
+            if (_binding == null || !isAdded) {
+                Log.d(TAG, "View destroyed, skipping error UI update")
+                return@collectWithLifecycle
+            }
+
             error?.let {
-                Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
+                showError(it)
                 viewModel.clearError()
             }
         }
+    }
+
+    private fun updateChatsUI(chats: List<Chat>) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot update chats UI: view is destroyed")
+                            return
+                        }
+
+        chatAdapter.submitList(chats)
+
+        // Show/hide empty state
+        if (chats.isEmpty()) {
+            binding.emptyStateView.visibility = View.VISIBLE
+            binding.emptyStateView.showNoChats {
+                // Open user search dialog when action button clicked
+                val dialog = UserSearchDialog.newInstance()
+                dialog.show(parentFragmentManager, UserSearchDialog.TAG)
+            }
+            binding.chatsRecyclerView.visibility = View.GONE
+        } else {
+            binding.emptyStateView.visibility = View.GONE
+            binding.chatsRecyclerView.visibility = View.VISIBLE
+        }
+    }
+
+    private fun updateLoadingUI(isLoading: Boolean) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot update loading UI: view is destroyed")
+                            return
+                        }
+
+        binding.swipeRefreshLayout.isRefreshing = isLoading
+
+        // Show skeleton loader on initial load, hide on subsequent refreshes
+        if (isLoading && chatAdapter.itemCount == 0) {
+            com.example.loginandregistration.utils.SkeletonLoaderHelper.showSkeleton(
+                    binding.skeletonRecyclerView,
+                    binding.chatsRecyclerView
+            )
+        } else if (!isLoading) {
+            com.example.loginandregistration.utils.SkeletonLoaderHelper.showContent(
+                    binding.skeletonRecyclerView,
+                    binding.chatsRecyclerView
+            )
+        }
+    }
+
+    private fun showError(message: String) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot show error: view is destroyed")
+                            return
+                        }
+
+        // Use ErrorStateManager for consistent error handling
+        val errorState = errorStateManager.categorizeError(Exception(message))
+        errorStateManager.showError(errorState, binding.root, null)
     }
 
     override fun onStart() {
@@ -228,6 +288,18 @@ class ChatFragment : Fragment() {
     override fun onStop() {
         super.onStop()
         Log.d(TAG, "onStop - Firestore listeners will be detached via ViewModel")
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        Log.d(TAG, "onDestroyView")
+
+        // Cancel any ongoing operations
+        ensureChatsJob?.cancel()
+        ensureChatsJob = null
+
+        // Clear binding reference
+        _binding = null
     }
 
     private fun onChatClick(chat: Chat) {

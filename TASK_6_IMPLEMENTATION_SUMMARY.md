@@ -1,296 +1,198 @@
-# Task 6: Fix Groups Display and Real-time Updates - Implementation Summary
+# Task 6: Update ChatRepository Error Handling - Implementation Summary
 
-## ✅ Task Completed
+## Overview
+Implemented comprehensive error handling for ChatRepository to prevent chat screen crashes from permission errors when fetching groups for chats.
 
-All requirements for Task 6 have been verified and are working correctly.
+## Changes Made
 
-## Implementation Details
+### 1. ChatRepository.kt - `ensureGroupChatsExist()` Function
 
-### 1. GroupRepository Query Verification ✅
+**Location:** `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
 
-**Location:** `app/src/main/java/com/example/loginandregistration/repository/GroupRepository.kt`
+**Changes:**
+- Added try-catch error handling when fetching user's groups
+- Specifically handles `FirebaseFirestoreException.Code.PERMISSION_DENIED` errors
+- Returns user-friendly error messages instead of crashing
+- Continues processing remaining groups if one fails (graceful degradation)
 
-The `getUserGroupsFlow()` method correctly uses:
-- ✅ `memberIds` field with `whereArrayContains("memberIds", userId)`
-- ✅ `isActive` field with `whereEqualTo("isActive", true)`
-- ✅ Proper ordering with `orderBy("updatedAt", Query.Direction.DESCENDING)`
-
+**Error Handling Added:**
 ```kotlin
-fun getUserGroupsFlow(): Flow<List<FirebaseGroup>> = callbackFlow {
-    val userId = auth.currentUser?.uid
-    if (userId == null) {
-        Log.d("GroupRepository", "No authenticated user, returning empty list")
-        trySend(emptyList())
-        close()
-        return@callbackFlow
+// Fetching groups with error handling
+val groupsSnapshot = try {
+    firestore
+        .collection("groups")
+        .whereArrayContains("memberIds", getCurrentUserId())
+        .get()
+        .await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access groups. Please try logging out and back in.")
+        )
     }
+    return Result.failure(e)
+} catch (e: Exception) {
+    return Result.failure(e)
+}
 
-    val listener = groupsCollection
-        .whereArrayContains("memberIds", userId)
-        .whereEqualTo("isActive", true)
-        .orderBy("updatedAt", Query.Direction.DESCENDING)
-        .addSnapshotListener { snapshot, error ->
-            // Error handling and data processing
-        }
-
-    awaitClose {
-        listener.remove()
-    }
+// Checking existing chats with error handling
+val existingChat = try {
+    firestore
+        .collection(CHATS_COLLECTION)
+        .whereEqualTo("type", ChatType.GROUP.name)
+        .whereEqualTo("groupId", groupId)
+        .limit(1)
+        .get()
+        .await()
+} catch (e: Exception) {
+    // Continue to next group instead of failing completely
+    continue
 }
 ```
 
-### 2. GroupsFragment Flow Collection ✅
+### 2. ChatRepository.kt - `getOrCreateGroupChat()` Function
 
-**Location:** `app/src/main/java/com/example/loginandregistration/GroupsFragment.kt`
+**Location:** `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
 
-The fragment properly collects the Flow using lifecycle-aware collection:
+**Changes:**
+- Added error handling when checking for existing chats
+- Added error handling when fetching group documents
+- Added error handling when creating new chats
+- All permission errors return user-friendly messages
 
+**Error Handling Added:**
+```kotlin
+// Check existing chats
+val existingChats = try {
+    firestore.collection(CHATS_COLLECTION)
+        .whereEqualTo("type", ChatType.GROUP.name)
+        .whereEqualTo("groupId", groupId)
+        .get()
+        .await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access this chat")
+        )
+    }
+    return Result.failure(e)
+}
+
+// Fetch group document
+val groupDoc = try {
+    firestore.collection("groups").document(groupId).get().await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access this group")
+        )
+    }
+    return Result.failure(e)
+}
+
+// Create chat
+try {
+    firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to create a chat for this group")
+        )
+    }
+    return Result.failure(e)
+}
+```
+
+### 3. ChatFragment.kt - User-Friendly Error Display
+
+**Location:** `app/src/main/java/com/example/loginandregistration/ChatFragment.kt`
+
+**Changes:**
+- Enhanced error handling when `ensureGroupChatsExist()` fails
+- Shows Toast message to user for permission errors
+- Provides actionable guidance (log out and back in)
+
+**Error Display Added:**
 ```kotlin
 lifecycleScope.launch {
-    try {
-        groupRepository.getUserGroupsFlow().collectWithLifecycle(viewLifecycleOwner) { firebaseGroups ->
-            Log.d(TAG, "Received user groups update: ${firebaseGroups.size} groups")
-            
-            // Hide loading skeleton after first data load
-            if (isLoading) {
-                showLoading(false)
-            }
-            
-            // Stop refresh animation
-            swipeRefreshLayout.isRefreshing = false
-            
-            // Update empty state visibility
-            updateMyGroupsEmptyState(firebaseGroups.isEmpty())
-            
-            // Map and display groups
-            val displayGroups = firebaseGroups.map { /* mapping logic */ }
-            myGroupsAdapter = GroupAdapter(displayGroups) { /* click handler */ }
-            recyclerMyGroups.adapter = myGroupsAdapter
-        }
-    } catch (e: Exception) {
-        Log.e(TAG, "Error collecting user groups", e)
-        handleGroupsError(e)
-        showLoading(false)
-        swipeRefreshLayout.isRefreshing = false
-    }
-}
-```
-
-### 3. Error Handling for Permission Denied ✅
-
-**Location:** `app/src/main/java/com/example/loginandregistration/GroupsFragment.kt`
-
-Comprehensive error handling is implemented in the `handleGroupsError()` method:
-
-```kotlin
-private fun handleGroupsError(exception: Exception) {
-    Log.e(TAG, "Groups error: ${exception.message}", exception)
-    
-    // Check if it's a permission denied error
-    val isPermissionDenied = exception.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true
-    
-    if (isPermissionDenied) {
-        Log.e(TAG, "Permission denied error detected - user may not have access to groups")
-        context?.let { ctx ->
-            ErrorHandler.handleGenericError(
-                ctx,
-                currentView,
-                "Unable to load groups. Please check your permissions and try again."
-            ) {
-                // Retry callback
-                refreshData()
-            }
+    val result = chatRepository.ensureGroupChatsExist()
+    if (result.isSuccess) {
+        val count = result.getOrNull() ?: 0
+        if (count > 0) {
+            android.util.Log.d("ChatFragment", "Created $count group chats")
         }
     } else {
-        // Use standard error handling for other errors
-        context?.let { ctx ->
-            ErrorHandler.handleError(ctx, exception, currentView) {
-                // Retry callback
-                refreshData()
-            }
-        }
-    }
-    
-    // Show empty state
-    updateMyGroupsEmptyState(true)
-}
-```
-
-Additionally, the repository handles permission errors in the snapshot listener:
-
-```kotlin
-.addSnapshotListener { snapshot, error ->
-    if (error != null) {
-        Log.e("GroupRepository", "Error getting user groups: ${error.message}", error)
+        val exception = result.exceptionOrNull()
+        android.util.Log.e(
+            "ChatFragment",
+            "Failed to ensure group chats: ${exception?.message}"
+        )
         
-        // Check for permission denied errors
-        if (error.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true) {
-            Log.e("GroupRepository", "PERMISSION_DENIED: User does not have access to groups collection")
-            // Close the flow with an error for permission denied
-            close(error)
-        } else {
-            // For other errors, send empty list and continue listening
-            trySend(emptyList())
-        }
-        return@addSnapshotListener
-    }
-    // Process data...
-}
-```
-
-### 4. Immediate Group Display After Creation ✅
-
-**Location:** `app/src/main/java/com/example/loginandregistration/GroupsFragment.kt`
-
-The real-time listener ensures groups appear immediately after creation:
-
-```kotlin
-btnCreate.setOnClickListener {
-    lifecycleScope.launch {
-        try {
-            val result = groupRepository.createGroup(name, description, subject, "public")
-            result.fold(
-                onSuccess = { groupId ->
-                    context?.let { ctx ->
-                        ErrorHandler.showSuccessMessage(
-                            ctx,
-                            currentView,
-                            getString(R.string.group_created)
-                        )
-                    }
-                    dialog.dismiss()
-                    // Real-time listener will automatically update the groups list
-                },
-                onFailure = { exception ->
-                    // Error handling
-                }
-            )
-        } catch (e: Exception) {
-            // Error handling
+        // Show user-friendly error message for permission errors
+        val errorMessage = exception?.message ?: "Failed to load group chats"
+        if (errorMessage.contains("permission", ignoreCase = true)) {
+            Toast.makeText(
+                requireContext(),
+                "Unable to access group chats. Please try logging out and back in.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 }
 ```
 
-The comment "Real-time listener will automatically update the groups list" confirms that the implementation relies on the snapshot listener to detect new groups immediately.
+## Requirements Addressed
 
-### 5. Real-time Updates When Group Data Changes ✅
+### Requirement 5.1: User-Friendly Error Messages
+✅ Permission errors now display: "You don't have permission to access groups. Please try logging out and back in."
+✅ Chat screen shows Toast message for permission errors
 
-**Location:** `app/src/main/java/com/example/loginandregistration/repository/GroupRepository.kt`
+### Requirement 5.3: No Crashes on Permission Errors
+✅ All Firestore operations wrapped in try-catch blocks
+✅ Permission errors return Result.failure instead of throwing exceptions
+✅ App continues to function even when some operations fail
 
-The `getUserGroupsFlow()` uses Firestore's `addSnapshotListener` which provides real-time updates:
+## Error Handling Strategy
 
-```kotlin
-val listener = groupsCollection
-    .whereArrayContains("memberIds", userId)
-    .whereEqualTo("isActive", true)
-    .orderBy("updatedAt", Query.Direction.DESCENDING)
-    .addSnapshotListener { snapshot, error ->
-        // This callback is triggered whenever:
-        // 1. Initial data is loaded
-        // 2. Any group document matching the query is added
-        // 3. Any group document matching the query is modified
-        // 4. Any group document matching the query is removed
-        
-        val groups = snapshot?.documents?.mapNotNull { doc ->
-            try {
-                doc.toObject(FirebaseGroup::class.java)?.copy(id = doc.id)
-            } catch (e: Exception) {
-                Log.e("GroupRepository", "Error parsing group document: ${doc.id}", e)
-                null
-            }
-        } ?: emptyList()
-        
-        Log.d("GroupRepository", "Received ${groups.size} groups from Firestore")
-        trySend(groups)
-    }
-```
-
-## Additional Features Implemented
-
-### Loading States
-- ✅ Loading skeleton shown on initial load
-- ✅ SwipeRefreshLayout for manual refresh
-- ✅ Loading indicators hidden after data loads
-
-### Empty States
-- ✅ Empty state for "My Groups" section
-- ✅ Empty state for "Recent Activity" section
-- ✅ Empty state for "Discover Groups" section
-
-### Lifecycle Management
-- ✅ Uses `collectWithLifecycle` to automatically stop/resume listeners
-- ✅ Proper cleanup with `awaitClose` in callbackFlow
-- ✅ Listeners attached in `onStart()` and detached in `onStop()`
-
-### Connection Monitoring
-- ✅ Offline indicator shown when device is offline
-- ✅ Connection state monitoring with `ConnectionMonitor`
-
-## Requirements Mapping
-
-| Requirement | Status | Implementation |
-|-------------|--------|----------------|
-| 5.1 - Fetch groups where user is in memberIds | ✅ Complete | `whereArrayContains("memberIds", userId)` |
-| 5.2 - Display group info (name, subject, members, activity) | ✅ Complete | Mapped to display groups with all details |
-| 5.3 - Groups appear immediately after creation | ✅ Complete | Real-time snapshot listener |
-| 5.4 - Real-time updates when group data changes | ✅ Complete | `addSnapshotListener` in Flow |
-| 5.5 - Empty state when no groups | ✅ Complete | `updateMyGroupsEmptyState()` |
-| 5.6 - Permission error handling | ✅ Complete | `handleGroupsError()` with PERMISSION_DENIED check |
-| 5.7 - Groups reload correctly on navigation | ✅ Complete | Lifecycle-aware collection |
+1. **Graceful Degradation**: If fetching groups fails, the function returns an error but doesn't crash
+2. **Continue on Partial Failure**: If checking one group's chat fails, continue processing other groups
+3. **User-Friendly Messages**: All error messages provide actionable guidance
+4. **Comprehensive Logging**: All errors are logged with context for debugging
 
 ## Testing Recommendations
 
-### Manual Testing Steps
+1. **Test Permission Denied Scenario**:
+   - Temporarily modify Firestore rules to deny access to groups collection
+   - Open Chat tab
+   - Verify Toast message appears
+   - Verify app doesn't crash
 
-1. **Test Group Creation**
-   - Create a new group
-   - Verify it appears immediately in "My Groups" section
-   - Verify group count updates in stats
+2. **Test Partial Failure**:
+   - Have user in multiple groups
+   - Deny access to one specific group
+   - Verify other group chats still load
 
-2. **Test Real-time Updates**
-   - Open app on two devices with same user
-   - Create/join a group on one device
-   - Verify it appears on the other device without refresh
+3. **Test Network Errors**:
+   - Turn off network
+   - Open Chat tab
+   - Verify appropriate error handling
 
-3. **Test Permission Errors**
-   - Temporarily modify Firestore rules to deny access
-   - Verify error message is user-friendly
-   - Verify retry button works
+## Files Modified
 
-4. **Test Empty States**
-   - Use a new user account with no groups
-   - Verify empty state is shown
-   - Create a group and verify empty state disappears
+1. `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
+   - Updated `ensureGroupChatsExist()` function
+   - Updated `getOrCreateGroupChat()` function
 
-5. **Test Offline Behavior**
-   - Turn off internet connection
-   - Verify offline indicator appears
-   - Verify cached data is still displayed
-   - Turn on internet and verify data syncs
+2. `app/src/main/java/com/example/loginandregistration/ChatFragment.kt`
+   - Enhanced error display in `onViewCreated()`
 
-6. **Test Loading States**
-   - Clear app data
-   - Open Groups screen
-   - Verify loading skeleton appears
-   - Verify it disappears when data loads
+## Status
 
-## Code Quality
+✅ Task 6 Complete - All sub-tasks implemented:
+- ✅ Add error handling to `ensureGroupChatsExist()`
+- ✅ Handle permission errors when fetching groups for chats
+- ✅ Prevent chat screen crashes from permission errors
 
-- ✅ Proper error logging with TAG
-- ✅ Null safety checks
-- ✅ Exception handling in all async operations
-- ✅ Lifecycle-aware coroutines
-- ✅ Resource cleanup (listener removal)
-- ✅ User-friendly error messages
+## Next Steps
 
-## Conclusion
-
-Task 6 is **fully implemented and verified**. All requirements have been met:
-- GroupRepository uses correct field names (memberIds, isActive)
-- GroupsFragment properly collects Flow with lifecycle awareness
-- Comprehensive error handling for permission denied errors
-- Groups appear immediately after creation via real-time listeners
-- Real-time updates work when group data changes
-
-The implementation follows Android best practices and provides a robust, user-friendly experience.
+Continue with Task 7: Verify Query Patterns in Repositories

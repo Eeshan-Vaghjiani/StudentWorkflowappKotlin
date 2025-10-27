@@ -28,89 +28,91 @@ class GroupRepository {
     private val groupsCollection = db.collection("groups")
     private val activitiesCollection = db.collection("group_activities")
 
-    suspend fun getUserGroups(): Result<List<FirebaseGroup>> =
-            withContext(Dispatchers.IO) {
-                val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
-                return@withContext safeFirestoreCall {
-                    groupsCollection
-                            .whereArrayContains("memberIds", userId)
-                            .whereEqualTo("isActive", true)
-                            .orderBy("updatedAt", Query.Direction.DESCENDING)
-                            .get()
-                            .await()
-                            .toObjects(FirebaseGroup::class.java)
-                }
-            }
+    suspend fun getUserGroups(): Result<List<FirebaseGroup>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall("getUserGroups") {
+            groupsCollection
+                    .whereArrayContains("memberIds", userId)
+                    .whereEqualTo("isActive", true)
+                    .orderBy("updatedAt", Query.Direction.DESCENDING)
+                    .get()
+                    .await()
+                    .toObjects(FirebaseGroup::class.java)
+        }
+    }
 
-    suspend fun getPublicGroups(): Result<List<FirebaseGroup>> =
-            withContext(Dispatchers.IO) {
-                val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
-                return@withContext safeFirestoreCall {
-                    groupsCollection
-                            .whereEqualTo("settings.isPublic", true)
-                            .whereEqualTo("isActive", true)
-                            .limit(10)
-                            .get()
-                            .await()
-                            .toObjects(FirebaseGroup::class.java)
-                            .filter {
-                                !it.memberIds.contains(userId)
-                            } // Exclude groups user is already in
-                }
-            }
+    suspend fun getPublicGroups(): Result<List<FirebaseGroup>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall("getPublicGroups") {
+            groupsCollection
+                    .whereEqualTo("settings.isPublic", true)
+                    .whereEqualTo("isActive", true)
+                    .limit(10)
+                    .get()
+                    .await()
+                    .toObjects(FirebaseGroup::class.java)
+                    .filter { !it.memberIds.contains(userId) } // Exclude groups user is already in
+        }
+    }
 
     suspend fun createGroup(
             name: String,
             description: String,
             subject: String,
             privacy: String
-    ): Result<String> =
-            withContext(Dispatchers.IO) {
-                val user =
-                        auth.currentUser
-                                ?: return@withContext Result.failure(
-                                        Exception("User not authenticated")
-                                )
-                return@withContext safeFirestoreCall {
-                    val joinCode = generateJoinCode()
-                    val ownerMember =
-                            GroupMember(
-                                    userId = user.uid,
-                                    email = user.email ?: "",
-                                    displayName = user.displayName ?: "Unknown",
-                                    role = "owner",
-                                    joinedAt = Timestamp.now()
-                            )
+    ): Result<String> {
+        val user = auth.currentUser ?: return Result.failure(Exception("User not authenticated"))
 
-                    val group =
-                            FirebaseGroup(
-                                    name = name,
-                                    description = description,
-                                    subject = subject,
-                                    owner = user.uid,
-                                    joinCode = joinCode,
-                                    createdAt = Timestamp.now(),
-                                    updatedAt = Timestamp.now(),
-                                    members = listOf(ownerMember),
-                                    memberIds = listOf(user.uid),
-                                    tasks = emptyList(),
-                                    settings = GroupSettings(isPublic = privacy == "public"),
-                                    isActive = true
-                            )
+        // Validate group member count (initial member is the owner)
+        // This validation ensures we start with valid data
+        if (1 < com.example.loginandregistration.utils.FirebaseRulesValidator.MIN_GROUP_MEMBERS ||
+                        1 >
+                                com.example.loginandregistration.utils.FirebaseRulesValidator
+                                        .MAX_GROUP_MEMBERS
+        ) {
+            return Result.failure(Exception("Invalid initial member count"))
+        }
 
-                    val docRef = groupsCollection.add(group).await()
-
-                    // Add activity for group creation
-                    addGroupActivity(
-                            groupId = docRef.id,
-                            type = "group_created",
-                            title = "Group created",
-                            description = "Group \"$name\" was created"
+        return safeFirestoreCall("createGroup") {
+            val joinCode = generateJoinCode()
+            val ownerMember =
+                    GroupMember(
+                            userId = user.uid,
+                            email = user.email ?: "",
+                            displayName = user.displayName ?: "Unknown",
+                            role = "owner",
+                            joinedAt = Timestamp.now()
                     )
 
-                    docRef.id
-                }
-            }
+            val group =
+                    FirebaseGroup(
+                            name = name,
+                            description = description,
+                            subject = subject,
+                            owner = user.uid,
+                            joinCode = joinCode,
+                            createdAt = Timestamp.now(),
+                            updatedAt = Timestamp.now(),
+                            members = listOf(ownerMember),
+                            memberIds = listOf(user.uid),
+                            tasks = emptyList(),
+                            settings = GroupSettings(isPublic = privacy == "public"),
+                            isActive = true
+                    )
+
+            val docRef = groupsCollection.add(group).await()
+
+            // Add activity for group creation
+            addGroupActivity(
+                    groupId = docRef.id,
+                    type = "group_created",
+                    title = "Group created",
+                    description = "Group \"$name\" was created"
+            )
+
+            docRef.id
+        }
+    }
 
     private fun generateJoinCode(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -136,6 +138,18 @@ class GroupRepository {
 
                     // Check if user is already a member
                     if (group.memberIds.contains(user.uid)) return@withContext true
+
+                    // Validate that adding this member won't exceed the limit
+                    val newMemberCount = group.memberIds.size + 1
+                    if (!com.example.loginandregistration.utils.FirebaseRulesValidator
+                                    .canAddMoreGroupMembers(group.memberIds.size, 1)
+                    ) {
+                        Log.e(
+                                "GroupRepository",
+                                "Cannot add member: group is at maximum capacity (${group.memberIds.size})"
+                        )
+                        return@withContext false
+                    }
 
                     val newMember =
                             GroupMember(
@@ -345,11 +359,12 @@ class GroupRepository {
                                                 ) {
                                                     Log.e(
                                                             "GroupRepository",
-                                                            "PERMISSION_DENIED: User does not have access to groups collection"
+                                                            "PERMISSION_DENIED: User does not have access to groups collection. Returning empty list."
                                                     )
-                                                    // Close the flow with an error for permission
-                                                    // denied
-                                                    close(error)
+                                                    // Send empty list instead of closing the flow
+                                                    // This prevents crashes and allows the UI to
+                                                    // show an empty state
+                                                    trySend(emptyList())
                                                 } else {
                                                     // For other errors, send empty list and
                                                     // continue listening
@@ -388,6 +403,93 @@ class GroupRepository {
                     }
                     .flowOn(Dispatchers.IO)
 
+    /**
+     * Get user groups as a Flow with error state emissions. This version emits RepositoryResult
+     * states (Loading, Success, Error) for better error handling.
+     */
+    fun getUserGroupsFlowWithState(): Flow<RepositoryResult<List<FirebaseGroup>>> =
+            callbackFlow {
+                        val userId = auth.currentUser?.uid
+                        if (userId == null) {
+                            Log.d("GroupRepository", "No authenticated user, returning empty list")
+                            trySend(RepositoryResult.Success(emptyList()))
+                            close()
+                            return@callbackFlow
+                        }
+
+                        Log.d(
+                                "GroupRepository",
+                                "Setting up real-time listener for user groups with state: $userId"
+                        )
+
+                        // Emit loading state
+                        trySend(RepositoryResult.Loading)
+
+                        val listener =
+                                groupsCollection
+                                        .whereArrayContains("memberIds", userId)
+                                        .whereEqualTo("isActive", true)
+                                        .orderBy("updatedAt", Query.Direction.DESCENDING)
+                                        .addSnapshotListener { snapshot, error ->
+                                            if (error != null) {
+                                                Log.e(
+                                                        "GroupRepository",
+                                                        "Error getting user groups: ${error.message}",
+                                                        error
+                                                )
+                                                // Emit error state with appropriate message
+                                                val errorMessage =
+                                                        when {
+                                                            error.message?.contains(
+                                                                    "PERMISSION_DENIED",
+                                                                    ignoreCase = true
+                                                            ) == true -> {
+                                                                "You don't have permission to access groups. Please try logging out and back in."
+                                                            }
+                                                            error.message?.contains(
+                                                                    "UNAVAILABLE",
+                                                                    ignoreCase = true
+                                                            ) == true -> {
+                                                                "Service temporarily unavailable. Please try again."
+                                                            }
+                                                            else -> {
+                                                                "Failed to load groups: ${error.message}"
+                                                            }
+                                                        }
+                                                trySend(RepositoryResult.Error(error, errorMessage))
+                                                return@addSnapshotListener
+                                            }
+
+                                            val groups =
+                                                    snapshot?.documents?.mapNotNull { doc ->
+                                                        try {
+                                                            doc.toObject(FirebaseGroup::class.java)
+                                                                    ?.copy(id = doc.id)
+                                                        } catch (e: Exception) {
+                                                            Log.e(
+                                                                    "GroupRepository",
+                                                                    "Error parsing group document: ${doc.id}",
+                                                                    e
+                                                            )
+                                                            null
+                                                        }
+                                                    }
+                                                            ?: emptyList()
+
+                                            Log.d(
+                                                    "GroupRepository",
+                                                    "Received ${groups.size} groups from Firestore"
+                                            )
+                                            trySend(RepositoryResult.Success(groups))
+                                        }
+
+                        awaitClose {
+                            Log.d("GroupRepository", "Removing groups listener")
+                            listener.remove()
+                        }
+                    }
+                    .flowOn(Dispatchers.IO)
+
     fun getGroupStatsFlow(): Flow<GroupStats> = callbackFlow {
         val userId = auth.currentUser?.uid
         if (userId == null) {
@@ -416,10 +518,12 @@ class GroupRepository {
                                 ) {
                                     Log.e(
                                             "GroupRepository",
-                                            "PERMISSION_DENIED: User does not have access to groups collection"
+                                            "PERMISSION_DENIED: User does not have access to groups collection. Returning empty stats."
                                     )
-                                    // Close the flow with an error for permission denied
-                                    close(error)
+                                    // Send empty stats instead of closing the flow
+                                    // This prevents crashes and allows the UI to show an empty
+                                    // state
+                                    trySend(GroupStats())
                                 } else {
                                     // For other errors, send empty stats and continue listening
                                     trySend(GroupStats())
@@ -516,21 +620,105 @@ class GroupRepository {
     }
 
     // Get recent group activities
-    suspend fun getGroupActivities(limit: Int = 20): List<GroupActivity> =
-            withContext(Dispatchers.IO) {
-                val userId = auth.currentUser?.uid ?: return@withContext emptyList()
-                return@withContext try {
-                    activitiesCollection
-                            .orderBy("createdAt", Query.Direction.DESCENDING)
-                            .limit(limit.toLong())
-                            .get()
-                            .await()
-                            .toObjects(GroupActivity::class.java)
-                } catch (e: Exception) {
-                    Log.e("GroupRepository", "Error getting activities: ${e.message}")
-                    emptyList()
-                }
-            }
+    suspend fun getGroupActivities(limit: Int = 20): Result<List<GroupActivity>> {
+        val userId = auth.currentUser?.uid ?: return Result.success(emptyList())
+        return safeFirestoreCall {
+            activitiesCollection
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .limit(limit.toLong())
+                    .get()
+                    .await()
+                    .toObjects(GroupActivity::class.java)
+        }
+    }
+
+    /**
+     * Get group activities as a Flow with error state emissions. This version emits
+     * RepositoryResult states (Loading, Success, Error) for better error handling.
+     */
+    fun getGroupActivitiesFlow(limit: Int = 20): Flow<RepositoryResult<List<GroupActivity>>> =
+            callbackFlow {
+                        val userId = auth.currentUser?.uid
+                        if (userId == null) {
+                            Log.d(
+                                    "GroupRepository",
+                                    "No authenticated user, returning empty activities"
+                            )
+                            trySend(RepositoryResult.Success(emptyList()))
+                            close()
+                            return@callbackFlow
+                        }
+
+                        Log.d(
+                                "GroupRepository",
+                                "Setting up real-time listener for group activities: $userId"
+                        )
+
+                        // Emit loading state
+                        trySend(RepositoryResult.Loading)
+
+                        val listener =
+                                activitiesCollection
+                                        .orderBy("createdAt", Query.Direction.DESCENDING)
+                                        .limit(limit.toLong())
+                                        .addSnapshotListener { snapshot, error ->
+                                            if (error != null) {
+                                                Log.e(
+                                                        "GroupRepository",
+                                                        "Error getting group activities: ${error.message}",
+                                                        error
+                                                )
+                                                // Emit error state with appropriate message
+                                                val errorMessage =
+                                                        when {
+                                                            error.message?.contains(
+                                                                    "PERMISSION_DENIED",
+                                                                    ignoreCase = true
+                                                            ) == true -> {
+                                                                "You don't have permission to access group activities."
+                                                            }
+                                                            error.message?.contains(
+                                                                    "UNAVAILABLE",
+                                                                    ignoreCase = true
+                                                            ) == true -> {
+                                                                "Service temporarily unavailable. Please try again."
+                                                            }
+                                                            else -> {
+                                                                "Failed to load activities: ${error.message}"
+                                                            }
+                                                        }
+                                                trySend(RepositoryResult.Error(error, errorMessage))
+                                                return@addSnapshotListener
+                                            }
+
+                                            val activities =
+                                                    snapshot?.documents?.mapNotNull { doc ->
+                                                        try {
+                                                            doc.toObject(GroupActivity::class.java)
+                                                        } catch (e: Exception) {
+                                                            Log.e(
+                                                                    "GroupRepository",
+                                                                    "Error parsing activity document: ${doc.id}",
+                                                                    e
+                                                            )
+                                                            null
+                                                        }
+                                                    }
+                                                            ?: emptyList()
+
+                                            Log.d(
+                                                    "GroupRepository",
+                                                    "Received ${activities.size} activities from Firestore"
+                                            )
+                                            trySend(RepositoryResult.Success(activities))
+                                        }
+
+                        awaitClose {
+                            Log.d("GroupRepository", "Removing activities listener")
+                            listener.remove()
+                        }
+                    }
+                    .flowOn(Dispatchers.IO)
 
     suspend fun getGroupAdminInfo(groupId: String): Pair<FirebaseGroup?, String?> {
         val userId = auth.currentUser?.uid ?: return Pair(null, null)

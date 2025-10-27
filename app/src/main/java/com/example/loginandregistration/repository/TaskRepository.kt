@@ -159,6 +159,24 @@ class TaskRepository(private val context: Context? = null) {
                                         Exception("User not authenticated")
                                 )
 
+                // Validate task assignments if assignedTo is not empty
+                if (task.assignedTo.isNotEmpty()) {
+                    val assignmentCount = task.assignedTo.size
+                    if (assignmentCount <
+                                    com.example.loginandregistration.utils.FirebaseRulesValidator
+                                            .MIN_TASK_ASSIGNMENTS ||
+                                    assignmentCount >
+                                            com.example.loginandregistration.utils
+                                                    .FirebaseRulesValidator.MAX_TASK_ASSIGNMENTS
+                    ) {
+                        return@withContext Result.failure(
+                                Exception(
+                                        "Task assignments must be between ${com.example.loginandregistration.utils.FirebaseRulesValidator.MIN_TASK_ASSIGNMENTS} and ${com.example.loginandregistration.utils.FirebaseRulesValidator.MAX_TASK_ASSIGNMENTS}"
+                                )
+                        )
+                    }
+                }
+
                 return@withContext safeFirestoreCall {
                     // Ensure all required fields are properly initialized
                     val taskWithUser =

@@ -447,22 +447,54 @@ class ChatRoomActivity : AppCompatActivity() {
 
     private fun handleImageSelected(uri: android.net.Uri) {
         lifecycleScope.launch {
-            // Show progress dialog
-            val progressDialog =
-                    androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
-                            .setTitle("Uploading Image")
-                            .setMessage("0%")
-                            .setCancelable(false)
-                            .create()
-            progressDialog.show()
-
+            // Validate file before uploading
             try {
+                val fileSize =
+                        contentResolver.openInputStream(uri)?.use { it.available().toLong() } ?: 0L
+                val mimeType = contentResolver.getType(uri)
+
+                // Validate file type
+                val typeValidation =
+                        com.example.loginandregistration.utils.FirebaseRulesValidator
+                                .validateProfilePictureType(this@ChatRoomActivity, mimeType)
+                if (!typeValidation.isValid) {
+                    Toast.makeText(
+                                    this@ChatRoomActivity,
+                                    typeValidation.errorMessage,
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
+                    return@launch
+                }
+
+                // Validate file size
+                val sizeValidation =
+                        com.example.loginandregistration.utils.FirebaseRulesValidator
+                                .validateProfilePictureSize(this@ChatRoomActivity, fileSize)
+                if (!sizeValidation.isValid) {
+                    Toast.makeText(
+                                    this@ChatRoomActivity,
+                                    sizeValidation.errorMessage,
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
+                    return@launch
+                }
+
+                // Show progress dialog
+                val progressDialog =
+                        androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
+                                .setTitle("Uploading Image")
+                                .setMessage("0%")
+                                .setCancelable(false)
+                                .create()
+                progressDialog.show()
+
                 viewModel.sendImageMessage(uri) { progress ->
                     runOnUiThread { progressDialog.setMessage("$progress%") }
                 }
                 progressDialog.dismiss()
             } catch (e: Exception) {
-                progressDialog.dismiss()
                 Toast.makeText(
                                 this@ChatRoomActivity,
                                 "Failed to send image: ${e.message}",
@@ -475,16 +507,49 @@ class ChatRoomActivity : AppCompatActivity() {
 
     private fun handleDocumentSelected(uri: android.net.Uri) {
         lifecycleScope.launch {
-            // Show progress dialog
-            val progressDialog =
-                    androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
-                            .setTitle("Uploading Document")
-                            .setMessage("0%")
-                            .setCancelable(false)
-                            .create()
-            progressDialog.show()
-
+            // Validate file before uploading
             try {
+                val fileSize =
+                        contentResolver.openInputStream(uri)?.use { it.available().toLong() } ?: 0L
+                val mimeType = contentResolver.getType(uri)
+
+                // Validate file type
+                val typeValidation =
+                        com.example.loginandregistration.utils.FirebaseRulesValidator
+                                .validateDocumentType(this@ChatRoomActivity, mimeType)
+                if (!typeValidation.isValid) {
+                    Toast.makeText(
+                                    this@ChatRoomActivity,
+                                    typeValidation.errorMessage,
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
+                    return@launch
+                }
+
+                // Validate file size
+                val sizeValidation =
+                        com.example.loginandregistration.utils.FirebaseRulesValidator
+                                .validateDocumentSize(this@ChatRoomActivity, fileSize)
+                if (!sizeValidation.isValid) {
+                    Toast.makeText(
+                                    this@ChatRoomActivity,
+                                    sizeValidation.errorMessage,
+                                    Toast.LENGTH_LONG
+                            )
+                            .show()
+                    return@launch
+                }
+
+                // Show progress dialog
+                val progressDialog =
+                        androidx.appcompat.app.AlertDialog.Builder(this@ChatRoomActivity)
+                                .setTitle("Uploading Document")
+                                .setMessage("0%")
+                                .setCancelable(false)
+                                .create()
+                progressDialog.show()
+
                 viewModel.sendDocumentMessage(uri) { progress ->
                     runOnUiThread { progressDialog.setMessage("$progress%") }
                 }
@@ -496,7 +561,6 @@ class ChatRoomActivity : AppCompatActivity() {
                         )
                         .show()
             } catch (e: Exception) {
-                progressDialog.dismiss()
                 Toast.makeText(
                                 this@ChatRoomActivity,
                                 "Failed to send document: ${e.message}",

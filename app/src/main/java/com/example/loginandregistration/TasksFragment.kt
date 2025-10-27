@@ -5,19 +5,15 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
-import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.example.loginandregistration.databinding.FragmentTasksBinding
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.utils.ErrorHandler
-import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.utils.ThemeUtils
 import com.example.loginandregistration.utils.collectWithLifecycle
 import com.example.loginandregistration.viewmodels.TasksViewModel
@@ -31,45 +27,55 @@ class TasksFragment : Fragment() {
                 private const val TAG = "TasksFragment"
         }
 
+        private var _binding: FragmentTasksBinding? = null
+        private val binding: FragmentTasksBinding?
+                get() = _binding
+
         private val viewModel: TasksViewModel by viewModels()
-        private lateinit var recyclerTasks: RecyclerView
         private lateinit var taskAdapter: TaskAdapter
         private lateinit var taskRepository: TaskRepository
-        private lateinit var swipeRefreshLayout: SwipeRefreshLayout
-        private var currentView: View? = null
+        private lateinit var errorStateManager:
+                com.example.loginandregistration.utils.ErrorStateManager
         private var currentFilter: String = "all"
 
         override fun onCreateView(
                 inflater: LayoutInflater,
                 container: ViewGroup?,
                 savedInstanceState: Bundle?
-        ): View? {
-                val view = inflater.inflate(R.layout.fragment_tasks, container, false)
-                currentView = view
+        ): View {
+                _binding = FragmentTasksBinding.inflate(inflater, container, false)
 
                 taskRepository = TaskRepository(requireContext())
-                setupViews(view)
-                setupRecyclerView(view)
-                setupClickListeners(view)
+                errorStateManager =
+                        com.example.loginandregistration.utils.ErrorStateManager(requireContext())
+                setupViews()
+                setupRecyclerView()
+                setupClickListeners()
                 observeViewModel()
 
-                return view
+                return _binding!!.root
         }
 
-        private fun setupViews(view: View) {
-                recyclerTasks = view.findViewById(R.id.recycler_tasks)
-                swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
+        override fun onDestroyView() {
+                super.onDestroyView()
+                _binding = null
+        }
+
+        private fun setupViews() {
+                val binding = _binding ?: return
 
                 // Setup swipe refresh
-                swipeRefreshLayout.setOnRefreshListener { refreshData() }
+                binding.swipeRefreshLayout.setOnRefreshListener { refreshData() }
         }
 
-        private fun setupRecyclerView(view: View) {
+        private fun setupRecyclerView() {
+                val binding = _binding ?: return
+
                 taskAdapter = TaskAdapter { task ->
                         Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
                 }
 
-                recyclerTasks.apply {
+                binding.recyclerTasks.apply {
                         layoutManager = LinearLayoutManager(context)
                         adapter = taskAdapter
                 }
@@ -79,6 +85,12 @@ class TasksFragment : Fragment() {
                 // Observe tasks from ViewModel
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.tasks.collect { firebaseTasks ->
+                                // Only update UI if view exists
+                                if (_binding == null || !isAdded) {
+                                        Log.d(TAG, "View destroyed, skipping tasks UI update")
+                                        return@collect
+                                }
+
                                 Log.d(TAG, "Received ${firebaseTasks.size} tasks from ViewModel")
 
                                 // Filter tasks based on current filter
@@ -101,14 +113,20 @@ class TasksFragment : Fragment() {
 
                                 updateTasksList(filteredTasks)
                                 showEmptyStateIfNeeded(filteredTasks.isEmpty())
-                                swipeRefreshLayout.isRefreshing = false
+                                _binding?.swipeRefreshLayout?.isRefreshing = false
                         }
                 }
 
                 // Observe loading state
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.isLoading.collect { isLoading ->
-                                swipeRefreshLayout.isRefreshing = isLoading
+                                // Only update UI if view exists
+                                if (_binding == null || !isAdded) {
+                                        Log.d(TAG, "View destroyed, skipping loading state update")
+                                        return@collect
+                                }
+
+                                _binding?.swipeRefreshLayout?.isRefreshing = isLoading
                         }
                 }
 
@@ -116,7 +134,15 @@ class TasksFragment : Fragment() {
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.error.collect { error ->
                                 error?.let {
-                                        showError(it)
+                                        // Only show error if view exists
+                                        if (_binding != null && isAdded) {
+                                                showError(it)
+                                        } else {
+                                                Log.d(
+                                                        TAG,
+                                                        "View destroyed, skipping error UI update"
+                                                )
+                                        }
                                         viewModel.clearError()
                                 }
                         }
@@ -126,7 +152,15 @@ class TasksFragment : Fragment() {
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.successMessage.collect { message ->
                                 message?.let {
-                                        showSuccess(it)
+                                        // Only show success if view exists
+                                        if (_binding != null && isAdded) {
+                                                showSuccess(it)
+                                        } else {
+                                                Log.d(
+                                                        TAG,
+                                                        "View destroyed, skipping success UI update"
+                                                )
+                                        }
                                         viewModel.clearSuccessMessage()
                                 }
                         }
@@ -136,60 +170,59 @@ class TasksFragment : Fragment() {
                 // stats)
                 taskRepository.getTaskStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats
                         ->
+                        // Only update UI if view exists
+                        val binding = _binding
+                        if (binding == null || !isAdded) {
+                                Log.d(TAG, "View destroyed, skipping stats UI update")
+                                return@collectWithLifecycle
+                        }
+
                         Log.d(
                                 TAG,
                                 "Received task stats: overdue=${stats.overdue}, dueToday=${stats.dueToday}, completed=${stats.completed}"
                         )
-                        currentView?.findViewById<android.widget.TextView>(R.id.tv_overdue_count)
-                                ?.text = stats.overdue.toString()
-                        currentView?.findViewById<android.widget.TextView>(R.id.tv_due_today_count)
-                                ?.text = stats.dueToday.toString()
-                        currentView?.findViewById<android.widget.TextView>(R.id.tv_completed_count)
-                                ?.text = stats.completed.toString()
+                        binding.tvOverdueCount.text = stats.overdue.toString()
+                        binding.tvDueTodayCount.text = stats.dueToday.toString()
+                        binding.tvCompletedCount.text = stats.completed.toString()
                 }
         }
 
         private fun showError(error: ErrorHandler.AppError) {
-                currentView?.let { view ->
-                        val message =
-                                when (error) {
-                                        is ErrorHandler.AppError.PermissionError ->
-                                                ErrorMessages.PERMISSION_DENIED
-                                        is ErrorHandler.AppError.NetworkError ->
-                                                ErrorMessages.NETWORK_ERROR
-                                        is ErrorHandler.AppError.FirestoreError -> {
-                                                // Check if this is a FAILED_PRECONDITION error
-                                                // (missing index)
-                                                val exception = error.exception
-                                                if (exception is
-                                                                com.google.firebase.firestore.FirebaseFirestoreException &&
-                                                                exception.code ==
-                                                                        com.google.firebase
-                                                                                .firestore
-                                                                                .FirebaseFirestoreException
-                                                                                .Code
-                                                                                .FAILED_PRECONDITION
-                                                ) {
-                                                        ErrorMessages.INDEX_MISSING
-                                                } else {
-                                                        ErrorMessages.TASK_LOAD_FAILED
-                                                }
-                                        }
-                                        is ErrorHandler.AppError.UnknownError ->
-                                                ErrorMessages.GENERIC_ERROR
-                                        else -> ErrorMessages.UNEXPECTED_ERROR
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(TAG, "Cannot show error: view is destroyed")
+                                        return
                                 }
 
-                        Snackbar.make(view, message, Snackbar.LENGTH_LONG)
-                                .setAction("Retry") { viewModel.loadUserTasks() }
-                                .show()
-                }
+                // Convert ErrorHandler.AppError to exception for ErrorStateManager
+                val exception =
+                        Exception(
+                                when (error) {
+                                        is ErrorHandler.AppError.PermissionError -> error.message
+                                        is ErrorHandler.AppError.NetworkError -> error.message
+                                        is ErrorHandler.AppError.FirestoreError -> error.message
+                                        is ErrorHandler.AppError.UnknownError -> error.message
+                                        is ErrorHandler.AppError.AuthError -> error.message
+                                        is ErrorHandler.AppError.StorageError -> error.message
+                                        is ErrorHandler.AppError.ValidationError -> error.message
+                                }
+                        )
+
+                // Use ErrorStateManager for consistent error handling
+                val errorState = errorStateManager.categorizeError(exception)
+                errorStateManager.showError(errorState, binding.root) { viewModel.loadUserTasks() }
         }
 
         private fun showSuccess(message: String) {
-                currentView?.let { view ->
-                        Snackbar.make(view, message, Snackbar.LENGTH_SHORT).show()
-                }
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(TAG, "Cannot show success: view is destroyed")
+                                        return
+                                }
+
+                Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
         }
 
         override fun onStart() {
@@ -208,6 +241,13 @@ class TasksFragment : Fragment() {
         }
 
         private fun updateTasksList(firebaseTasks: List<FirebaseTask>) {
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(TAG, "Cannot update tasks list: view is destroyed")
+                                        return
+                                }
+
                 val displayTasks =
                         firebaseTasks.map { firebaseTask ->
                                 Task(
@@ -228,36 +268,40 @@ class TasksFragment : Fragment() {
                         Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
                 }
                 taskAdapter.submitList(displayTasks)
-                recyclerTasks.adapter = taskAdapter
+                binding.recyclerTasks.adapter = taskAdapter
         }
 
         private fun showEmptyStateIfNeeded(isEmpty: Boolean) {
-                currentView?.let { view ->
-                        val emptyStateView = view.findViewById<View>(R.id.empty_state_layout)
-                        val emptyStateText = view.findViewById<TextView>(R.id.empty_state_text)
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(TAG, "Cannot show empty state: view is destroyed")
+                                        return
+                                }
 
-                        if (isEmpty) {
-                                emptyStateView?.visibility = View.VISIBLE
-                                recyclerTasks.visibility = View.GONE
+                if (isEmpty) {
+                        binding.emptyStateLayout.visibility = View.VISIBLE
+                        binding.recyclerTasks.visibility = View.GONE
 
-                                val message =
-                                        when (currentFilter) {
-                                                "personal" -> "No personal tasks yet"
-                                                "group" -> "No group tasks yet"
-                                                "assignment" -> "No assignments yet"
-                                                else -> "No tasks yet"
-                                        }
-                                emptyStateText?.text = message
-                        } else {
-                                emptyStateView?.visibility = View.GONE
-                                recyclerTasks.visibility = View.VISIBLE
-                        }
+                        val message =
+                                when (currentFilter) {
+                                        "personal" -> "No personal tasks yet"
+                                        "group" -> "No group tasks yet"
+                                        "assignment" -> "No assignments yet"
+                                        else -> "No tasks yet"
+                                }
+                        binding.emptyStateText.text = message
+                } else {
+                        binding.emptyStateLayout.visibility = View.GONE
+                        binding.recyclerTasks.visibility = View.VISIBLE
                 }
         }
 
-        private fun setupClickListeners(view: View) {
+        private fun setupClickListeners() {
+                val binding = _binding ?: return
+
                 // Header buttons
-                view.findViewById<ImageButton>(R.id.btn_filter)?.setOnClickListener {
+                binding.btnFilter.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.filter_clicked),
@@ -266,7 +310,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<ImageButton>(R.id.btn_search)?.setOnClickListener {
+                binding.btnSearch.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.search_clicked),
@@ -275,12 +319,10 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<ImageButton>(R.id.btn_add_task)?.setOnClickListener {
-                        showCreateTaskDialog()
-                }
+                binding.btnAddTask.setOnClickListener { showCreateTaskDialog() }
 
                 // Category buttons
-                view.findViewById<MaterialButton>(R.id.btn_all_tasks)?.setOnClickListener {
+                binding.btnAllTasks.setOnClickListener {
                         currentFilter = "all"
                         // Trigger UI update with current tasks
                         val currentTasks = viewModel.tasks.value
@@ -294,7 +336,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_personal)?.setOnClickListener {
+                binding.btnPersonal.setOnClickListener {
                         currentFilter = "personal"
                         // Trigger UI update with filtered tasks
                         val filteredTasks =
@@ -309,7 +351,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_group)?.setOnClickListener {
+                binding.btnGroup.setOnClickListener {
                         currentFilter = "group"
                         // Trigger UI update with filtered tasks
                         val filteredTasks = viewModel.tasks.value.filter { it.category == "group" }
@@ -323,7 +365,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
+                binding.btnAssignments.setOnClickListener {
                         currentFilter = "assignment"
                         // Trigger UI update with filtered tasks
                         val filteredTasks =
@@ -339,7 +381,7 @@ class TasksFragment : Fragment() {
                 }
 
                 // View toggle buttons
-                view.findViewById<ImageButton>(R.id.btn_list_view)?.setOnClickListener {
+                binding.btnListView.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.view_changed, "List"),
@@ -348,7 +390,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<ImageButton>(R.id.btn_kanban_view)?.setOnClickListener {
+                binding.btnKanbanView.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.view_changed, "Kanban"),
@@ -358,11 +400,9 @@ class TasksFragment : Fragment() {
                 }
 
                 // Quick action buttons
-                view.findViewById<MaterialButton>(R.id.btn_new_task)?.setOnClickListener {
-                        showCreateTaskDialog()
-                }
+                binding.btnNewTask.setOnClickListener { showCreateTaskDialog() }
 
-                view.findViewById<MaterialButton>(R.id.btn_kanban_view_action)?.setOnClickListener {
+                binding.btnKanbanViewAction.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.view_changed, "Kanban"),
@@ -371,7 +411,7 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_ai_assistant)?.setOnClickListener {
+                binding.btnAiAssistant.setOnClickListener {
                         // Launch AI Assistant Activity
                         val intent =
                                 android.content.Intent(
@@ -381,7 +421,7 @@ class TasksFragment : Fragment() {
                         startActivity(intent)
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_export)?.setOnClickListener {
+                binding.btnExport.setOnClickListener {
                         Toast.makeText(context, "Export clicked", Toast.LENGTH_SHORT).show()
                 }
         }

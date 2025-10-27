@@ -436,13 +436,39 @@ suspend fun <T> safeFirestoreCall(block: suspend () -> T): Result<T> {
         try {
             Result.success(block())
         } catch (e: FirebaseFirestoreException) {
-            Log.e("SafeFirestoreCall", "Firestore error: ${e.code}", e)
+            // Enhanced logging for permission denied errors
+            when (e.code) {
+                FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                    Log.e(
+                            "SafeFirestoreCall",
+                            "PERMISSION_DENIED: Missing or insufficient permissions. " +
+                                    "User may not have access to the requested data. " +
+                                    "Error: ${e.message}",
+                            e
+                    )
+                    // Log additional context for debugging
+                    Log.e(
+                            "SafeFirestoreCall",
+                            "Permission denied details - Code: ${e.code}, " +
+                                    "Message: ${e.message}"
+                    )
+                }
+                FirebaseFirestoreException.Code.UNAVAILABLE -> {
+                    Log.e("SafeFirestoreCall", "Firestore service unavailable: ${e.message}", e)
+                }
+                FirebaseFirestoreException.Code.UNAUTHENTICATED -> {
+                    Log.e("SafeFirestoreCall", "User not authenticated: ${e.message}", e)
+                }
+                else -> {
+                    Log.e("SafeFirestoreCall", "Firestore error: ${e.code} - ${e.message}", e)
+                }
+            }
             Result.failure(e)
         } catch (e: FirebaseNetworkException) {
-            Log.e("SafeFirestoreCall", "Network error", e)
+            Log.e("SafeFirestoreCall", "Network error: ${e.message}", e)
             Result.failure(e)
         } catch (e: Exception) {
-            Log.e("SafeFirestoreCall", "Unknown error", e)
+            Log.e("SafeFirestoreCall", "Unknown error: ${e.message}", e)
             Result.failure(e)
         }
     }

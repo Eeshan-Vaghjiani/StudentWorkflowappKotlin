@@ -21,6 +21,19 @@ class ChatViewModel(private val chatRepository: ChatRepository = ChatRepository(
     private val allChats =
             chatRepository
                     .getUserChats()
+                    .catch { exception ->
+                        Log.e(TAG, "Error collecting chats", exception)
+                        _error.value =
+                                when {
+                                    exception.message?.contains("permission", ignoreCase = true) ==
+                                            true ->
+                                            "Unable to access chats. Please try logging out and back in."
+                                    exception.message?.contains("network", ignoreCase = true) ==
+                                            true -> "Connection error. Please check your internet."
+                                    else -> "Unable to load chats"
+                                }
+                        emit(emptyList())
+                    }
                     .stateIn(
                             scope = viewModelScope,
                             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),

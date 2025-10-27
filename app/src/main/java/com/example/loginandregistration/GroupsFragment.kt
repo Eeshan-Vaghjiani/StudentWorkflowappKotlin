@@ -7,18 +7,15 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.example.loginandregistration.databinding.FragmentGroupsBinding
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.repository.GroupRepository
 import com.example.loginandregistration.utils.ConnectionMonitor
 import com.example.loginandregistration.utils.ErrorHandler
-import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.utils.collectWithLifecycle
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
@@ -33,51 +30,47 @@ class GroupsFragment : Fragment() {
                 private const val TAG = "GroupsFragment"
         }
 
-        private lateinit var recyclerMyGroups: RecyclerView
-        private lateinit var recyclerRecentActivity: RecyclerView
-        private lateinit var recyclerDiscoverGroups: RecyclerView
+        private var _binding: FragmentGroupsBinding? = null
+        private val binding: FragmentGroupsBinding?
+                get() = _binding
 
         private lateinit var myGroupsAdapter: GroupAdapter
         private lateinit var activityAdapter: ActivityAdapter
         private lateinit var discoverGroupsAdapter: DiscoverGroupAdapter
 
         private lateinit var groupRepository: GroupRepository
-        private lateinit var swipeRefreshLayout: SwipeRefreshLayout
         private lateinit var connectionMonitor: ConnectionMonitor
-        private lateinit var offlineIndicator: View
-        private lateinit var loadingSkeleton: View
-        private var currentView: View? = null
         private var isLoading = false
 
         override fun onCreateView(
                 inflater: LayoutInflater,
                 container: ViewGroup?,
                 savedInstanceState: Bundle?
-        ): View? {
-                val view = inflater.inflate(R.layout.fragment_groups, container, false)
-                currentView = view
+        ): View {
+                _binding = FragmentGroupsBinding.inflate(inflater, container, false)
 
                 groupRepository = GroupRepository()
                 connectionMonitor = ConnectionMonitor(requireContext())
-                setupViews(view)
-                setupRecyclerViews(view)
-                setupClickListeners(view)
+                setupViews()
+                setupRecyclerViews()
+                setupClickListeners()
                 setupConnectionMonitoring()
                 setupRealTimeListeners()
 
-                return view
+                return _binding!!.root
         }
 
-        private fun setupViews(view: View) {
-                recyclerMyGroups = view.findViewById(R.id.recycler_my_groups)
-                recyclerRecentActivity = view.findViewById(R.id.recycler_recent_activity)
-                recyclerDiscoverGroups = view.findViewById(R.id.recycler_discover_groups)
-                swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
-                offlineIndicator = view.findViewById(R.id.offlineIndicator)
-                loadingSkeleton = view.findViewById(R.id.loading_skeleton)
+        override fun onDestroyView() {
+                super.onDestroyView()
+                Log.d(TAG, "onDestroyView - Clearing binding reference")
+                _binding = null
+        }
+
+        private fun setupViews() {
+                val binding = _binding ?: return
 
                 // Setup swipe refresh
-                swipeRefreshLayout.setOnRefreshListener { refreshData() }
+                binding.swipeRefreshLayout.setOnRefreshListener { refreshData() }
 
                 // Show loading initially
                 showLoading(true)
@@ -86,7 +79,11 @@ class GroupsFragment : Fragment() {
         private fun setupConnectionMonitoring() {
                 connectionMonitor.isConnected.collectWithLifecycle(viewLifecycleOwner) { isConnected
                         ->
-                        offlineIndicator.visibility = if (isConnected) View.GONE else View.VISIBLE
+                        val binding = _binding ?: return@collectWithLifecycle
+
+                        // Find the offline indicator from the root view
+                        binding.root.findViewById<View>(R.id.offlineIndicator)?.visibility =
+                                if (isConnected) View.GONE else View.VISIBLE
 
                         if (!isConnected) {
                                 Log.w(TAG, "Device is offline")
@@ -97,19 +94,27 @@ class GroupsFragment : Fragment() {
         }
 
         private fun showLoading(show: Boolean) {
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(TAG, "Cannot show loading state: view is destroyed")
+                                        return
+                                }
+
                 isLoading = show
-                loadingSkeleton.visibility = if (show) View.VISIBLE else View.GONE
-                swipeRefreshLayout.visibility = if (show) View.GONE else View.VISIBLE
+                binding.swipeRefreshLayout.isRefreshing = show
         }
 
-        private fun setupRecyclerViews(view: View) {
+        private fun setupRecyclerViews() {
+                val binding = _binding ?: return
+
                 // My Groups - Initialize with click listener, will be populated by real-time
                 // listener
                 myGroupsAdapter = GroupAdapter { group ->
                         Toast.makeText(context, "Clicked: ${group.name}", Toast.LENGTH_SHORT).show()
                 }
 
-                recyclerMyGroups.apply {
+                binding.recyclerMyGroups.apply {
                         layoutManager = LinearLayoutManager(context)
                         adapter = myGroupsAdapter
                 }
@@ -120,7 +125,7 @@ class GroupsFragment : Fragment() {
                         Toast.makeText(context, "Activity clicked", Toast.LENGTH_SHORT).show()
                 }
 
-                recyclerRecentActivity.apply {
+                binding.recyclerRecentActivity.apply {
                         layoutManager = LinearLayoutManager(context)
                         adapter = activityAdapter
                 }
@@ -129,15 +134,17 @@ class GroupsFragment : Fragment() {
                 discoverGroupsAdapter =
                         DiscoverGroupAdapter(emptyList()) { group -> joinDiscoverGroup(group) }
 
-                recyclerDiscoverGroups.apply {
+                binding.recyclerDiscoverGroups.apply {
                         layoutManager = LinearLayoutManager(context)
                         adapter = discoverGroupsAdapter
                 }
         }
 
-        private fun setupClickListeners(view: View) {
+        private fun setupClickListeners() {
+                val binding = _binding ?: return
+
                 // Header buttons
-                view.findViewById<ImageButton>(R.id.btn_search_groups)?.setOnClickListener {
+                binding.btnSearchGroups.setOnClickListener {
                         Toast.makeText(
                                         context,
                                         getString(R.string.search_clicked),
@@ -146,34 +153,28 @@ class GroupsFragment : Fragment() {
                                 .show()
                 }
 
-                view.findViewById<ImageButton>(R.id.btn_join_group)?.setOnClickListener {
-                        showJoinGroupDialog()
-                }
+                binding.btnJoinGroup.setOnClickListener { showJoinGroupDialog() }
 
                 // Quick action buttons
-                view.findViewById<MaterialButton>(R.id.btn_create_group)?.setOnClickListener {
-                        showCreateGroupDialog()
-                }
+                binding.btnCreateGroup.setOnClickListener { showCreateGroupDialog() }
 
-                view.findViewById<MaterialButton>(R.id.btn_join_group_action)?.setOnClickListener {
-                        showJoinGroupDialog()
-                }
+                binding.btnJoinGroupAction.setOnClickListener { showJoinGroupDialog() }
 
-                view.findViewById<MaterialButton>(R.id.btn_assignments)?.setOnClickListener {
+                binding.btnAssignments.setOnClickListener {
                         Toast.makeText(context, "Assignments clicked", Toast.LENGTH_SHORT).show()
                 }
 
-                view.findViewById<MaterialButton>(R.id.btn_group_chat)?.setOnClickListener {
+                binding.btnGroupChat.setOnClickListener {
                         Toast.makeText(context, "Group chat clicked", Toast.LENGTH_SHORT).show()
                 }
 
                 // Navigation buttons
-                view.findViewById<ImageButton>(R.id.btn_show_all_groups)?.setOnClickListener {
+                binding.btnShowAllGroups.setOnClickListener {
                         Toast.makeText(context, "Show all groups clicked", Toast.LENGTH_SHORT)
                                 .show()
                 }
 
-                view.findViewById<ImageButton>(R.id.btn_show_more_groups)?.setOnClickListener {
+                binding.btnShowMoreGroups.setOnClickListener {
                         Toast.makeText(context, "Show more groups clicked", Toast.LENGTH_SHORT)
                                 .show()
                 }
@@ -189,33 +190,37 @@ class GroupsFragment : Fragment() {
                                 groupRepository.getGroupStatsFlow().collectWithLifecycle(
                                                 viewLifecycleOwner
                                         ) { stats ->
-                                        Log.d(
-                                                TAG,
-                                                "Received group stats update: myGroups=${stats.myGroups}, activeAssignments=${stats.activeAssignments}, newMessages=${stats.newMessages}"
-                                        )
-
-                                        val myGroupsTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_my_groups_count
-                                                )
-                                        val activeAssignmentsTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_active_assignments_count
-                                                )
-                                        val newMessagesTextView =
-                                                currentView?.findViewById<android.widget.TextView>(
-                                                        R.id.tv_new_messages_count
+                                        try {
+                                                Log.d(
+                                                        TAG,
+                                                        "Received group stats update: myGroups=${stats.myGroups}, activeAssignments=${stats.activeAssignments}, newMessages=${stats.newMessages}"
                                                 )
 
-                                        myGroupsTextView?.text = stats.myGroups.toString()
-                                        activeAssignmentsTextView?.text =
-                                                stats.activeAssignments.toString()
-                                        newMessagesTextView?.text = stats.newMessages.toString()
+                                                val binding =
+                                                        _binding
+                                                                ?: run {
+                                                                        Log.d(
+                                                                                TAG,
+                                                                                "Cannot update group stats: view is destroyed"
+                                                                        )
+                                                                        return@collectWithLifecycle
+                                                                }
 
-                                        Log.d(
-                                                TAG,
-                                                "Updated UI elements: myGroups=${myGroupsTextView?.text}, activeAssignments=${activeAssignmentsTextView?.text}, newMessages=${newMessagesTextView?.text}"
-                                        )
+                                                binding.tvMyGroupsCount.text =
+                                                        stats.myGroups.toString()
+                                                binding.tvActiveAssignmentsCount.text =
+                                                        stats.activeAssignments.toString()
+                                                binding.tvNewMessagesCount.text =
+                                                        stats.newMessages.toString()
+
+                                                Log.d(
+                                                        TAG,
+                                                        "Updated UI elements: myGroups=${binding.tvMyGroupsCount.text}, activeAssignments=${binding.tvActiveAssignmentsCount.text}, newMessages=${binding.tvNewMessagesCount.text}"
+                                                )
+                                        } catch (e: Exception) {
+                                                Log.e(TAG, "Error processing group stats update", e)
+                                                // Don't crash, just log the error
+                                        }
                                 }
                         } catch (e: Exception) {
                                 Log.e(TAG, "Error collecting group stats", e)
@@ -229,66 +234,110 @@ class GroupsFragment : Fragment() {
                                 groupRepository.getUserGroupsFlow().collectWithLifecycle(
                                                 viewLifecycleOwner
                                         ) { firebaseGroups ->
-                                        Log.d(
-                                                TAG,
-                                                "Received user groups update: ${firebaseGroups.size} groups"
-                                        )
+                                        try {
+                                                Log.d(
+                                                        TAG,
+                                                        "Received user groups update: ${firebaseGroups.size} groups"
+                                                )
 
-                                        // Hide loading skeleton after first data load
-                                        if (isLoading) {
-                                                showLoading(false)
-                                        }
+                                                val binding =
+                                                        _binding
+                                                                ?: run {
+                                                                        Log.d(
+                                                                                TAG,
+                                                                                "Cannot update user groups: view is destroyed"
+                                                                        )
+                                                                        return@collectWithLifecycle
+                                                                }
 
-                                        // Stop refresh animation
-                                        swipeRefreshLayout.isRefreshing = false
-
-                                        // Update empty state visibility
-                                        updateMyGroupsEmptyState(firebaseGroups.isEmpty())
-
-                                        val displayGroups =
-                                                firebaseGroups.map { firebaseGroup ->
-                                                        Group(
-                                                                id = firebaseGroup.id.hashCode(),
-                                                                name = firebaseGroup.name,
-                                                                details =
-                                                                        "${firebaseGroup.members.size} members • ${firebaseGroup.subject}",
-                                                                assignmentCount =
-                                                                        firebaseGroup.tasks.size,
-                                                                iconColor = "#007AFF",
-                                                                iconResource = R.drawable.ic_groups
-                                                        )
+                                                // Hide loading skeleton after first data load
+                                                if (isLoading) {
+                                                        showLoading(false)
                                                 }
 
-                                        Log.d(TAG, "Mapped to ${displayGroups.size} display groups")
+                                                // Stop refresh animation
+                                                binding.swipeRefreshLayout.isRefreshing = false
 
-                                        myGroupsAdapter = GroupAdapter { group ->
-                                                // Navigate to group details
-                                                val intent =
-                                                        Intent(
-                                                                context,
-                                                                GroupDetailsActivity::class.java
-                                                        )
-                                                intent.putExtra(
-                                                        "GROUP_ID",
-                                                        firebaseGroups
-                                                                .find { it.name == group.name }
-                                                                ?.id
-                                                                ?: ""
+                                                // Update empty state visibility
+                                                updateMyGroupsEmptyState(firebaseGroups.isEmpty())
+
+                                                val displayGroups =
+                                                        firebaseGroups.map { firebaseGroup ->
+                                                                Group(
+                                                                        id =
+                                                                                firebaseGroup.id
+                                                                                        .hashCode(),
+                                                                        name = firebaseGroup.name,
+                                                                        details =
+                                                                                "${firebaseGroup.members.size} members • ${firebaseGroup.subject}",
+                                                                        assignmentCount =
+                                                                                firebaseGroup
+                                                                                        .tasks
+                                                                                        .size,
+                                                                        iconColor = "#007AFF",
+                                                                        iconResource =
+                                                                                R.drawable.ic_groups
+                                                                )
+                                                        }
+
+                                                Log.d(
+                                                        TAG,
+                                                        "Mapped to ${displayGroups.size} display groups"
                                                 )
-                                                startActivity(intent)
+
+                                                myGroupsAdapter = GroupAdapter { group ->
+                                                        // Navigate to group details
+                                                        val intent =
+                                                                Intent(
+                                                                        context,
+                                                                        GroupDetailsActivity::class
+                                                                                .java
+                                                                )
+                                                        intent.putExtra(
+                                                                "GROUP_ID",
+                                                                firebaseGroups
+                                                                        .find {
+                                                                                it.name ==
+                                                                                        group.name
+                                                                        }
+                                                                        ?.id
+                                                                        ?: ""
+                                                        )
+                                                        startActivity(intent)
+                                                }
+                                                myGroupsAdapter.submitList(displayGroups)
+                                                _binding?.recyclerMyGroups?.adapter =
+                                                        myGroupsAdapter
+                                                Log.d(
+                                                        TAG,
+                                                        "Updated recyclerMyGroups adapter with ${myGroupsAdapter.itemCount} items"
+                                                )
+                                        } catch (e: Exception) {
+                                                Log.e(TAG, "Error processing user groups update", e)
+                                                if (_binding != null && isAdded) {
+                                                        handleGroupsError(e)
+                                                        showLoading(false)
+                                                        _binding?.swipeRefreshLayout?.isRefreshing =
+                                                                false
+                                                        updateMyGroupsEmptyState(true)
+                                                } else {
+                                                        Log.d(
+                                                                TAG,
+                                                                "View destroyed, skipping error UI update"
+                                                        )
+                                                }
                                         }
-                                        myGroupsAdapter.submitList(displayGroups)
-                                        recyclerMyGroups.adapter = myGroupsAdapter
-                                        Log.d(
-                                                TAG,
-                                                "Updated recyclerMyGroups adapter with ${myGroupsAdapter.itemCount} items"
-                                        )
                                 }
                         } catch (e: Exception) {
                                 Log.e(TAG, "Error collecting user groups", e)
-                                handleGroupsError(e)
-                                showLoading(false)
-                                swipeRefreshLayout.isRefreshing = false
+                                if (_binding != null && isAdded) {
+                                        handleGroupsError(e)
+                                        showLoading(false)
+                                        _binding?.swipeRefreshLayout?.isRefreshing = false
+                                        updateMyGroupsEmptyState(true)
+                                } else {
+                                        Log.d(TAG, "View destroyed, skipping error UI update")
+                                }
                         }
                 }
 
@@ -300,33 +349,47 @@ class GroupsFragment : Fragment() {
                 lifecycleScope.launch {
                         try {
                                 // Load recent activities
-                                val activities = groupRepository.getGroupActivities()
-                                val displayActivities =
-                                        activities.map { activity ->
-                                                Activity(
-                                                        id = activity.id.hashCode(),
-                                                        title = activity.title,
-                                                        details =
-                                                                "${activity.description} • ${formatTimestamp(activity.createdAt)}",
-                                                        iconColor = "#007AFF",
-                                                        iconResource =
-                                                                getActivityIcon(activity.type)
+                                val activitiesResult = groupRepository.getGroupActivities()
+                                activitiesResult.fold(
+                                        onSuccess = { activities ->
+                                                val displayActivities =
+                                                        activities.map { activity ->
+                                                                Activity(
+                                                                        id = activity.id.hashCode(),
+                                                                        title = activity.title,
+                                                                        details =
+                                                                                "${activity.description} • ${formatTimestamp(activity.createdAt)}",
+                                                                        iconColor = "#007AFF",
+                                                                        iconResource =
+                                                                                getActivityIcon(
+                                                                                        activity.type
+                                                                                )
+                                                                )
+                                                        }
+
+                                                activityAdapter = ActivityAdapter { _ ->
+                                                        Toast.makeText(
+                                                                        context,
+                                                                        "Activity clicked",
+                                                                        Toast.LENGTH_SHORT
+                                                                )
+                                                                .show()
+                                                }
+                                                activityAdapter.submitList(displayActivities)
+                                                _binding?.recyclerRecentActivity?.adapter =
+                                                        activityAdapter
+
+                                                // Update activity empty state
+                                                updateActivityEmptyState(
+                                                        displayActivities.isEmpty()
                                                 )
+                                        },
+                                        onFailure = { exception ->
+                                                Log.e(TAG, "Error loading activities", exception)
+                                                // Show empty state for activities
+                                                updateActivityEmptyState(true)
                                         }
-
-                                activityAdapter = ActivityAdapter { _ ->
-                                        Toast.makeText(
-                                                        context,
-                                                        "Activity clicked",
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                }
-                                activityAdapter.submitList(displayActivities)
-                                recyclerRecentActivity.adapter = activityAdapter
-
-                                // Update activity empty state
-                                updateActivityEmptyState(displayActivities.isEmpty())
+                                )
 
                                 // Load discoverable groups
                                 val publicGroupsResult = groupRepository.getPublicGroups()
@@ -351,7 +414,7 @@ class GroupsFragment : Fragment() {
                                                         DiscoverGroupAdapter(
                                                                 displayDiscoverGroups
                                                         ) { group -> joinDiscoverGroup(group) }
-                                                recyclerDiscoverGroups.adapter =
+                                                _binding?.recyclerDiscoverGroups?.adapter =
                                                         discoverGroupsAdapter
 
                                                 // Update discover groups empty state
@@ -367,26 +430,32 @@ class GroupsFragment : Fragment() {
                                 )
 
                                 // Hide refresh indicator when data loads
-                                swipeRefreshLayout.isRefreshing = false
+                                _binding?.swipeRefreshLayout?.isRefreshing = false
                         } catch (e: Exception) {
                                 Log.e(TAG, "Error loading data", e)
-                                swipeRefreshLayout.isRefreshing = false
+                                _binding?.swipeRefreshLayout?.isRefreshing = false
                                 showLoading(false)
 
                                 // Use ErrorHandler for consistent error handling
-                                context?.let { ctx ->
-                                        ErrorHandler.handleError(ctx, e, currentView) {
-                                                // Retry callback
-                                                loadInitialData()
+                                if (_binding != null && isAdded) {
+                                        context?.let { ctx ->
+                                                ErrorHandler.handleError(ctx, e, _binding?.root) {
+                                                        // Retry callback
+                                                        loadInitialData()
+                                                }
                                         }
+                                } else {
+                                        Log.d(TAG, "View destroyed, skipping error UI update")
                                 }
                         }
                 }
         }
 
         private fun refreshData() {
+                val binding = _binding ?: return
+
                 // Show loading indicator
-                swipeRefreshLayout.isRefreshing = true
+                binding.swipeRefreshLayout.isRefreshing = true
 
                 // Reload all data
                 loadInitialData()
@@ -439,7 +508,7 @@ class GroupsFragment : Fragment() {
                                                         context?.let { ctx ->
                                                                 ErrorHandler.showSuccessMessage(
                                                                         ctx,
-                                                                        currentView,
+                                                                        _binding?.root,
                                                                         getString(
                                                                                 R.string
                                                                                         .group_created
@@ -460,7 +529,7 @@ class GroupsFragment : Fragment() {
                                                                 ErrorHandler.handleError(
                                                                         ctx,
                                                                         exception,
-                                                                        currentView
+                                                                        _binding?.root
                                                                 ) {
                                                                         // Retry callback
                                                                         btnCreate.performClick()
@@ -471,7 +540,7 @@ class GroupsFragment : Fragment() {
                                 } catch (e: Exception) {
                                         Log.e(TAG, "Error creating group", e)
                                         context?.let { ctx ->
-                                                ErrorHandler.handleError(ctx, e, currentView) {
+                                                ErrorHandler.handleError(ctx, e, _binding?.root) {
                                                         // Retry callback
                                                         btnCreate.performClick()
                                                 }
@@ -514,7 +583,7 @@ class GroupsFragment : Fragment() {
                                                 context?.let { ctx ->
                                                         ErrorHandler.showSuccessMessage(
                                                                 ctx,
-                                                                currentView,
+                                                                _binding?.root,
                                                                 getString(R.string.group_joined)
                                                         )
                                                 }
@@ -525,7 +594,7 @@ class GroupsFragment : Fragment() {
                                                 context?.let { ctx ->
                                                         ErrorHandler.handleGenericError(
                                                                 ctx,
-                                                                currentView,
+                                                                _binding?.root,
                                                                 getString(
                                                                         R.string.error_joining_group
                                                                 )
@@ -535,7 +604,7 @@ class GroupsFragment : Fragment() {
                                 } catch (e: Exception) {
                                         Log.e(TAG, "Error joining group", e)
                                         context?.let { ctx ->
-                                                ErrorHandler.handleError(ctx, e, currentView) {
+                                                ErrorHandler.handleError(ctx, e, _binding?.root) {
                                                         // Retry callback
                                                         btnJoin.performClick()
                                                 }
@@ -568,7 +637,7 @@ class GroupsFragment : Fragment() {
                                                                         ErrorHandler
                                                                                 .showSuccessMessage(
                                                                                         ctx,
-                                                                                        currentView,
+                                                                                        _binding?.root,
                                                                                         getString(
                                                                                                 R.string
                                                                                                         .discover_group_joined,
@@ -584,7 +653,7 @@ class GroupsFragment : Fragment() {
                                                                         ErrorHandler
                                                                                 .handleGenericError(
                                                                                         ctx,
-                                                                                        currentView,
+                                                                                        _binding?.root,
                                                                                         getString(
                                                                                                 R.string
                                                                                                         .error_joining_group
@@ -596,7 +665,7 @@ class GroupsFragment : Fragment() {
                                                         context?.let { ctx ->
                                                                 ErrorHandler.handleGenericError(
                                                                         ctx,
-                                                                        currentView,
+                                                                        _binding?.root,
                                                                         "Group not found"
                                                                 )
                                                         }
@@ -608,7 +677,7 @@ class GroupsFragment : Fragment() {
                                                         ErrorHandler.handleError(
                                                                 ctx,
                                                                 exception,
-                                                                currentView
+                                                                _binding?.root
                                                         ) {
                                                                 // Retry callback
                                                                 joinDiscoverGroup(group)
@@ -619,7 +688,7 @@ class GroupsFragment : Fragment() {
                         } catch (e: Exception) {
                                 Log.e(TAG, "Error joining group", e)
                                 context?.let { ctx ->
-                                        ErrorHandler.handleError(ctx, e, currentView) {
+                                        ErrorHandler.handleError(ctx, e, _binding?.root) {
                                                 // Retry callback
                                                 joinDiscoverGroup(group)
                                         }
@@ -702,10 +771,11 @@ class GroupsFragment : Fragment() {
                                                         startActivity(intent)
                                                 }
                                                 myGroupsAdapter.submitList(displayGroups)
-                                                recyclerMyGroups.adapter = myGroupsAdapter
+                                                _binding?.recyclerMyGroups?.adapter =
+                                                        myGroupsAdapter
 
                                                 // Hide refresh indicator when data loads
-                                                swipeRefreshLayout.isRefreshing = false
+                                                _binding?.swipeRefreshLayout?.isRefreshing = false
                                         },
                                         onFailure = { exception ->
                                                 Log.e(TAG, "Error loading groups", exception)
@@ -713,74 +783,87 @@ class GroupsFragment : Fragment() {
                                                         ErrorHandler.handleError(
                                                                 ctx,
                                                                 exception,
-                                                                currentView
+                                                                _binding?.root
                                                         ) {
                                                                 // Retry callback
                                                                 loadGroupsData()
                                                         }
                                                 }
-                                                swipeRefreshLayout.isRefreshing = false
+                                                _binding?.swipeRefreshLayout?.isRefreshing = false
                                         }
                                 )
                         } catch (e: Exception) {
                                 Log.e(TAG, "Error refreshing groups", e)
                                 context?.let { ctx ->
-                                        ErrorHandler.handleError(ctx, e, currentView) {
+                                        ErrorHandler.handleError(ctx, e, _binding?.root) {
                                                 // Retry callback
                                                 loadGroupsData()
                                         }
                                 }
-                                swipeRefreshLayout.isRefreshing = false
+                                _binding?.swipeRefreshLayout?.isRefreshing = false
                         }
                 }
         }
 
         private fun updateMyGroupsEmptyState(isEmpty: Boolean) {
-                currentView?.let { view ->
-                        val emptyStateView = view.findViewById<View>(R.id.empty_state_my_groups)
-                        val recyclerView = view.findViewById<RecyclerView>(R.id.recycler_my_groups)
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(
+                                                TAG,
+                                                "Cannot update my groups empty state: view is destroyed"
+                                        )
+                                        return
+                                }
 
-                        if (isEmpty) {
-                                emptyStateView?.visibility = View.VISIBLE
-                                recyclerView?.visibility = View.GONE
-                                Log.d(TAG, "Showing empty state for my groups")
-                        } else {
-                                emptyStateView?.visibility = View.GONE
-                                recyclerView?.visibility = View.VISIBLE
-                                Log.d(TAG, "Hiding empty state for my groups")
-                        }
+                if (isEmpty) {
+                        binding.emptyStateMyGroups.visibility = View.VISIBLE
+                        binding.recyclerMyGroups.visibility = View.GONE
+                        Log.d(TAG, "Showing empty state for my groups")
+                } else {
+                        binding.emptyStateMyGroups.visibility = View.GONE
+                        binding.recyclerMyGroups.visibility = View.VISIBLE
+                        Log.d(TAG, "Hiding empty state for my groups")
                 }
         }
 
         private fun updateActivityEmptyState(isEmpty: Boolean) {
-                currentView?.let { view ->
-                        val emptyStateView = view.findViewById<View>(R.id.empty_state_activity)
-                        val recyclerView =
-                                view.findViewById<RecyclerView>(R.id.recycler_recent_activity)
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(
+                                                TAG,
+                                                "Cannot update activity empty state: view is destroyed"
+                                        )
+                                        return
+                                }
 
-                        if (isEmpty) {
-                                emptyStateView?.visibility = View.VISIBLE
-                                recyclerView?.visibility = View.GONE
-                        } else {
-                                emptyStateView?.visibility = View.GONE
-                                recyclerView?.visibility = View.VISIBLE
-                        }
+                if (isEmpty) {
+                        binding.emptyStateActivity.visibility = View.VISIBLE
+                        binding.recyclerRecentActivity.visibility = View.GONE
+                } else {
+                        binding.emptyStateActivity.visibility = View.GONE
+                        binding.recyclerRecentActivity.visibility = View.VISIBLE
                 }
         }
 
         private fun updateDiscoverGroupsEmptyState(isEmpty: Boolean) {
-                currentView?.let { view ->
-                        val emptyStateView = view.findViewById<View>(R.id.empty_state_discover)
-                        val recyclerView =
-                                view.findViewById<RecyclerView>(R.id.recycler_discover_groups)
+                val binding =
+                        _binding
+                                ?: run {
+                                        Log.d(
+                                                TAG,
+                                                "Cannot update discover groups empty state: view is destroyed"
+                                        )
+                                        return
+                                }
 
-                        if (isEmpty) {
-                                emptyStateView?.visibility = View.VISIBLE
-                                recyclerView?.visibility = View.GONE
-                        } else {
-                                emptyStateView?.visibility = View.GONE
-                                recyclerView?.visibility = View.VISIBLE
-                        }
+                if (isEmpty) {
+                        binding.emptyStateDiscover.visibility = View.VISIBLE
+                        binding.recyclerDiscoverGroups.visibility = View.GONE
+                } else {
+                        binding.emptyStateDiscover.visibility = View.GONE
+                        binding.recyclerDiscoverGroups.visibility = View.VISIBLE
                 }
         }
 
@@ -791,29 +874,20 @@ class GroupsFragment : Fragment() {
         private fun handleGroupsError(exception: Exception) {
                 Log.e(TAG, "Handling groups error", exception)
 
-                val errorMessage =
-                        when {
-                                exception.message?.contains("PERMISSION_DENIED") == true ->
-                                        ErrorMessages.PERMISSION_DENIED
-                                exception.message?.contains("UNAVAILABLE") == true ->
-                                        ErrorMessages.NETWORK_ERROR
-                                exception.message?.contains("FAILED_PRECONDITION") == true ->
-                                        ErrorMessages.INDEX_MISSING
-                                exception.message?.contains("NOT_FOUND") == true ->
-                                        ErrorMessages.GROUP_NOT_FOUND
-                                else -> ErrorMessages.GROUP_LOAD_FAILED
+                // Use ErrorHandler for consistent error handling across the app
+                if (_binding != null && isAdded) {
+                        context?.let { ctx ->
+                                ErrorHandler.handleError(ctx, exception, _binding?.root) {
+                                        // Retry callback - refresh the data
+                                        refreshData()
+                                }
                         }
 
-                // Show error message to user
-                Toast.makeText(
-                                context,
-                                "$errorMessage\n${ErrorMessages.RETRY_PROMPT}",
-                                Toast.LENGTH_LONG
-                        )
-                        .show()
-
-                // Show empty state
-                updateMyGroupsEmptyState(true)
+                        // Show empty state for groups
+                        updateMyGroupsEmptyState(true)
+                } else {
+                        Log.d(TAG, "View destroyed, skipping error UI update")
+                }
         }
 
         private fun getDummyGroups(): List<Group> {

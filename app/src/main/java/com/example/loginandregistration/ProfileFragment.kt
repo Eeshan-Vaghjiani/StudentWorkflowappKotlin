@@ -4,9 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.MediaStore
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -29,23 +27,25 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
+import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.io.File
 
 /**
- * Fragment for displaying and managing user profile.
- * Allows users to view their profile information and update their profile picture.
+ * Fragment for displaying and managing user profile. Allows users to view their profile information
+ * and update their profile picture.
  */
 class ProfileFragment : Fragment() {
 
     private var _binding: FragmentProfileBinding? = null
-    private val binding get() = _binding!!
+    private val binding
+        get() = _binding
 
     private lateinit var auth: FirebaseAuth
     private lateinit var storageRepository: StorageRepository
     private lateinit var userRepository: UserRepository
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var errorStateManager: com.example.loginandregistration.utils.ErrorStateManager
 
     private var tempPhotoUri: Uri? = null
     private var currentPhotoUrl: String? = null
@@ -55,44 +55,41 @@ class ProfileFragment : Fragment() {
     }
 
     // Camera permission launcher
-    private val requestCameraPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            launchCamera()
-        } else {
-            Toast.makeText(
-                requireContext(),
-                "Camera permission is required to take photos",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
+    private val requestCameraPermission =
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+                if (isGranted) {
+                    launchCamera()
+                } else {
+                    Toast.makeText(
+                                    requireContext(),
+                                    "Camera permission is required to take photos",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                }
+            }
 
     // Gallery picker launcher
-    private val pickImageFromGallery = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            uploadProfilePicture(it)
-        }
-    }
+    private val pickImageFromGallery =
+            registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+                uri?.let { uploadProfilePicture(it) }
+            }
 
     // Camera launcher
-    private val takePicture = registerForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success && tempPhotoUri != null) {
-            uploadProfilePicture(tempPhotoUri!!)
-        }
-    }
+    private val takePicture =
+            registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+                if (success && tempPhotoUri != null) {
+                    uploadProfilePicture(tempPhotoUri!!)
+                }
+            }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
+            inflater: LayoutInflater,
+            container: ViewGroup?,
+            savedInstanceState: Bundle?
     ): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
-        return binding.root
+        return _binding!!.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -102,23 +99,19 @@ class ProfileFragment : Fragment() {
         storageRepository = StorageRepository(context = requireContext())
         userRepository = UserRepository()
         firestore = FirebaseFirestore.getInstance()
+        errorStateManager =
+                com.example.loginandregistration.utils.ErrorStateManager(requireContext())
 
         val currentUser = auth.currentUser
         updateUI(currentUser)
         loadUserProfile()
 
-        binding.fabEditProfilePicture.setOnClickListener {
-            showProfilePictureOptions()
-        }
+        binding?.fabEditProfilePicture?.setOnClickListener { showProfilePictureOptions() }
 
-        binding.btnLogout.setOnClickListener {
-            logoutUser()
-        }
+        binding?.btnLogout?.setOnClickListener { logoutUser() }
     }
 
-    /**
-     * Loads user profile data from Firestore.
-     */
+    /** Loads user profile data from Firestore. */
     private fun loadUserProfile() {
         val userId = auth.currentUser?.uid ?: return
 
@@ -126,25 +119,40 @@ class ProfileFragment : Fragment() {
             try {
                 val user = userRepository.getUserById(userId)
                 user?.let {
-                    currentPhotoUrl = it.photoUrl
-                    displayProfilePicture(it.photoUrl)
-                    binding.tvProfileName.text = it.displayName
+                    // Only update UI if view still exists
+                    if (_binding != null && isAdded) {
+                        currentPhotoUrl = it.photoUrl
+                        displayProfilePicture(it.photoUrl)
+                        _binding?.tvProfileName?.text = it.displayName
+                    } else {
+                        Log.d(TAG, "View destroyed during profile load, skipping UI update")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading user profile", e)
+                // Only show error if view still exists
+                if (_binding != null && isAdded) {
+                    val errorState = errorStateManager.categorizeError(e)
+                    errorStateManager.showError(errorState, _binding?.root, null)
+                }
             }
         }
     }
 
-    /**
-     * Displays profile picture using Coil.
-     */
+    /** Displays profile picture using Coil. */
     private fun displayProfilePicture(photoUrl: String?) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot display profile picture: view is destroyed")
+                            return
+                        }
+
         if (photoUrl.isNullOrEmpty()) {
             // Show default avatar with user initials
             val displayName = auth.currentUser?.displayName ?: "User"
             val initials = getInitials(displayName)
-            
+
             // For now, use a placeholder. In task 19, we'll implement DefaultAvatarGenerator
             binding.ivProfilePicture.load(R.drawable.ic_person) {
                 transformations(CircleCropTransformation())
@@ -160,9 +168,7 @@ class ProfileFragment : Fragment() {
         }
     }
 
-    /**
-     * Gets initials from display name.
-     */
+    /** Gets initials from display name. */
     private fun getInitials(name: String): String {
         val parts = name.trim().split(" ")
         return when {
@@ -172,26 +178,21 @@ class ProfileFragment : Fragment() {
         }
     }
 
-    /**
-     * Shows bottom sheet with profile picture options.
-     */
+    /** Shows bottom sheet with profile picture options. */
     private fun showProfilePictureOptions() {
-        val bottomSheet = ProfilePictureBottomSheet(
-            onTakePhoto = { checkCameraPermissionAndLaunch() },
-            onChooseGallery = { pickImageFromGallery.launch("image/*") }
-        )
+        val bottomSheet =
+                ProfilePictureBottomSheet(
+                        onTakePhoto = { checkCameraPermissionAndLaunch() },
+                        onChooseGallery = { pickImageFromGallery.launch("image/*") }
+                )
         bottomSheet.show(parentFragmentManager, "ProfilePictureBottomSheet")
     }
 
-    /**
-     * Checks camera permission and launches camera.
-     */
+    /** Checks camera permission and launches camera. */
     private fun checkCameraPermissionAndLaunch() {
         when {
-            ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED -> {
+            ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) ==
+                    PackageManager.PERMISSION_GRANTED -> {
                 launchCamera()
             }
             else -> {
@@ -200,117 +201,149 @@ class ProfileFragment : Fragment() {
         }
     }
 
-    /**
-     * Launches camera to take a photo.
-     */
+    /** Launches camera to take a photo. */
     private fun launchCamera() {
         try {
-            val photoFile = File(
-                requireContext().cacheDir,
-                "profile_${System.currentTimeMillis()}.jpg"
-            )
-            
-            tempPhotoUri = FileProvider.getUriForFile(
-                requireContext(),
-                "${requireContext().packageName}.fileprovider",
-                photoFile
-            )
-            
+            val photoFile =
+                    File(requireContext().cacheDir, "profile_${System.currentTimeMillis()}.jpg")
+
+            tempPhotoUri =
+                    FileProvider.getUriForFile(
+                            requireContext(),
+                            "${requireContext().packageName}.fileprovider",
+                            photoFile
+                    )
+
             takePicture.launch(tempPhotoUri)
         } catch (e: Exception) {
             Log.e(TAG, "Error launching camera", e)
             Toast.makeText(
-                requireContext(),
-                "Error launching camera: ${e.message}",
-                Toast.LENGTH_SHORT
-            ).show()
+                            requireContext(),
+                            "Error launching camera: ${e.message}",
+                            Toast.LENGTH_SHORT
+                    )
+                    .show()
         }
     }
 
-    /**
-     * Uploads profile picture to Firebase Storage and updates user document.
-     */
+    /** Uploads profile picture to Firebase Storage and updates user document. */
     private fun uploadProfilePicture(uri: Uri) {
         val userId = auth.currentUser?.uid ?: return
 
         lifecycleScope.launch {
             try {
+                val binding =
+                        _binding
+                                ?: run {
+                                    Log.d(TAG, "Cannot upload profile picture: view is destroyed")
+                                    return@launch
+                                }
+
                 // Show progress
                 binding.progressUpload.visibility = View.VISIBLE
                 binding.tvUploadStatus.visibility = View.VISIBLE
                 binding.fabEditProfilePicture.isEnabled = false
 
                 // Upload to Storage
-                val result = storageRepository.uploadProfilePicture(
-                    uri = uri,
-                    userId = userId,
-                    onProgress = { progress ->
-                        binding.progressUpload.progress = progress
-                        binding.tvUploadStatus.text = "Uploading... $progress%"
-                    }
-                )
+                val result =
+                        storageRepository.uploadProfilePicture(
+                                uri = uri,
+                                userId = userId,
+                                onProgress = { progress ->
+                                    _binding?.let {
+                                        it.progressUpload.progress = progress
+                                        it.tvUploadStatus.text = "Uploading... $progress%"
+                                    }
+                                }
+                        )
 
-                result.onSuccess { downloadUrl ->
-                    // Update Firestore user document
-                    updateUserPhotoUrl(userId, downloadUrl)
-                    
-                    // Update UI
-                    currentPhotoUrl = downloadUrl
-                    displayProfilePicture(downloadUrl)
-                    
-                    // Hide progress
-                    binding.progressUpload.visibility = View.GONE
-                    binding.tvUploadStatus.visibility = View.GONE
-                    binding.fabEditProfilePicture.isEnabled = true
-                    
-                    Toast.makeText(
-                        requireContext(),
-                        "Profile picture updated successfully",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    
-                    Log.d(TAG, "Profile picture uploaded: $downloadUrl")
-                }.onFailure { exception ->
-                    // Hide progress
-                    binding.progressUpload.visibility = View.GONE
-                    binding.tvUploadStatus.visibility = View.GONE
-                    binding.fabEditProfilePicture.isEnabled = true
-                    
-                    Toast.makeText(
-                        requireContext(),
-                        "Upload failed: ${exception.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    
-                    Log.e(TAG, "Error uploading profile picture", exception)
-                }
+                result
+                        .onSuccess { downloadUrl ->
+                            // Only update UI if view still exists
+                            if (_binding == null || !isAdded) {
+                                Log.d(TAG, "View destroyed during upload, skipping UI update")
+                                return@onSuccess
+                            }
+
+                            // Update Firestore user document
+                            updateUserPhotoUrl(userId, downloadUrl)
+
+                            // Update UI
+                            currentPhotoUrl = downloadUrl
+                            displayProfilePicture(downloadUrl)
+
+                            // Hide progress
+                            _binding?.let {
+                                it.progressUpload.visibility = View.GONE
+                                it.tvUploadStatus.visibility = View.GONE
+                                it.fabEditProfilePicture.isEnabled = true
+                            }
+
+                            if (isAdded) {
+                                Toast.makeText(
+                                                requireContext(),
+                                                "Profile picture updated successfully",
+                                                Toast.LENGTH_SHORT
+                                        )
+                                        .show()
+                            }
+
+                            Log.d(TAG, "Profile picture uploaded: $downloadUrl")
+                        }
+                        .onFailure { exception ->
+                            // Only update UI if view still exists
+                            if (_binding == null || !isAdded) {
+                                Log.d(TAG, "View destroyed during upload error, skipping UI update")
+                                return@onFailure
+                            }
+
+                            // Hide progress
+                            _binding?.let {
+                                it.progressUpload.visibility = View.GONE
+                                it.tvUploadStatus.visibility = View.GONE
+                                it.fabEditProfilePicture.isEnabled = true
+                            }
+
+                            if (isAdded) {
+                                Toast.makeText(
+                                                requireContext(),
+                                                "Upload failed: ${exception.message}",
+                                                Toast.LENGTH_SHORT
+                                        )
+                                        .show()
+                            }
+
+                            Log.e(TAG, "Error uploading profile picture", exception)
+                        }
             } catch (e: Exception) {
+                // Only update UI if view still exists
+                if (_binding == null || !isAdded) {
+                    Log.d(TAG, "View destroyed during upload exception, skipping UI update")
+                    return@launch
+                }
+
                 // Hide progress
-                binding.progressUpload.visibility = View.GONE
-                binding.tvUploadStatus.visibility = View.GONE
-                binding.fabEditProfilePicture.isEnabled = true
-                
-                Toast.makeText(
-                    requireContext(),
-                    "Error: ${e.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
-                
+                _binding?.let {
+                    it.progressUpload.visibility = View.GONE
+                    it.tvUploadStatus.visibility = View.GONE
+                    it.fabEditProfilePicture.isEnabled = true
+                }
+
+                if (isAdded && _binding != null) {
+                    val errorState = errorStateManager.categorizeError(e)
+                    errorStateManager.showError(errorState, _binding?.root, null)
+                }
+
                 Log.e(TAG, "Error in uploadProfilePicture", e)
             }
         }
     }
 
-    /**
-     * Updates user's photoUrl in Firestore.
-     */
+    /** Updates user's photoUrl in Firestore. */
     private suspend fun updateUserPhotoUrl(userId: String, photoUrl: String) {
         try {
-            firestore.collection("users")
-                .document(userId)
-                .update("photoUrl", photoUrl)
-                .await()
-            
+            firestore.collection("users").document(userId).update("photoUrl", photoUrl).await()
+
             Log.d(TAG, "User photoUrl updated in Firestore")
         } catch (e: Exception) {
             Log.e(TAG, "Error updating user photoUrl", e)
@@ -319,10 +352,18 @@ class ProfileFragment : Fragment() {
     }
 
     private fun updateUI(user: FirebaseUser?) {
+        val binding =
+                _binding
+                        ?: run {
+                            Log.d(TAG, "Cannot update UI: view is destroyed")
+                            return
+                        }
+
         if (user != null) {
             binding.tvProfileEmail.text = user.email ?: "N/A"
             binding.tvProfileUid.text = user.uid
-            binding.tvProfileName.text = user.displayName ?: user.email?.substringBefore("@") ?: "User"
+            binding.tvProfileName.text =
+                    user.displayName ?: user.email?.substringBefore("@") ?: "User"
         } else {
             binding.tvProfileEmail.text = "Not logged in"
             binding.tvProfileUid.text = "N/A"
@@ -336,14 +377,13 @@ class ProfileFragment : Fragment() {
         auth.signOut()
 
         // Sign out from Google as well if the user signed in with Google
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build()
+        val gso =
+                GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(getString(R.string.default_web_client_id))
+                        .requestEmail()
+                        .build()
         val googleSignInClient = GoogleSignIn.getClient(requireActivity(), gso)
-        googleSignInClient.signOut().addOnCompleteListener {
-            navigateToLoginScreen()
-        }
+        googleSignInClient.signOut().addOnCompleteListener { navigateToLoginScreen() }
     }
 
     private fun navigateToLoginScreen() {

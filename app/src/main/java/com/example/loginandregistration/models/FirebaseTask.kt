@@ -16,23 +16,25 @@ data class FirebaseTask(
         val updatedAt: Timestamp = Timestamp.now(),
         val userId: String = "",
         val groupId: String? = null,
-        val completedAt: Timestamp? = null
+        val completedAt: Timestamp? = null,
+        val assignedTo: List<String> = emptyList() // List of user IDs assigned to this task
 ) {
-    // No-argument constructor for Firestore
-    constructor() :
-            this(
-                    "",
-                    "",
-                    "",
-                    "",
-                    "personal",
-                    "pending",
-                    "medium",
-                    null,
-                    Timestamp.now(),
-                    Timestamp.now(),
-                    "",
-                    null,
-                    null
-            )
+        // No-argument constructor for Firestore
+        constructor() :
+                this(
+                        "",
+                        "",
+                        "",
+                        "",
+                        "personal",
+                        "pending",
+                        "medium",
+                        null,
+                        Timestamp.now(),
+                        Timestamp.now(),
+                        "",
+                        null,
+                        null,
+                        emptyList()
+                )
 }

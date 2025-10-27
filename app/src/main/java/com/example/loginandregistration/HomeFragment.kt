@@ -14,11 +14,12 @@ import com.example.loginandregistration.models.DashboardStats
 import com.example.loginandregistration.repository.GroupRepository
 import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.repository.UserRepository
-import com.example.loginandregistration.utils.ErrorMessages
+import com.example.loginandregistration.utils.ErrorStateManager
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -26,8 +27,8 @@ import kotlinx.coroutines.launch
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
-    private val binding
-        get() = _binding!!
+    private val binding: FragmentHomeBinding?
+        get() = _binding
 
     private lateinit var auth: FirebaseAuth
 
@@ -35,6 +36,9 @@ class HomeFragment : Fragment() {
     private lateinit var taskRepository: TaskRepository
     private lateinit var groupRepository: GroupRepository
     private lateinit var userRepository: UserRepository
+
+    // Error state manager for consistent error handling
+    private lateinit var errorStateManager: ErrorStateManager
 
     // Job for managing coroutines lifecycle
     private var statsJob: Job? = null
@@ -54,6 +58,9 @@ class HomeFragment : Fragment() {
         taskRepository = TaskRepository(requireContext())
         groupRepository = GroupRepository()
         userRepository = UserRepository()
+
+        // Initialize error state manager
+        errorStateManager = ErrorStateManager(requireContext())
     }
 
     override fun onCreateView(
@@ -61,8 +68,9 @@ class HomeFragment : Fragment() {
             container: ViewGroup?,
             savedInstanceState: Bundle?
     ): View {
+        Log.d(TAG, "onCreateView: Creating view binding")
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
-        return binding.root
+        return _binding!!.root // Safe here as just created
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -75,9 +83,11 @@ class HomeFragment : Fragment() {
 
     private fun setupToolbar() {
         // Setup Toolbar
-        (activity as? AppCompatActivity)?.setSupportActionBar(binding.toolbarHome)
-        (activity as? AppCompatActivity)?.supportActionBar?.title =
-                getString(R.string.dashboard_title)
+        _binding?.toolbarHome?.let { toolbar ->
+            (activity as? AppCompatActivity)?.setSupportActionBar(toolbar)
+            (activity as? AppCompatActivity)?.supportActionBar?.title =
+                    getString(R.string.dashboard_title)
+        }
 
         // Setup menu using the new MenuProvider API
         requireActivity()
@@ -126,7 +136,7 @@ class HomeFragment : Fragment() {
         // Update Welcome Message
         val user = auth.currentUser
         val welcomeName = user?.displayName?.takeIf { it.isNotBlank() } ?: user?.email ?: "User"
-        binding.tvWelcomeTitle.text =
+        _binding?.tvWelcomeTitle?.text =
                 getString(R.string.welcome_message, welcomeName)
                         .replace("👋 ", "")
                         .replace(",", "") // Basic formatting
@@ -139,7 +149,7 @@ class HomeFragment : Fragment() {
         val userId = auth.currentUser?.uid
         if (userId == null) {
             Log.w(TAG, "User not authenticated, cannot load dashboard data")
-            showErrorState("Please sign in to view your dashboard")
+            showErrorState(Exception("Please sign in to view your dashboard"))
             return
         }
 
@@ -150,71 +160,74 @@ class HomeFragment : Fragment() {
         statsJob?.cancel()
 
         // Set up real-time listeners for continuous updates
+        // Each collector handles its own errors independently to prevent crashes
         statsJob =
                 viewLifecycleOwner.lifecycleScope.launch {
-                    try {
-                        // Collect task statistics
-                        launch { collectTaskStats(userId) }
+                    // Collect task statistics
+                    launch { collectTaskStats(userId) }
 
-                        // Collect group statistics
-                        launch { collectGroupStats(userId) }
+                    // Collect group statistics
+                    launch { collectGroupStats(userId) }
 
-                        // Collect AI usage statistics
-                        launch { collectAIStats(userId) }
+                    // Collect AI usage statistics
+                    launch { collectAIStats(userId) }
 
-                        // Collect session statistics (placeholder for now)
-                        launch { collectSessionStats(userId) }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error loading dashboard stats", e)
-                        showErrorState(e.message ?: "Failed to load dashboard data")
-                    }
+                    // Collect session statistics (placeholder for now)
+                    launch { collectSessionStats(userId) }
                 }
     }
 
     private fun showLoadingState() {
+        // Early return if view is destroyed
+        if (_binding == null) {
+            Log.d(TAG, "Cannot show loading state: view is destroyed")
+            return
+        }
+
         Log.d(TAG, "Showing loading state")
         currentStats = currentStats.copy(isLoading = true, error = null)
 
         // Show loading indicators
-        binding.tvTasksDueCount.text = "..."
-        binding.tvGroupsCount.text = "..."
-        binding.tvSessionsCount.text = "..."
-        binding.tvAiPromptsLeft.text = "..."
-        binding.progressBarAiUsage.progress = 0
-        binding.tvAiUsageDetails.text = getString(R.string.loading)
+        _binding?.tvTasksDueCount?.text = "..."
+        _binding?.tvGroupsCount?.text = "..."
+        _binding?.tvSessionsCount?.text = "..."
+        _binding?.tvAiPromptsLeft?.text = "..."
+        _binding?.progressBarAiUsage?.progress = 0
+        _binding?.tvAiUsageDetails?.text = getString(R.string.loading)
     }
 
     /** Show error state with fallback values Displays error message and allows user to retry */
-    private fun showErrorState(message: String) {
-        Log.e(TAG, "Showing error state: $message")
-        currentStats = currentStats.copy(isLoading = false, error = message)
+    private fun showErrorState(exception: Throwable) {
+        // Early return if view is destroyed
+        if (_binding == null) {
+            Log.d(TAG, "Cannot show error state: view is destroyed")
+            return
+        }
 
-        // Show error indicators with fallback values
-        binding.tvTasksDueCount.text = "0"
-        binding.tvGroupsCount.text = "0"
-        binding.tvSessionsCount.text = "0"
-        binding.tvAiPromptsLeft.text = getString(R.string.home_ai_prompts_left_template, 10)
-        binding.progressBarAiUsage.progress = 0
-        binding.tvAiUsageDetails.text = getString(R.string.home_ai_prompts_usage_template, 0, 10)
+        val errorState = errorStateManager.categorizeError(exception)
+        Log.e(TAG, "Showing error state: ${errorState.category} - ${errorState.userMessage}")
+        currentStats = currentStats.copy(isLoading = false, error = errorState.userMessage)
 
-        // Show toast with error message and retry option
-        val errorMessage =
-                when {
-                    message.contains("permission", ignoreCase = true) ->
-                            ErrorMessages.PERMISSION_DENIED
-                    message.contains("network", ignoreCase = true) ||
-                            message.contains("connection", ignoreCase = true) ->
-                            ErrorMessages.NETWORK_ERROR
-                    message.contains("index", ignoreCase = true) -> ErrorMessages.INDEX_MISSING
-                    else -> message
-                }
+        // Don't update UI if already showing data - let partial data remain visible
+        // Only show empty state if no data has been loaded yet
+        if (_binding?.tvTasksDueCount?.text == "...") {
+            _binding?.tvTasksDueCount?.text = "0"
+        }
+        if (_binding?.tvGroupsCount?.text == "...") {
+            _binding?.tvGroupsCount?.text = "0"
+        }
+        if (_binding?.tvSessionsCount?.text == "...") {
+            _binding?.tvSessionsCount?.text = "0"
+        }
+        if (_binding?.tvAiPromptsLeft?.text == getString(R.string.loading)) {
+            _binding?.tvAiPromptsLeft?.text = getString(R.string.home_ai_prompts_left_template, 10)
+            _binding?.progressBarAiUsage?.progress = 0
+            _binding?.tvAiUsageDetails?.text =
+                    getString(R.string.home_ai_prompts_usage_template, 0, 10)
+        }
 
-        Toast.makeText(
-                        context,
-                        "$errorMessage\n${ErrorMessages.PULL_TO_REFRESH}",
-                        Toast.LENGTH_LONG
-                )
-                .show()
+        // Show error with retry option using ErrorStateManager
+        errorStateManager.showError(errorState, _binding?.root) { retryLoadDashboardData() }
     }
 
     /** Retry loading dashboard data Called when user wants to retry after an error */
@@ -228,66 +241,85 @@ class HomeFragment : Fragment() {
      * overdue task counts
      */
     private suspend fun collectTaskStats(userId: String) {
-        taskRepository
-                .getUserTasksFlow()
-                .catch { e ->
-                    Log.e(TAG, "Error collecting task stats", e)
-                    val errorMessage =
-                            when {
-                                e.message?.contains("PERMISSION_DENIED") == true ->
-                                        ErrorMessages.PERMISSION_DENIED
-                                e.message?.contains("UNAVAILABLE") == true ->
-                                        ErrorMessages.NETWORK_ERROR
-                                e.message?.contains("FAILED_PRECONDITION") == true ->
-                                        ErrorMessages.INDEX_MISSING
-                                else -> ErrorMessages.TASK_LOAD_FAILED
-                            }
-                    showErrorState(errorMessage)
-                    // Update with zero values on error
-                    updateTaskStatsUI(0, 0, 0, 0)
-                }
-                .collect { tasks ->
-                    Log.d(TAG, "Received ${tasks.size} tasks from Firestore")
+        try {
+            taskRepository
+                    .getUserTasksFlow()
+                    .catch { e ->
+                        Log.e(TAG, "Error collecting task stats", e)
 
-                    val now = Timestamp.now()
-                    var totalTasks = tasks.size
-                    var completedTasks = 0
-                    var pendingTasks = 0
-                    var overdueTasks = 0
-                    var tasksDue = 0
+                        // Only show error if view still exists
+                        if (_binding != null && isAdded) {
+                            // Use ErrorStateManager for consistent error handling
+                            showErrorState(e)
+                        } else {
+                            Log.d(TAG, "View destroyed, skipping error UI update for task stats")
+                        }
+                        // Emit empty list to continue flow without crashing
+                        emit(emptyList())
+                    }
+                    .collect { tasks ->
+                        // Only update UI if view exists
+                        if (_binding != null && isAdded) {
+                            Log.d(TAG, "Received ${tasks.size} tasks from Firestore")
 
-                    tasks.forEach { task ->
-                        when {
-                            task.status == "completed" -> completedTasks++
-                            task.dueDate != null && task.dueDate!! < now -> {
-                                overdueTasks++
-                                tasksDue++
+                            val now = Timestamp.now()
+                            var totalTasks = tasks.size
+                            var completedTasks = 0
+                            var pendingTasks = 0
+                            var overdueTasks = 0
+                            var tasksDue = 0
+
+                            tasks.forEach { task ->
+                                when {
+                                    task.status == "completed" -> completedTasks++
+                                    task.dueDate != null && task.dueDate < now -> {
+                                        overdueTasks++
+                                        tasksDue++
+                                    }
+                                    task.dueDate != null && isSameDay(task.dueDate, now) -> {
+                                        tasksDue++
+                                    }
+                                    else -> pendingTasks++
+                                }
                             }
-                            task.dueDate != null && isSameDay(task.dueDate!!, now) -> {
-                                tasksDue++
-                            }
-                            else -> pendingTasks++
+
+                            // Update stats model
+                            currentStats =
+                                    currentStats.copy(
+                                            totalTasks = totalTasks,
+                                            completedTasks = completedTasks,
+                                            pendingTasks = pendingTasks,
+                                            overdueTasks = overdueTasks,
+                                            tasksDue = tasksDue,
+                                            isLoading = false
+                                    )
+
+                            // Update UI
+                            updateTaskStatsUI(tasksDue, totalTasks, completedTasks, overdueTasks)
                         }
                     }
+        } catch (e: CancellationException) {
+            // Coroutine was cancelled - this is expected during navigation
+            Log.d(TAG, "Task stats collection cancelled (expected during navigation)")
+            throw e // Re-throw to properly cancel the coroutine
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in collectTaskStats", e)
 
-                    // Update stats model
-                    currentStats =
-                            currentStats.copy(
-                                    totalTasks = totalTasks,
-                                    completedTasks = completedTasks,
-                                    pendingTasks = pendingTasks,
-                                    overdueTasks = overdueTasks,
-                                    tasksDue = tasksDue,
-                                    isLoading = false
-                            )
-
-                    // Update UI
-                    updateTaskStatsUI(tasksDue, totalTasks, completedTasks, overdueTasks)
-                }
+            // Only show error if view still exists
+            if (_binding != null && isAdded) {
+                showErrorState(e)
+                updateTaskStatsUI(0, 0, 0, 0)
+            } else {
+                Log.d(TAG, "View destroyed, skipping error UI update for task stats")
+            }
+        }
     }
 
     /** Update task statistics in the UI */
     private fun updateTaskStatsUI(tasksDue: Int, total: Int, completed: Int, overdue: Int) {
+        // Early return if view is destroyed
+        val binding = _binding ?: return
+
         Log.d(
                 TAG,
                 "Updating task stats UI: due=$tasksDue, total=$total, completed=$completed, overdue=$overdue"
@@ -307,85 +339,134 @@ class HomeFragment : Fragment() {
      * Collect real-time group statistics from Firestore Counts active groups where user is a member
      */
     private suspend fun collectGroupStats(userId: String) {
-        groupRepository
-                .getUserGroupsFlow()
-                .catch { e ->
-                    Log.e(TAG, "Error collecting group stats", e)
-                    val errorMessage =
-                            when {
-                                e.message?.contains("PERMISSION_DENIED") == true ->
-                                        ErrorMessages.PERMISSION_DENIED
-                                e.message?.contains("UNAVAILABLE") == true ->
-                                        ErrorMessages.NETWORK_ERROR
-                                else -> ErrorMessages.GROUP_LOAD_FAILED
-                            }
-                    showErrorState(errorMessage)
-                    // Update with zero value on error
-                    updateGroupStatsUI(0)
-                }
-                .collect { groups ->
-                    Log.d(TAG, "Received ${groups.size} groups from Firestore")
+        try {
+            groupRepository
+                    .getUserGroupsFlow()
+                    .catch { e ->
+                        Log.e(TAG, "Error collecting group stats", e)
 
-                    val activeGroups = groups.count { it.isActive }
+                        // Only show error if view still exists
+                        if (_binding != null && isAdded) {
+                            // Use ErrorStateManager for consistent error handling
+                            showErrorState(e)
+                        } else {
+                            Log.d(TAG, "View destroyed, skipping error UI update for group stats")
+                        }
+                        // Emit empty list to continue flow without crashing
+                        emit(emptyList())
+                    }
+                    .collect { groups ->
+                        // Only update UI if view exists
+                        if (_binding != null && isAdded) {
+                            Log.d(TAG, "Received ${groups.size} groups from Firestore")
 
-                    // Update stats model
-                    currentStats = currentStats.copy(activeGroups = activeGroups, isLoading = false)
+                            val activeGroups = groups.count { it.isActive }
 
-                    // Update UI
-                    updateGroupStatsUI(activeGroups)
-                }
+                            // Update stats model
+                            currentStats =
+                                    currentStats.copy(
+                                            activeGroups = activeGroups,
+                                            isLoading = false
+                                    )
+
+                            // Update UI
+                            updateGroupStatsUI(activeGroups)
+                        }
+                    }
+        } catch (e: CancellationException) {
+            // Coroutine was cancelled - this is expected during navigation
+            Log.d(TAG, "Group stats collection cancelled (expected during navigation)")
+            throw e // Re-throw to properly cancel the coroutine
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in collectGroupStats", e)
+
+            // Only show error if view still exists
+            if (_binding != null && isAdded) {
+                showErrorState(e)
+                updateGroupStatsUI(0)
+            } else {
+                Log.d(TAG, "View destroyed, skipping error UI update for group stats")
+            }
+        }
     }
 
     /** Update group statistics in the UI */
     private fun updateGroupStatsUI(activeGroups: Int) {
+        // Early return if view is destroyed
+        val binding = _binding ?: return
+
         Log.d(TAG, "Updating group stats UI: activeGroups=$activeGroups")
         binding.tvGroupsCount.text = activeGroups.toString()
     }
 
     /** Collect AI usage statistics from user profile Extracts aiUsageCount from user document */
     private suspend fun collectAIStats(userId: String) {
-        userRepository
-                .getCurrentUserProfileFlow()
-                .catch { e ->
-                    Log.e(TAG, "Error collecting AI stats", e)
-                    val errorMessage =
-                            when {
-                                e.message?.contains("PERMISSION_DENIED") == true ->
-                                        ErrorMessages.PERMISSION_DENIED
-                                e.message?.contains("UNAVAILABLE") == true ->
-                                        ErrorMessages.NETWORK_ERROR
-                                else -> ErrorMessages.PROFILE_LOAD_FAILED
-                            }
-                    showErrorState(errorMessage)
-                    // Update with default values on error
-                    updateAIStatsUI(0, 10)
-                }
-                .collect { user ->
-                    if (user != null) {
-                        Log.d(TAG, "Received user profile with AI usage: ${user.aiUsageCount}")
+        try {
+            userRepository
+                    .getCurrentUserProfileFlow()
+                    .catch { e ->
+                        Log.e(TAG, "Error collecting AI stats", e)
 
-                        val aiUsageCount = user.aiUsageCount
-                        val aiUsageLimit = 10 // Default limit
-
-                        // Update stats model
-                        currentStats =
-                                currentStats.copy(
-                                        aiUsageCount = aiUsageCount,
-                                        aiUsageLimit = aiUsageLimit,
-                                        isLoading = false
+                        // Only show error if view still exists
+                        if (_binding != null && isAdded) {
+                            // Use ErrorStateManager for consistent error handling
+                            showErrorState(e)
+                        } else {
+                            Log.d(TAG, "View destroyed, skipping error UI update for AI stats")
+                        }
+                        // Emit null to continue flow without crashing
+                        emit(null)
+                    }
+                    .collect { user ->
+                        // Only update UI if view exists
+                        if (_binding != null && isAdded) {
+                            if (user != null) {
+                                Log.d(
+                                        TAG,
+                                        "Received user profile with AI usage: ${user.aiUsageCount}"
                                 )
 
-                        // Update UI
-                        updateAIStatsUI(aiUsageCount, aiUsageLimit)
-                    } else {
-                        Log.w(TAG, "User profile not found")
-                        updateAIStatsUI(0, 10)
+                                val aiUsageCount = user.aiUsageCount
+                                val aiUsageLimit = 10 // Default limit
+
+                                // Update stats model
+                                currentStats =
+                                        currentStats.copy(
+                                                aiUsageCount = aiUsageCount,
+                                                aiUsageLimit = aiUsageLimit,
+                                                isLoading = false
+                                        )
+
+                                // Update UI
+                                updateAIStatsUI(aiUsageCount, aiUsageLimit)
+                            } else {
+                                Log.w(TAG, "User profile not found")
+                                updateAIStatsUI(0, 10)
+                            }
+                        }
                     }
-                }
+        } catch (e: CancellationException) {
+            // Coroutine was cancelled - this is expected during navigation
+            Log.d(TAG, "AI stats collection cancelled (expected during navigation)")
+            throw e // Re-throw to properly cancel the coroutine
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error in collectAIStats", e)
+
+            // Only show error if view still exists
+            if (_binding != null && isAdded) {
+                showErrorState(e)
+                updateAIStatsUI(0, 10)
+            } else {
+                Log.d(TAG, "View destroyed, skipping error UI update for AI stats")
+            }
+        }
     }
 
     /** Update AI usage statistics in the UI */
     private fun updateAIStatsUI(used: Int, limit: Int) {
+        // Early return if view is destroyed
+        val binding = _binding ?: return
+
         Log.d(TAG, "Updating AI stats UI: used=$used, limit=$limit")
 
         val remaining = (limit - used).coerceAtLeast(0)
@@ -405,46 +486,51 @@ class HomeFragment : Fragment() {
 
     /** Collect session statistics Placeholder for future session tracking feature */
     private suspend fun collectSessionStats(userId: String) {
-        Log.d(TAG, "collectSessionStats - using placeholder value")
-        binding.tvSessionsCount.text = "0"
+        // Only update UI if view exists
+        if (_binding != null && isAdded) {
+            Log.d(TAG, "collectSessionStats - using placeholder value")
+            _binding?.tvSessionsCount?.text = "0"
+        } else {
+            Log.d(TAG, "View destroyed, skipping session stats update")
+        }
     }
 
     private fun setupClickListeners() {
-        binding.btnViewAllTasksHome.setOnClickListener {
+        _binding?.btnViewAllTasksHome?.setOnClickListener {
             Toast.makeText(context, R.string.button_view_all_tasks_clicked, Toast.LENGTH_SHORT)
                     .show()
             (activity as? MainActivity)?.navigateToTasksScreen()
         }
 
-        binding.btnViewAllGroupsHome.setOnClickListener {
+        _binding?.btnViewAllGroupsHome?.setOnClickListener {
             Toast.makeText(context, R.string.button_view_all_groups_clicked, Toast.LENGTH_SHORT)
                     .show()
             (activity as? MainActivity)?.navigateToGroupsScreen()
         }
 
-        binding.btnViewAllScheduleHome.setOnClickListener {
+        _binding?.btnViewAllScheduleHome?.setOnClickListener {
             Toast.makeText(context, R.string.button_view_all_schedule_clicked, Toast.LENGTH_SHORT)
                     .show()
             (activity as? MainActivity)?.navigateToCalendarScreen()
         }
 
-        binding.btnNewTaskHome.setOnClickListener {
+        _binding?.btnNewTaskHome?.setOnClickListener {
             Toast.makeText(context, R.string.new_task_clicked, Toast.LENGTH_SHORT).show()
             // TODO: Implement navigation or dialog for new task
         }
 
-        binding.btnCalendarQuickHome.setOnClickListener {
+        _binding?.btnCalendarQuickHome?.setOnClickListener {
             Toast.makeText(context, R.string.calendar_quick_action_clicked, Toast.LENGTH_SHORT)
                     .show()
             (activity as? MainActivity)?.navigateToCalendarScreen()
         }
 
-        binding.btnGroupsQuickHome.setOnClickListener {
+        _binding?.btnGroupsQuickHome?.setOnClickListener {
             Toast.makeText(context, R.string.groups_quick_action_clicked, Toast.LENGTH_SHORT).show()
             (activity as? MainActivity)?.navigateToGroupsScreen()
         }
 
-        binding.btnAiAssistantHome.setOnClickListener {
+        _binding?.btnAiAssistantHome?.setOnClickListener {
             Toast.makeText(context, R.string.ai_assistant_clicked, Toast.LENGTH_SHORT).show()
             // TODO: Implement navigation to AI Assistant
         }
@@ -452,8 +538,10 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        Log.d(TAG, "onDestroyView: Cancelling coroutines and clearing binding")
         // Cancel stats collection job
         statsJob?.cancel()
+        statsJob = null
         _binding = null
     }
 }

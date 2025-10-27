@@ -8,8 +8,8 @@ import android.util.Patterns
  */
 object InputValidator {
 
-    // Constants for validation limits
-    const val MAX_MESSAGE_LENGTH = 5000
+    // Constants for validation limits (aligned with Firebase Security Rules)
+    const val MAX_MESSAGE_LENGTH = 10000 // Updated to match Firebase rules
     const val MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
     const val MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
     const val MAX_GROUP_NAME_LENGTH = 50

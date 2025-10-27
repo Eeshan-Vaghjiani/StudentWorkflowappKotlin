@@ -107,7 +107,7 @@ class EnhancedGroupRepository {
 
         val listener =
                 groupsCollection
-                        .whereArrayContains("members.userId", userId)
+                        .whereArrayContains("memberIds", userId)
                         .whereEqualTo("isActive", true)
                         .orderBy("updatedAt", Query.Direction.DESCENDING)
                         .addSnapshotListener { snapshot, error ->

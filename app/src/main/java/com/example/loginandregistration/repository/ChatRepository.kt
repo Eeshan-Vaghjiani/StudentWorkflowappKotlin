@@ -287,14 +287,33 @@ class ChatRepository(
 
             Log.d(TAG, "getOrCreateGroupChat: Checking for existing chat for group $groupId")
 
+            // Check for existing chat with error handling
             val existingChats =
-                    firestore
-                            .collection(CHATS_COLLECTION)
-                            .whereEqualTo("type", ChatType.GROUP.name)
-                            .whereEqualTo("groupId", groupId)
-                            .get()
-                            .await()
+                    try {
+                        firestore
+                                .collection(CHATS_COLLECTION)
+                                .whereEqualTo("type", ChatType.GROUP.name)
+                                .whereEqualTo("groupId", groupId)
+                                .get()
+                                .await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "getOrCreateGroupChat: Error checking existing chats", e)
 
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            return Result.failure(
+                                    Exception("You don't have permission to access this chat")
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(
+                                TAG,
+                                "getOrCreateGroupChat: Unexpected error checking existing chats",
+                                e
+                        )
+                        return Result.failure(e)
+                    }
             if (!existingChats.isEmpty) {
                 val chat = existingChats.documents.first().toObject(Chat::class.java)
                 Log.d(TAG, "getOrCreateGroupChat: Found existing chat ${chat?.chatId}")
@@ -306,8 +325,29 @@ class ChatRepository(
             }
 
             Log.d(TAG, "getOrCreateGroupChat: Creating new chat for group $groupId")
-            val groupDoc = firestore.collection("groups").document(groupId).get().await()
 
+            // Fetch group document with error handling
+            val groupDoc =
+                    try {
+                        firestore.collection("groups").document(groupId).get().await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "getOrCreateGroupChat: Error fetching group document", e)
+
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            return Result.failure(
+                                    Exception("You don't have permission to access this group")
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(
+                                TAG,
+                                "getOrCreateGroupChat: Unexpected error fetching group document",
+                                e
+                        )
+                        return Result.failure(e)
+                    }
             if (!groupDoc.exists()) {
                 Log.e(
                         TAG,
@@ -352,7 +392,24 @@ class ChatRepository(
                             createdAt = Date()
                     )
 
-            firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
+            // Create chat with error handling
+            try {
+                firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
+            } catch (e: FirebaseFirestoreException) {
+                Log.e(TAG, "getOrCreateGroupChat: Error creating chat", e)
+
+                if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    return Result.failure(
+                            Exception("You don't have permission to create a chat for this group")
+                    )
+                }
+
+                return Result.failure(e)
+            } catch (e: Exception) {
+                Log.e(TAG, "getOrCreateGroupChat: Unexpected error creating chat", e)
+                return Result.failure(e)
+            }
+
             Log.d(
                     TAG,
                     "getOrCreateGroupChat: Successfully created chat $chatId for group $groupId with ${memberIds.size} participants"
@@ -361,6 +418,16 @@ class ChatRepository(
             Result.success(chat)
         } catch (e: Exception) {
             Log.e(TAG, "Error creating group chat", e)
+
+            // Handle permission errors gracefully
+            if (e is FirebaseFirestoreException &&
+                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+            ) {
+                return Result.failure(
+                        Exception("You don't have permission to access this group chat")
+                )
+            }
+
             Result.failure(e)
         }
     }
@@ -377,16 +444,37 @@ class ChatRepository(
 
             Log.d(TAG, "ensureGroupChatsExist: Fetching user's groups")
 
-            // Get all groups where user is a member
+            // Get all groups where user is a member with error handling
             // FIXED: Use memberIds instead of members to match the actual field name in groups
             // collection
             val groupsSnapshot =
-                    firestore
-                            .collection("groups")
-                            .whereArrayContains("memberIds", getCurrentUserId())
-                            .get()
-                            .await()
+                    try {
+                        firestore
+                                .collection("groups")
+                                .whereArrayContains("memberIds", getCurrentUserId())
+                                .get()
+                                .await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "ensureGroupChatsExist: Error fetching groups", e)
 
+                        // Handle permission errors gracefully
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            Log.e(
+                                    TAG,
+                                    "ensureGroupChatsExist: Permission denied when fetching groups"
+                            )
+                            return Result.failure(
+                                    Exception(
+                                            "You don't have permission to access groups. Please try logging out and back in."
+                                    )
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "ensureGroupChatsExist: Unexpected error fetching groups", e)
+                        return Result.failure(e)
+                    }
             Log.d(TAG, "ensureGroupChatsExist: Found ${groupsSnapshot.documents.size} groups")
 
             var createdCount = 0
@@ -396,16 +484,25 @@ class ChatRepository(
 
                 Log.d(TAG, "ensureGroupChatsExist: Checking group '$groupName' ($groupId)")
 
-                // Check if chat already exists for this group
+                // Check if chat already exists for this group with error handling
                 val existingChat =
-                        firestore
-                                .collection(CHATS_COLLECTION)
-                                .whereEqualTo("type", ChatType.GROUP.name)
-                                .whereEqualTo("groupId", groupId)
-                                .limit(1)
-                                .get()
-                                .await()
-
+                        try {
+                            firestore
+                                    .collection(CHATS_COLLECTION)
+                                    .whereEqualTo("type", ChatType.GROUP.name)
+                                    .whereEqualTo("groupId", groupId)
+                                    .limit(1)
+                                    .get()
+                                    .await()
+                        } catch (e: Exception) {
+                            Log.e(
+                                    TAG,
+                                    "ensureGroupChatsExist: Error checking existing chat for group '$groupName'",
+                                    e
+                            )
+                            // Continue to next group instead of failing completely
+                            continue
+                        }
                 if (existingChat.isEmpty) {
                     // Create chat for this group
                     Log.d(TAG, "ensureGroupChatsExist: Creating chat for group '$groupName'")
@@ -421,6 +518,7 @@ class ChatRepository(
                                 TAG,
                                 "ensureGroupChatsExist: Failed to create chat for group '$groupName': ${result.exceptionOrNull()?.message}"
                         )
+                        // Continue to next group instead of failing completely
                     }
                 } else {
                     Log.d(TAG, "ensureGroupChatsExist: Chat already exists for group '$groupName'")
@@ -431,6 +529,19 @@ class ChatRepository(
             Result.success(createdCount)
         } catch (e: Exception) {
             Log.e(TAG, "Error ensuring group chats exist", e)
+
+            // Handle permission errors gracefully
+            if (e is FirebaseFirestoreException &&
+                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+            ) {
+                Log.e(TAG, "ensureGroupChatsExist: Permission denied error caught")
+                return Result.failure(
+                        Exception(
+                                "You don't have permission to access chat data. Please try logging out and back in."
+                        )
+                )
+            }
+
             Result.failure(e)
         }
     }

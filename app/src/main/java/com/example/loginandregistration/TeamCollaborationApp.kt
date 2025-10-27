@@ -7,6 +7,7 @@ import coil.Coil
 import com.example.loginandregistration.utils.FirestoreConfig
 import com.example.loginandregistration.utils.ImageLoaderConfig
 import com.example.loginandregistration.utils.MemoryManager
+import com.example.loginandregistration.utils.ProductionMetricsMonitor
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -39,6 +40,10 @@ class TeamCollaborationApp : Application() {
             Coil.setImageLoader(imageLoader)
 
             Log.d(TAG, "Coil ImageLoader configured with 50MB disk cache")
+
+            // Initialize production metrics monitoring
+            ProductionMetricsMonitor.initialize(this)
+            Log.d(TAG, "Production metrics monitoring initialized")
 
             // Log initial memory statistics
             MemoryManager.logMemoryStats(this, TAG)

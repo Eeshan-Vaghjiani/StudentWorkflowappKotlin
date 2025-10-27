@@ -20,12 +20,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.loginandregistration.adapters.CalendarTaskAdapter
 import com.example.loginandregistration.utils.CalendarDayBinder
-import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.viewmodels.CalendarViewModel
 import com.example.loginandregistration.viewmodels.TaskFilter
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
-import com.google.android.material.snackbar.Snackbar
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.CalendarMonth
 import com.kizitonwose.calendar.core.daysOfWeek
@@ -44,23 +42,25 @@ import kotlinx.coroutines.launch
 class CalendarFragment : Fragment() {
 
     private val viewModel: CalendarViewModel by viewModels()
+    private lateinit var errorStateManager: com.example.loginandregistration.utils.ErrorStateManager
 
-    private lateinit var calendarView: CalendarView
-    private lateinit var monthYearText: TextView
-    private lateinit var previousMonthButton: ImageButton
-    private lateinit var nextMonthButton: ImageButton
-    private lateinit var filterChipGroup: ChipGroup
-    private lateinit var chipAllTasks: Chip
-    private lateinit var chipMyTasks: Chip
-    private lateinit var chipGroupTasks: Chip
-    private lateinit var selectedDateText: TextView
-    private lateinit var tasksRecyclerView: RecyclerView
-    private lateinit var emptyStateLayout: View
-    private lateinit var loadingIndicator: ProgressBar
+    // Make views nullable for lifecycle safety
+    private var calendarView: CalendarView? = null
+    private var monthYearText: TextView? = null
+    private var previousMonthButton: ImageButton? = null
+    private var nextMonthButton: ImageButton? = null
+    private var filterChipGroup: ChipGroup? = null
+    private var chipAllTasks: Chip? = null
+    private var chipMyTasks: Chip? = null
+    private var chipGroupTasks: Chip? = null
+    private var selectedDateText: TextView? = null
+    private var tasksRecyclerView: RecyclerView? = null
+    private var emptyStateLayout: View? = null
+    private var loadingIndicator: ProgressBar? = null
 
-    private lateinit var taskAdapter: CalendarTaskAdapter
+    private var taskAdapter: CalendarTaskAdapter? = null
     private var currentMonth = YearMonth.now()
-    private lateinit var gestureDetector: GestureDetectorCompat
+    private var gestureDetector: GestureDetectorCompat? = null
 
     // Activity result launcher for task details
     private val taskDetailsLauncher =
@@ -82,6 +82,8 @@ class CalendarFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        errorStateManager =
+                com.example.loginandregistration.utils.ErrorStateManager(requireContext())
         initViews(view)
         setupCalendar()
         setupTasksList()
@@ -89,6 +91,26 @@ class CalendarFragment : Fragment() {
         setupSwipeGesture()
         observeViewModel()
         setupMonthNavigation()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+
+        // Clear all view references to prevent memory leaks
+        calendarView = null
+        monthYearText = null
+        previousMonthButton = null
+        nextMonthButton = null
+        filterChipGroup = null
+        chipAllTasks = null
+        chipMyTasks = null
+        chipGroupTasks = null
+        selectedDateText = null
+        tasksRecyclerView = null
+        emptyStateLayout = null
+        loadingIndicator = null
+        taskAdapter = null
+        gestureDetector = null
     }
 
     private fun initViews(view: View) {
@@ -107,10 +129,11 @@ class CalendarFragment : Fragment() {
     }
 
     private fun setupCalendar() {
+        val calendar = calendarView ?: return
         val daysOfWeek = daysOfWeek()
 
         // Setup month header
-        calendarView.monthHeaderBinder =
+        calendar.monthHeaderBinder =
                 object : MonthHeaderFooterBinder<MonthHeaderViewContainer> {
                     override fun create(view: View) = MonthHeaderViewContainer(view)
                     override fun bind(container: MonthHeaderViewContainer, data: CalendarMonth) {
@@ -134,20 +157,22 @@ class CalendarFragment : Fragment() {
         // Setup calendar range (show 12 months: 6 before and 6 after current month)
         val startMonth = currentMonth.minusMonths(6)
         val endMonth = currentMonth.plusMonths(6)
-        calendarView.setup(startMonth, endMonth, daysOfWeek.first())
-        calendarView.scrollToMonth(currentMonth)
+        calendar.setup(startMonth, endMonth, daysOfWeek.first())
+        calendar.scrollToMonth(currentMonth)
 
         // Update month/year text
         updateMonthYearText(currentMonth)
 
         // Listen for month scroll
-        calendarView.monthScrollListener = { month ->
+        calendar.monthScrollListener = { month ->
             currentMonth = month.yearMonth
             updateMonthYearText(currentMonth)
         }
     }
 
     private fun setupTasksList() {
+        val recyclerView = tasksRecyclerView ?: return
+
         taskAdapter = CalendarTaskAdapter { task ->
             // Navigate to task details
             val intent =
@@ -157,7 +182,7 @@ class CalendarFragment : Fragment() {
             taskDetailsLauncher.launch(intent)
         }
 
-        tasksRecyclerView.apply {
+        recyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = taskAdapter
         }
@@ -165,67 +190,137 @@ class CalendarFragment : Fragment() {
 
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.datesWithTasks.collect { dates ->
-                updateCalendarDayBinder(dates, viewModel.selectedDate.value)
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.selectedDate.collect { selectedDate ->
-                updateCalendarDayBinder(viewModel.datesWithTasks.value, selectedDate)
-                updateSelectedDateText(selectedDate)
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.tasksForSelectedDate.collect { tasks ->
-                taskAdapter.submitList(tasks)
-
-                if (tasks.isEmpty()) {
-                    tasksRecyclerView.visibility = View.GONE
-                    emptyStateLayout.visibility = View.VISIBLE
+            try {
+                viewModel.datesWithTasks.collect { dates ->
+                    // Only update UI if view still exists
+                    if (isAdded && calendarView != null) {
+                        updateCalendarDayBinder(dates, viewModel.selectedDate.value)
+                    }
+                }
+            } catch (e: Exception) {
+                if (isAdded && view != null) {
+                    android.util.Log.e("CalendarFragment", "Error collecting dates with tasks", e)
+                    showError(e.message ?: "Error loading calendar data")
                 } else {
-                    tasksRecyclerView.visibility = View.VISIBLE
-                    emptyStateLayout.visibility = View.GONE
+                    android.util.Log.d(
+                            "CalendarFragment",
+                            "View destroyed, skipping error UI update"
+                    )
                 }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isLoading.collect { isLoading ->
-                loadingIndicator.visibility = if (isLoading) View.VISIBLE else View.GONE
+            try {
+                viewModel.selectedDate.collect { selectedDate ->
+                    // Only update UI if view still exists
+                    if (isAdded && calendarView != null) {
+                        updateCalendarDayBinder(viewModel.datesWithTasks.value, selectedDate)
+                        updateSelectedDateText(selectedDate)
+                    }
+                }
+            } catch (e: Exception) {
+                if (isAdded && view != null) {
+                    android.util.Log.e("CalendarFragment", "Error collecting selected date", e)
+                } else {
+                    android.util.Log.d(
+                            "CalendarFragment",
+                            "View destroyed, skipping error UI update"
+                    )
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                viewModel.tasksForSelectedDate.collect { tasks ->
+                    // Only update UI if view still exists
+                    if (isAdded && tasksRecyclerView != null && emptyStateLayout != null) {
+                        taskAdapter?.submitList(tasks)
+
+                        if (tasks.isEmpty()) {
+                            tasksRecyclerView?.visibility = View.GONE
+                            emptyStateLayout?.visibility = View.VISIBLE
+                        } else {
+                            tasksRecyclerView?.visibility = View.VISIBLE
+                            emptyStateLayout?.visibility = View.GONE
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (isAdded && view != null) {
+                    android.util.Log.e("CalendarFragment", "Error collecting tasks", e)
+                    showError(e.message ?: "Error loading tasks")
+                } else {
+                    android.util.Log.d(
+                            "CalendarFragment",
+                            "View destroyed, skipping error UI update"
+                    )
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                viewModel.isLoading.collect { isLoading ->
+                    // Only update UI if view still exists
+                    if (isAdded && loadingIndicator != null) {
+                        loadingIndicator?.visibility = if (isLoading) View.VISIBLE else View.GONE
+                    }
+                }
+            } catch (e: Exception) {
+                if (isAdded && view != null) {
+                    android.util.Log.e("CalendarFragment", "Error collecting loading state", e)
+                } else {
+                    android.util.Log.d(
+                            "CalendarFragment",
+                            "View destroyed, skipping error UI update"
+                    )
+                }
             }
         }
 
         // Observe errors
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.error.collect { error -> error?.let { showError(it) } }
+            try {
+                viewModel.error.collect { error ->
+                    // Only show error if view still exists
+                    if (isAdded && view != null) {
+                        error?.let { showError(it) }
+                    }
+                }
+            } catch (e: Exception) {
+                if (isAdded && view != null) {
+                    android.util.Log.e("CalendarFragment", "Error collecting error state", e)
+                } else {
+                    android.util.Log.d(
+                            "CalendarFragment",
+                            "View destroyed, skipping error UI update"
+                    )
+                }
+            }
         }
     }
 
     /** Show error message to user with retry option */
     private fun showError(errorMessage: String) {
-        val message =
-                when {
-                    errorMessage.contains("PERMISSION_DENIED", ignoreCase = true) ->
-                            ErrorMessages.PERMISSION_DENIED
-                    errorMessage.contains("UNAVAILABLE", ignoreCase = true) ->
-                            ErrorMessages.NETWORK_ERROR
-                    errorMessage.contains("FAILED_PRECONDITION", ignoreCase = true) ->
-                            ErrorMessages.INDEX_MISSING
-                    errorMessage.contains("NOT_FOUND", ignoreCase = true) ->
-                            ErrorMessages.TASK_NOT_FOUND
-                    else -> ErrorMessages.CALENDAR_LOAD_FAILED
-                }
-
-        view?.let { v ->
-            Snackbar.make(v, message, Snackbar.LENGTH_LONG)
-                    .setAction(ErrorMessages.RETRY_PROMPT) { viewModel.loadTasks() }
-                    .show()
+        // Check if view still exists
+        if (!isAdded || view == null) {
+            android.util.Log.d("CalendarFragment", "Cannot show error: view is destroyed")
+            return
         }
+
+        // Use ErrorStateManager for consistent error handling
+        val exception = Exception(errorMessage)
+        val errorState = errorStateManager.categorizeError(exception)
+
+        view?.let { v -> errorStateManager.showError(errorState, v) { viewModel.loadTasks() } }
     }
 
     private fun updateCalendarDayBinder(datesWithTasks: Set<LocalDate>, selectedDate: LocalDate) {
+        // Check if view still exists
+        val calendar = calendarView ?: return
+
         val dayBinder =
                 CalendarDayBinder(
                         datesWithTasks = datesWithTasks,
@@ -233,7 +328,7 @@ class CalendarFragment : Fragment() {
                         onDateSelected = { date -> viewModel.selectDate(date) }
                 )
 
-        calendarView.dayBinder =
+        calendar.dayBinder =
                 object : MonthDayBinder<CalendarDayBinder.DayViewContainer> {
                     override fun create(view: View) = dayBinder.DayViewContainer(view)
                     override fun bind(
@@ -246,19 +341,19 @@ class CalendarFragment : Fragment() {
     }
 
     private fun setupMonthNavigation() {
-        previousMonthButton.setOnClickListener {
+        previousMonthButton?.setOnClickListener {
             val previousMonth = currentMonth.minusMonths(1)
-            calendarView.smoothScrollToMonth(previousMonth)
+            calendarView?.smoothScrollToMonth(previousMonth)
         }
 
-        nextMonthButton.setOnClickListener {
+        nextMonthButton?.setOnClickListener {
             val nextMonth = currentMonth.plusMonths(1)
-            calendarView.smoothScrollToMonth(nextMonth)
+            calendarView?.smoothScrollToMonth(nextMonth)
         }
     }
 
     private fun setupFilterChips() {
-        filterChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+        filterChipGroup?.setOnCheckedStateChangeListener { _, checkedIds ->
             if (checkedIds.isEmpty()) return@setOnCheckedStateChangeListener
 
             val filter =
@@ -299,11 +394,11 @@ class CalendarFragment : Fragment() {
                                         if (diffX > 0) {
                                             // Swipe right - go to previous month
                                             val previousMonth = currentMonth.minusMonths(1)
-                                            calendarView.smoothScrollToMonth(previousMonth)
+                                            calendarView?.smoothScrollToMonth(previousMonth)
                                         } else {
                                             // Swipe left - go to next month
                                             val nextMonth = currentMonth.plusMonths(1)
-                                            calendarView.smoothScrollToMonth(nextMonth)
+                                            calendarView?.smoothScrollToMonth(nextMonth)
                                         }
                                         return true
                                     }
@@ -313,20 +408,26 @@ class CalendarFragment : Fragment() {
                         }
                 )
 
-        calendarView.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
+        calendarView?.setOnTouchListener { _, event ->
+            gestureDetector?.onTouchEvent(event)
             false
         }
     }
 
     private fun updateMonthYearText(yearMonth: YearMonth) {
+        // Check if view still exists
+        val textView = monthYearText ?: return
+
         val formatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
-        monthYearText.text = yearMonth.format(formatter)
+        textView.text = yearMonth.format(formatter)
     }
 
     private fun updateSelectedDateText(date: LocalDate) {
+        // Check if view still exists
+        val textView = selectedDateText ?: return
+
         val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.getDefault())
-        selectedDateText.text = "Tasks for ${date.format(formatter)}"
+        textView.text = "Tasks for ${date.format(formatter)}"
     }
 
     // Helper class for month header

@@ -100,7 +100,11 @@
         <activity
             android:name=".MemoryMonitorActivity"
             android:exported="false"
-            android:label="Memory Monitor" /> <!-- Login Activity (Launcher) -->
+            android:label="Memory Monitor" />
+        <activity
+            android:name=".MonitoringDashboardActivity"
+            android:exported="false"
+            android:label="Production Metrics" /> <!-- Login Activity (Launcher) -->
         <activity
             android:name=".Login"
             android:exported="true"

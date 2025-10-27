@@ -77,11 +77,18 @@ android {
 
     kotlinOptions {
         jvmTarget = "11"
+        // Disable incremental compilation to avoid file locking
+        freeCompilerArgs += listOf("-Xno-incremental")
     }
 
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+    
+    // Disable file-based caching to prevent locking issues
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        incremental = false
     }
 }
 
@@ -153,4 +160,10 @@ dependencies {
     testImplementation("com.google.truth:truth:1.1.5")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.fragment:fragment-testing:1.8.5")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    debugImplementation("androidx.fragment:fragment-testing-manifest:1.8.5")
 }
