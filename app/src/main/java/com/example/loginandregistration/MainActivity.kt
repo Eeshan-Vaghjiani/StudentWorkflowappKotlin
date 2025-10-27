@@ -8,8 +8,10 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.loginandregistration.databinding.ActivityMainBinding
 import com.example.loginandregistration.repository.UserRepository
+import com.example.loginandregistration.utils.ConnectionMonitor
 import com.example.loginandregistration.utils.NotificationChannels
 import com.example.loginandregistration.utils.NotificationPermissionHelper
+import com.example.loginandregistration.views.ConnectionStatusView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
@@ -21,6 +23,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var auth: FirebaseAuth
     private lateinit var notificationPermissionHelper: NotificationPermissionHelper
+    private lateinit var connectionMonitor: ConnectionMonitor
+    private lateinit var connectionStatusView: ConnectionStatusView
+
+    private var wasOffline = false
 
     // Register permission launcher
     private val notificationPermissionLauncher =
@@ -44,6 +50,16 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        // Initialize connection status view
+        connectionStatusView = binding.connectionStatusView
+        connectionStatusView.hideImmediate()
+
+        // Initialize connection monitor
+        connectionMonitor = ConnectionMonitor(this)
+
+        // Monitor connection status
+        monitorConnectionStatus()
 
         // Create notification channels
         NotificationChannels.createChannels(this)
@@ -220,5 +236,43 @@ class MainActivity : AppCompatActivity() {
 
     fun navigateToGroupsScreen() {
         binding.bottomNavigation.selectedItemId = R.id.nav_groups
+    }
+
+    /**
+     * Monitor network connection status and update the connection status banner. Shows "No internet
+     * connection" when offline, "Connecting..." when reconnecting, and hides the banner when
+     * online.
+     */
+    private fun monitorConnectionStatus() {
+        lifecycleScope.launch {
+            connectionMonitor.isConnected.collect { isConnected ->
+                android.util.Log.d("MainActivity", "Connection status changed: $isConnected")
+
+                when {
+                    // Currently offline
+                    !isConnected -> {
+                        wasOffline = true
+                        connectionStatusView.showOffline()
+                    }
+                    // Just came back online
+                    isConnected && wasOffline -> {
+                        connectionStatusView.showConnecting()
+                        // Show "Connecting..." briefly, then hide
+                        connectionStatusView.postDelayed(
+                                {
+                                    connectionStatusView.showOnline()
+                                    wasOffline = false
+                                },
+                                1500
+                        ) // Show for 1.5 seconds
+                    }
+                    // Already online
+                    else -> {
+                        connectionStatusView.showOnline()
+                        wasOffline = false
+                    }
+                }
+            }
+        }
     }
 }

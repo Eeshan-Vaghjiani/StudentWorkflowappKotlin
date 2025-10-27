@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is the owner
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Helper function to check if file is a valid image type
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/jpeg') ||
+             request.resource.contentType.matches('image/png') ||
+             request.resource.contentType.matches('image/webp');
+    }
+    
+    // Helper function to check if file is a valid document type
+    function isValidDocumentType() {
+      return request.resource.contentType.matches('image/jpeg') ||
+             request.resource.contentType.matches('image/png') ||
+             request.resource.contentType.matches('image/webp') ||
+             request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+             request.resource.contentType.matches('text/plain');
+    }
+    
+    // Helper function to check profile picture size (5MB limit)
+    function isValidImageSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Helper function to check document size (10MB limit)
+    function isValidDocumentSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Profile pictures folder rules
+    // Users can read any profile picture if authenticated
+    // Users can only write to their own profile picture folder
+    // Only images allowed, 5MB size limit
+    match /profile_pictures/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) && 
+                      isValidImageSize() &&
+                      isValidImageType();
+    }
+    
+    // Chat attachments folder rules
+    // Users can read any chat attachment if authenticated
+    // Users can write chat attachments if authenticated (participant check handled by Firestore)
+    // Allow images and documents, 10MB size limit
+    match /chat_attachments/{chatId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      isValidDocumentSize() &&
+                      isValidDocumentType();
+    }
+    
+    // Global file size limit for all paths
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

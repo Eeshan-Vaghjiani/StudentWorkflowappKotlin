@@ -11,6 +11,8 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.loginandregistration.models.FirebaseGroup
 import com.google.android.material.button.MaterialButton
@@ -18,10 +20,8 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.firebase.auth.FirebaseAuth
 
-class EnhancedGroupAdapter(
-        private var groups: List<FirebaseGroup>,
-        private val onGroupClick: (FirebaseGroup) -> Unit
-) : RecyclerView.Adapter<EnhancedGroupAdapter.GroupViewHolder>() {
+class EnhancedGroupAdapter(private val onGroupClick: (FirebaseGroup) -> Unit) :
+        ListAdapter<FirebaseGroup, EnhancedGroupAdapter.GroupViewHolder>(GroupDiffCallback()) {
 
     private val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
 
@@ -38,7 +38,6 @@ class EnhancedGroupAdapter(
         val manageMembersBtn: MaterialButton = itemView.findViewById(R.id.btn_manage_members)
         val editGroupBtn: MaterialButton = itemView.findViewById(R.id.btn_edit_group)
         val iconBackground: MaterialCardView = itemView.findViewById(R.id.card_group_icon)
-
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GroupViewHolder {
@@ -49,7 +48,7 @@ class EnhancedGroupAdapter(
     }
 
     override fun onBindViewHolder(holder: GroupViewHolder, position: Int) {
-        val group = groups[position]
+        val group = getItem(position)
         val context = holder.itemView.context
 
         // Basic group info
@@ -110,11 +109,13 @@ class EnhancedGroupAdapter(
         holder.itemView.setOnClickListener { onGroupClick(group) }
     }
 
-    override fun getItemCount(): Int = groups.size
-
-    fun updateGroups(newGroups: List<FirebaseGroup>) {
-        groups = newGroups
-        notifyDataSetChanged()
+    override fun onViewRecycled(holder: GroupViewHolder) {
+        super.onViewRecycled(holder)
+        // Clear click listeners to prevent memory leaks
+        holder.itemView.setOnClickListener(null)
+        holder.copyJoinCode.setOnClickListener(null)
+        holder.manageMembersBtn.setOnClickListener(null)
+        holder.editGroupBtn.setOnClickListener(null)
     }
 
     private fun buildGroupDetails(group: FirebaseGroup): String {
@@ -165,5 +166,15 @@ class EnhancedGroupAdapter(
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("Join Code", text)
         clipboard.setPrimaryClip(clip)
+    }
+
+    class GroupDiffCallback : DiffUtil.ItemCallback<FirebaseGroup>() {
+        override fun areItemsTheSame(oldItem: FirebaseGroup, newItem: FirebaseGroup): Boolean {
+            return oldItem.id == newItem.id
+        }
+
+        override fun areContentsTheSame(oldItem: FirebaseGroup, newItem: FirebaseGroup): Boolean {
+            return oldItem == newItem
+        }
     }
 }

@@ -36,9 +36,10 @@ class SessionRepository {
             return@callbackFlow
         }
 
-        val listener = sessionsCollection
-                .whereEqualTo("userId", userId)
-                .addSnapshotListener { snapshot, error ->
+        val listener =
+                sessionsCollection.whereEqualTo("userId", userId).addSnapshotListener {
+                        snapshot,
+                        error ->
                     if (error != null) {
                         trySend(SessionStats())
                         return@addSnapshotListener
@@ -47,11 +48,13 @@ class SessionRepository {
                     val sessions = snapshot?.toObjects(FirebaseSession::class.java) ?: emptyList()
                     val totalSessions = sessions.size
                     val totalDuration = sessions.sumOf { it.durationMinutes }
-                    
-                    trySend(SessionStats(
-                        totalSessions = totalSessions,
-                        totalDuration = totalDuration
-                    ))
+
+                    trySend(
+                            SessionStats(
+                                    totalSessions = totalSessions,
+                                    totalMinutes = totalDuration
+                            )
+                    )
                 }
 
         awaitClose { listener.remove() }
@@ -59,6 +62,7 @@ class SessionRepository {
 }
 
 data class SessionStats(
-    val totalSessions: Int = 0,
-    val totalDuration: Int = 0
+        val totalSessions: Int = 0,
+        val totalMinutes: Int = 0,
+        val todaySessions: Int = 0
 )

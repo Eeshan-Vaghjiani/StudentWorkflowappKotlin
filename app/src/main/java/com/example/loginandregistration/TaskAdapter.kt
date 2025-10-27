@@ -6,12 +6,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 
-class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task) -> Unit) :
-        RecyclerView.Adapter<TaskAdapter.TaskViewHolder>() {
+class TaskAdapter(private val onTaskClick: (Task) -> Unit) :
+        ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallback()) {
 
     class TaskViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val iconBackground: MaterialCardView =
@@ -28,7 +31,7 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
     }
 
     override fun onBindViewHolder(holder: TaskViewHolder, position: Int) {
-        val task = tasks[position]
+        val task = getItem(position)
 
         holder.taskTitle.text = task.title
         holder.taskSubtitle.text = task.subtitle
@@ -40,7 +43,9 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
             holder.iconBackground.setCardBackgroundColor(color)
         } catch (e: IllegalArgumentException) {
             // Fallback to default color if parsing fails
-            holder.iconBackground.setCardBackgroundColor(Color.parseColor("#007AFF"))
+            val defaultColor =
+                    ContextCompat.getColor(holder.itemView.context, R.color.primary_color)
+            holder.iconBackground.setCardBackgroundColor(defaultColor)
         }
 
         // Set status chip color
@@ -50,7 +55,9 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
             holder.statusChip.setTextColor(statusColor)
         } catch (e: IllegalArgumentException) {
             // Fallback to default color
-            holder.statusChip.setTextColor(Color.parseColor("#007AFF"))
+            val defaultColor =
+                    ContextCompat.getColor(holder.itemView.context, R.color.primary_color)
+            holder.statusChip.setTextColor(defaultColor)
         }
 
         // Set appropriate icon based on status
@@ -78,5 +85,19 @@ class TaskAdapter(private val tasks: List<Task>, private val onTaskClick: (Task)
         holder.itemView.setOnClickListener { onTaskClick(task) }
     }
 
-    override fun getItemCount(): Int = tasks.size
+    override fun onViewRecycled(holder: TaskViewHolder) {
+        super.onViewRecycled(holder)
+        // Clear click listener to prevent memory leaks
+        holder.itemView.setOnClickListener(null)
+    }
+
+    class TaskDiffCallback : DiffUtil.ItemCallback<Task>() {
+        override fun areItemsTheSame(oldItem: Task, newItem: Task): Boolean {
+            return oldItem.title == newItem.title && oldItem.subtitle == newItem.subtitle
+        }
+
+        override fun areContentsTheSame(oldItem: Task, newItem: Task): Boolean {
+            return oldItem == newItem
+        }
+    }
 }

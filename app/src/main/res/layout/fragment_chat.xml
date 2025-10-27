@@ -69,6 +69,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
 
+                <!-- Skeleton Loader Container -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/skeletonRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingBottom="8dp"
+                    android:visibility="gone" />
+
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/chatsRecyclerView"
                     android:layout_width="match_parent"
@@ -77,42 +86,11 @@
                     android:paddingBottom="8dp" />
 
                 <!-- Empty State -->
-                <LinearLayout
-                    android:id="@+id/emptyStateLayout"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <ImageView
-                        android:layout_width="120dp"
-                        android:layout_height="120dp"
-                        android:alpha="0.3"
-                        android:src="@android:drawable/ic_dialog_email"
-                        app:tint="@color/colorTextSecondary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:text="No chats yet"
-                        android:textColor="@color/colorTextPrimary"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center"
-                        android:paddingStart="32dp"
-                        android:paddingEnd="32dp"
-                        android:text="Start a conversation by searching for users or creating a group chat"
-                        android:textColor="@color/colorTextSecondary"
-                        android:textSize="14sp" />
-                </LinearLayout>
+                <com.example.loginandregistration.views.EmptyStateView
+                    android:id="@+id/emptyStateView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone" />
             </FrameLayout>
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     </LinearLayout>

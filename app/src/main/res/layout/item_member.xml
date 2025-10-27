@@ -10,25 +10,31 @@
     android:padding="16dp">
 
     <!-- Member Avatar -->
-    <com.google.android.material.card.MaterialCardView
+    <FrameLayout
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:layout_marginEnd="16dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/primary_color">
+        android:layout_marginEnd="16dp">
+
+        <ImageView
+            android:id="@+id/profileImageView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="Profile picture"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tv_member_initial"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="@drawable/circle_background"
             android:gravity="center"
             android:text="J"
             android:textColor="@android:color/white"
             android:textSize="16sp"
             android:textStyle="bold" />
 
-    </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
 
     <!-- Member Info -->
     <LinearLayout

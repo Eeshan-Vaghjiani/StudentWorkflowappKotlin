@@ -1,5 +1,6 @@
 package com.example.loginandregistration.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.loginandregistration.models.Chat
@@ -10,13 +11,32 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(private val chatRepository: ChatRepository = ChatRepository()) : ViewModel() {
 
+    companion object {
+        private const val TAG = "ChatViewModel"
+        private const val STOP_TIMEOUT_MILLIS = 5000L
+    }
+
     // All chats from repository
+    // WhileSubscribed with timeout ensures listeners are detached when no collectors are active
     private val allChats =
             chatRepository
                     .getUserChats()
+                    .catch { exception ->
+                        Log.e(TAG, "Error collecting chats", exception)
+                        _error.value =
+                                when {
+                                    exception.message?.contains("permission", ignoreCase = true) ==
+                                            true ->
+                                            "Unable to access chats. Please try logging out and back in."
+                                    exception.message?.contains("network", ignoreCase = true) ==
+                                            true -> "Connection error. Please check your internet."
+                                    else -> "Unable to load chats"
+                                }
+                        emit(emptyList())
+                    }
                     .stateIn(
                             scope = viewModelScope,
-                            started = SharingStarted.WhileSubscribed(5000),
+                            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
                             initialValue = emptyList()
                     )
 
@@ -57,7 +77,7 @@ class ChatViewModel(private val chatRepository: ChatRepository = ChatRepository(
                     }
                     .stateIn(
                             scope = viewModelScope,
-                            started = SharingStarted.WhileSubscribed(5000),
+                            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
                             initialValue = emptyList()
                     )
 
@@ -68,6 +88,10 @@ class ChatViewModel(private val chatRepository: ChatRepository = ChatRepository(
     // Error state
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    init {
+        Log.d(TAG, "ChatViewModel initialized")
+    }
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
@@ -88,5 +112,11 @@ class ChatViewModel(private val chatRepository: ChatRepository = ChatRepository(
 
     fun clearError() {
         _error.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "ChatViewModel cleared - all coroutines will be cancelled")
+        // viewModelScope automatically cancels all coroutines when ViewModel is cleared
     }
 }

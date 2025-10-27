@@ -1,318 +1,396 @@
-# Task 10 Verification Checklist
+# Task 10: Verification Checklist
 
-## Notification Permission Testing
-
-### Android 13+ Devices
-
-#### First Launch
-- [ ] Open app for the first time
-- [ ] Verify rationale dialog appears with clear explanation
-- [ ] Dialog shows benefits: messages, task reminders, group updates
-- [ ] Tap "Allow" button
-- [ ] Verify system permission dialog appears
-- [ ] Grant permission
-- [ ] Verify no errors in logcat
-- [ ] Check Firestore: user document should have fcmToken field
-
-#### Permission Denied
-- [ ] Uninstall and reinstall app
-- [ ] Open app
-- [ ] Tap "Not Now" on rationale dialog
-- [ ] Verify app continues to work normally
-- [ ] Close and reopen app
-- [ ] Verify rationale dialog appears again
-- [ ] Tap "Not Now" again
-- [ ] Deny permission in system dialog
-- [ ] Close and reopen app multiple times
-- [ ] After 2+ denials, verify settings dialog appears
-- [ ] Tap "Open Settings"
-- [ ] Verify app settings page opens
-- [ ] Enable notifications manually
-- [ ] Return to app
-- [ ] Verify FCM token is saved
-
-#### Permission Already Granted
-- [ ] With permission already granted, close and reopen app
-- [ ] Verify no permission dialogs appear
-- [ ] Verify app starts normally
-- [ ] Check logcat for FCM token save confirmation
-
-### Android 12 and Below
-- [ ] Run app on Android 12 or lower device/emulator
-- [ ] Verify no permission dialogs appear
-- [ ] Verify FCM token is saved automatically
-- [ ] Verify notifications work by default
-
-## Deep Linking Testing
-
-### Chat Notifications
-
-#### App Closed
-- [ ] Close app completely (swipe away from recents)
-- [ ] Send a test chat notification (use Firebase Console or backend)
-- [ ] Notification data should include:
-  ```json
-  {
-    "type": "chat",
-    "chatId": "test_chat_id",
-    "chatName": "Test Chat",
-    "senderName": "Test User",
-    "message": "Hello from notification"
-  }
-  ```
-- [ ] Tap notification
-- [ ] Verify app opens to ChatRoomActivity
-- [ ] Verify correct chat is displayed
-- [ ] Verify chat name in toolbar matches
-- [ ] Verify messages are marked as read
-
-#### App in Background
-- [ ] Open app and navigate to Home screen
-- [ ] Press home button (app in background)
-- [ ] Send chat notification
-- [ ] Tap notification
-- [ ] Verify ChatRoomActivity opens
-- [ ] Verify correct chat loads
-- [ ] Press back button
-- [ ] Verify returns to previous screen (Home)
-
-#### App in Foreground (Different Screen)
-- [ ] Open app and stay on Home screen
-- [ ] Send chat notification
-- [ ] Tap notification
-- [ ] Verify ChatRoomActivity opens
-- [ ] Verify correct chat loads
-
-#### App Already in Chat
-- [ ] Open ChatRoomActivity for Chat A
-- [ ] Send notification for Chat B
-- [ ] Tap notification
-- [ ] Verify ChatRoomActivity updates to show Chat B
-- [ ] Verify no duplicate activities created
-- [ ] Press back button once
-- [ ] Verify returns to previous screen (not Chat A)
-
-### Task Notifications
-
-#### View Task Action
-- [ ] Close app
-- [ ] Send task notification:
-  ```json
-  {
-    "type": "task",
-    "taskId": "test_task_id",
-    "taskTitle": "Complete Report",
-    "taskDescription": "Finish quarterly report",
-    "dueDate": "Tomorrow",
-    "priority": "High"
-  }
-  ```
-- [ ] Tap notification body (not action button)
-- [ ] Verify app opens to MainActivity
-- [ ] Verify Tasks tab is selected
-- [ ] Verify task list is visible
-
-#### Mark Complete Action
-- [ ] Send task notification
-- [ ] Tap "Mark Complete" action button
-- [ ] Verify app opens to MainActivity
-- [ ] Verify Tasks tab is selected
-- [ ] Verify task completion logic triggered (check logs)
-
-### Group Notifications
-
-#### Group Update
-- [ ] Close app
-- [ ] Send group notification:
-  ```json
-  {
-    "type": "group",
-    "groupId": "test_group_id",
-    "groupName": "Test Group",
-    "message": "New member added",
-    "updateType": "member_added",
-    "actionUserName": "John Doe"
-  }
-  ```
-- [ ] Tap notification
-- [ ] Verify app opens to MainActivity
-- [ ] Verify Groups tab is selected
-- [ ] Verify groups list is visible
-
-## Notification Display Testing
-
-### Chat Notification Appearance
-- [ ] Send chat notification
-- [ ] Verify notification appears on lock screen
-- [ ] Verify shows sender name
-- [ ] Verify shows message preview
-- [ ] Verify shows chat name as title
-- [ ] Verify notification icon is visible
-- [ ] Verify notification color is blue
-- [ ] Verify sound plays
-- [ ] Verify device vibrates
-
-### Task Notification Appearance
-- [ ] Send task notification with priority "High"
-- [ ] Verify notification shows 🔴 emoji
-- [ ] Verify shows task title
-- [ ] Verify shows due date
-- [ ] Verify "Mark Complete" button visible
-- [ ] Verify "View Task" button visible
-- [ ] Verify notification color is orange
-
-### Group Notification Appearance
-- [ ] Send group notification with updateType "member_added"
-- [ ] Verify notification shows 👥 emoji
-- [ ] Verify shows group name
-- [ ] Verify shows update message
-- [ ] Verify shows "By [username]" if provided
-- [ ] Verify notification color is green
-
-## Edge Cases
-
-### Invalid Data
-- [ ] Send notification with missing chatId
-- [ ] Verify app doesn't crash
-- [ ] Verify error logged in logcat
-- [ ] Send notification with invalid chatId
-- [ ] Tap notification
-- [ ] Verify app handles gracefully (shows error or returns to home)
-
-### Multiple Notifications
-- [ ] Send 3 chat notifications from different chats
-- [ ] Verify notifications are grouped
-- [ ] Verify summary notification shows "New Messages"
-- [ ] Tap individual notification
-- [ ] Verify correct chat opens
-- [ ] Verify other notifications remain
-
-### Notification While Permission Denied
-- [ ] Deny notification permission
-- [ ] Try to send notification
-- [ ] Verify notification doesn't appear (expected)
-- [ ] Verify app still works normally
-
-### Back Navigation
-- [ ] Open app to Home screen
-- [ ] Tap chat notification
-- [ ] ChatRoomActivity opens
-- [ ] Press back button
-- [ ] Verify returns to Home screen (not Login)
-- [ ] Press back button again
-- [ ] Verify app exits
-
-### Rapid Notification Taps
-- [ ] Send multiple notifications quickly
-- [ ] Tap notifications rapidly
-- [ ] Verify app doesn't crash
-- [ ] Verify correct screens open
-- [ ] Verify no duplicate activities
-
-## Integration Testing
-
-### With Existing Features
-- [ ] Verify chat list still works
-- [ ] Verify sending messages still works
-- [ ] Verify task list still works
-- [ ] Verify group list still works
-- [ ] Verify all bottom navigation tabs work
-- [ ] Verify logout still works
-
-### FCM Token Management
-- [ ] Grant notification permission
-- [ ] Check Firestore user document
-- [ ] Verify fcmToken field exists and has value
-- [ ] Uninstall and reinstall app
-- [ ] Grant permission again
-- [ ] Verify fcmToken is updated in Firestore
-
-## Performance Testing
-
-### Memory
-- [ ] Open app with permission granted
-- [ ] Send 10 notifications
-- [ ] Tap each notification
-- [ ] Check Android Profiler for memory leaks
-- [ ] Verify memory usage is reasonable
-
-### Battery
-- [ ] Enable notification permission
-- [ ] Use app normally for 30 minutes
-- [ ] Check battery usage in system settings
-- [ ] Verify app battery usage is reasonable
-
-## Accessibility Testing
-
-### Screen Reader
-- [ ] Enable TalkBack
-- [ ] Open app
-- [ ] Navigate through permission dialogs
-- [ ] Verify all text is readable
-- [ ] Verify buttons are labeled correctly
-- [ ] Tap notification with TalkBack
-- [ ] Verify navigation works
-
-### Large Text
-- [ ] Enable large text in system settings
-- [ ] Open app
-- [ ] Verify permission dialogs are readable
-- [ ] Verify notification text is readable
-- [ ] Verify no text is cut off
-
-## Regression Testing
-
-### Existing Functionality
-- [ ] Login still works
-- [ ] Registration still works
-- [ ] Chat list loads
-- [ ] Sending messages works
-- [ ] Creating groups works
-- [ ] Creating tasks works
-- [ ] Calendar view works
-- [ ] Profile view works
-- [ ] Logout works
-
-## Documentation Verification
-
-- [ ] Review NotificationPermissionHelper.kt code comments
-- [ ] Verify all public methods are documented
-- [ ] Verify parameter descriptions are clear
-- [ ] Review implementation summary document
-- [ ] Verify all features are documented
-- [ ] Verify testing instructions are clear
-
-## Sign-Off
-
-### Developer Checklist
-- [ ] All code compiles without errors
-- [ ] No lint warnings for new code
-- [ ] All diagnostics resolved
-- [ ] Code follows project conventions
-- [ ] Proper error handling implemented
-- [ ] Logging added for debugging
-
-### Testing Checklist
-- [ ] All permission scenarios tested
-- [ ] All deep linking scenarios tested
-- [ ] All notification types tested
-- [ ] Edge cases handled
-- [ ] No crashes observed
-- [ ] Performance is acceptable
-
-### Ready for Next Task
-- [ ] Task 10 marked as complete
-- [ ] Implementation summary created
-- [ ] Verification checklist completed
-- [ ] All files committed
-- [ ] Ready to proceed to Task 11
+## Overview
+Use this checklist to verify that Task 10 (Test App with Updated Rules) has been completed successfully.
 
 ---
 
-## Notes
-- Use Firebase Console to send test notifications: https://console.firebase.google.com/
-- Navigate to: Project → Cloud Messaging → Send test message
-- Or use backend API to send notifications programmatically
-- Check logcat for detailed debugging information
-- Test on both physical devices and emulators
-- Test on different Android versions (API 23-34)
+## Pre-Test Verification
+
+### Environment Setup
+- [ ] Firebase project configured correctly
+- [ ] Updated Firestore rules deployed (Task 9 complete)
+- [ ] App built and installed on test device/emulator
+- [ ] Test user account created and can log in
+- [ ] Internet connection available and stable
+- [ ] Android Studio and ADB tools working
+
+### Test Preparation
+- [ ] Test data backed up (if needed)
+- [ ] Test environment isolated from production
+- [ ] Logging enabled for debugging
+- [ ] Test documentation reviewed
+- [ ] Test devices/emulators ready
+
+---
+
+## Automated Test Verification
+
+### Test Execution
+- [ ] All 10 automated tests executed
+- [ ] Test execution completed without crashes
+- [ ] Test results generated successfully
+- [ ] Test report reviewed
+
+### Test Results
+- [ ] ✅ testGroupsScreenNavigation_doesNotCrash - PASSED
+- [ ] ✅ testCreateNewGroup_succeeds - PASSED
+- [ ] ✅ testViewGroupActivities_succeeds - PASSED
+- [ ] ✅ testTasksScreen_doesNotCrash - PASSED
+- [ ] ✅ testCreateTask_succeeds - PASSED
+- [ ] ✅ testChatFunctionality_succeeds - PASSED
+- [ ] ✅ testErrorHandling_providesUserFriendlyMessages - PASSED
+- [ ] ✅ testQueryWithoutFilters_handledGracefully - PASSED
+- [ ] ✅ testConcurrentQueries_succeed - PASSED
+- [ ] ✅ testUpdateOwnedResources_succeeds - PASSED
+
+### Test Coverage
+- [ ] All requirements tested (1.1, 4.5, 5.4)
+- [ ] All critical paths covered
+- [ ] Edge cases tested
+- [ ] Error scenarios tested
+
+---
+
+## Manual Test Verification
+
+### Core Functionality Tests
+
+#### Groups Screen
+- [ ] Navigate to Groups screen without crash
+- [ ] Groups load correctly or show empty state
+- [ ] No permission denied errors
+- [ ] Loading indicators work properly
+- [ ] Can scroll through groups list
+- [ ] Can pull to refresh
+
+#### Group Creation
+- [ ] Can open create group dialog/screen
+- [ ] Can enter group details
+- [ ] Validation works correctly
+- [ ] Group created successfully
+- [ ] New group appears in list
+- [ ] User is automatically a member
+- [ ] Success message displayed
+
+#### Group Activities
+- [ ] Can view group details
+- [ ] Activities section loads
+- [ ] Activities display correctly or show empty state
+- [ ] Can scroll through activities
+- [ ] Activity timestamps correct
+- [ ] Activity types display correctly
+
+#### Tasks Screen
+- [ ] Navigate to Tasks screen without crash
+- [ ] Tasks load correctly or show empty state
+- [ ] Can view own tasks
+- [ ] Can view assigned tasks
+- [ ] No permission denied errors
+- [ ] Can filter/sort tasks
+
+#### Task Creation
+- [ ] Can open create task dialog/screen
+- [ ] Can enter task details
+- [ ] Validation works correctly
+- [ ] Task created successfully
+- [ ] New task appears in list
+- [ ] Can assign task to users
+
+#### Chat Functionality
+- [ ] Navigate to Chat screen without crash
+- [ ] Chats load correctly or show empty state
+- [ ] Can open individual chats
+- [ ] Can view chat messages
+- [ ] Can send messages
+- [ ] Messages appear correctly
+- [ ] Real-time updates work
+
+---
+
+## Error Handling Verification
+
+### Error Message Quality
+- [ ] No technical error codes shown to users
+- [ ] Error messages in plain language
+- [ ] Error messages provide actionable guidance
+- [ ] Error messages are contextually appropriate
+- [ ] Success messages are clear and positive
+
+### Error Scenarios Tested
+- [ ] Network offline - handled gracefully
+- [ ] Permission denied - user-friendly message
+- [ ] Invalid input - clear validation messages
+- [ ] Timeout - appropriate retry options
+- [ ] Server error - informative message
+
+### App Stability
+- [ ] No crashes during error scenarios
+- [ ] App recovers gracefully from errors
+- [ ] Error states can be dismissed
+- [ ] Can retry failed operations
+- [ ] App state remains consistent after errors
+
+---
+
+## Permission Verification
+
+### Query Filtering
+- [ ] Groups query uses `whereArrayContains("memberIds", userId)`
+- [ ] Tasks query uses `whereEqualTo("userId", userId)` or `whereArrayContains("assignedTo", userId)`
+- [ ] Chats query uses `whereArrayContains("participantIds", userId)`
+- [ ] All queries include proper filters
+
+### Permission Boundaries
+- [ ] Can access own groups
+- [ ] Cannot access other users' groups (unless member)
+- [ ] Can access own tasks
+- [ ] Can access assigned tasks
+- [ ] Cannot access other users' tasks
+- [ ] Can access chats where participant
+- [ ] Cannot access other users' chats
+
+### CRUD Operations
+- [ ] Can create groups (with self as member)
+- [ ] Can read own groups
+- [ ] Can update own groups
+- [ ] Can delete own groups
+- [ ] Can create tasks
+- [ ] Can update own tasks
+- [ ] Can delete own tasks
+
+---
+
+## Performance Verification
+
+### Load Times
+- [ ] Groups screen loads in < 2 seconds
+- [ ] Tasks screen loads in < 2 seconds
+- [ ] Chat screen loads in < 2 seconds
+- [ ] Group details load in < 1 second
+- [ ] Task details load in < 1 second
+
+### Query Performance
+- [ ] User's groups query < 500ms
+- [ ] User's tasks query < 500ms
+- [ ] User's chats query < 500ms
+- [ ] Group activities query < 1 second
+
+### Resource Usage
+- [ ] Memory usage stable (no leaks)
+- [ ] CPU usage reasonable
+- [ ] Network usage efficient
+- [ ] Battery drain acceptable
+- [ ] No excessive Firestore reads
+
+---
+
+## Integration Verification
+
+### Cross-Feature Testing
+- [ ] Create group → Create task → View activity (works)
+- [ ] Create task → Assign to user → User sees task (works)
+- [ ] Send chat message → Appears in chat (works)
+- [ ] Update group → Activity logged (works)
+- [ ] Complete task → Activity logged (works)
+
+### Real-Time Updates
+- [ ] New groups appear automatically
+- [ ] New tasks appear automatically
+- [ ] New messages appear automatically
+- [ ] Updates sync across devices
+- [ ] Offline changes sync when online
+
+### Data Consistency
+- [ ] Data consistent across screens
+- [ ] Counts match actual data
+- [ ] No duplicate entries
+- [ ] No missing data
+- [ ] Timestamps accurate
+
+---
+
+## Regression Verification
+
+### Existing Features
+- [ ] User authentication still works
+- [ ] Profile management still works
+- [ ] Image upload still works
+- [ ] Notifications still work
+- [ ] Search still works
+- [ ] Filters still work
+- [ ] Dark mode still works
+- [ ] Settings still work
+- [ ] Offline mode still works
+
+### No New Issues
+- [ ] No new crashes introduced
+- [ ] No new errors introduced
+- [ ] No performance degradation
+- [ ] No UI issues introduced
+- [ ] No data loss issues
+
+---
+
+## Documentation Verification
+
+### Test Documentation
+- [ ] Test execution report filled out
+- [ ] All test results documented
+- [ ] Issues documented with details
+- [ ] Screenshots captured where needed
+- [ ] Logs saved for reference
+
+### Code Documentation
+- [ ] Test code properly commented
+- [ ] Test purposes clear
+- [ ] Requirements referenced
+- [ ] Edge cases documented
+
+---
+
+## Requirements Compliance
+
+### Requirement 1.1: Access Without Permission Errors
+- [ ] Users can query groups without errors
+- [ ] Users can query tasks without errors
+- [ ] Users can query chats without errors
+- [ ] Users can query activities without errors
+- [ ] No PERMISSION_DENIED errors occur
+- [ ] Empty results returned instead of errors
+
+**Status**: ✅ PASS / ❌ FAIL
+
+### Requirement 4.5: Correct Operation After Deployment
+- [ ] All features work after rules deployment
+- [ ] No new errors introduced
+- [ ] Performance remains acceptable
+- [ ] Data integrity maintained
+- [ ] User experience not degraded
+
+**Status**: ✅ PASS / ❌ FAIL
+
+### Requirement 5.4: User-Friendly Error Messages
+- [ ] No technical errors shown to users
+- [ ] Error messages are clear
+- [ ] Error messages are actionable
+- [ ] Error messages are contextual
+- [ ] Success feedback is positive
+
+**Status**: ✅ PASS / ❌ FAIL
+
+---
+
+## Log Analysis Verification
+
+### Error Logs
+- [ ] No PERMISSION_DENIED errors in logs
+- [ ] No unhandled exceptions in logs
+- [ ] All errors properly caught and logged
+- [ ] Error context included in logs
+
+### Warning Logs
+- [ ] Warnings are informational only
+- [ ] No critical warnings present
+- [ ] Warnings properly categorized
+
+### Info Logs
+- [ ] Operations logged appropriately
+- [ ] Success operations logged
+- [ ] Useful debugging information present
+
+---
+
+## Final Verification
+
+### Test Completion
+- [ ] All automated tests passed
+- [ ] All manual tests completed
+- [ ] All edge cases tested
+- [ ] All error scenarios tested
+- [ ] All requirements verified
+
+### Quality Assurance
+- [ ] No critical issues found
+- [ ] No major issues found
+- [ ] Minor issues documented
+- [ ] Performance acceptable
+- [ ] User experience good
+
+### Deliverables
+- [ ] Test code committed
+- [ ] Test documentation complete
+- [ ] Test report filled out
+- [ ] Issues documented
+- [ ] Screenshots/videos captured
+
+### Sign-Off
+- [ ] Tester approval
+- [ ] Developer approval
+- [ ] All stakeholders notified
+- [ ] Ready for next task
+
+---
+
+## Task Completion Criteria
+
+Task 10 is complete when ALL of the following are true:
+
+✅ All automated tests pass  
+✅ All manual tests pass  
+✅ No permission errors occur  
+✅ No app crashes  
+✅ Error messages are user-friendly  
+✅ All requirements met (1.1, 4.5, 5.4)  
+✅ Performance is acceptable  
+✅ No regressions introduced  
+✅ Documentation complete  
+✅ Issues documented and addressed  
+
+---
+
+## Issues Found
+
+### Critical Issues
+[None / List issues]
+
+### Major Issues
+[None / List issues]
+
+### Minor Issues
+[None / List issues]
+
+### Resolved Issues
+[List resolved issues]
+
+---
+
+## Sign-Off
+
+**Tester:**
+- Name: ___________________
+- Date: ___________________
+- Signature: ___________________
+
+**Developer:**
+- Name: ___________________
+- Date: ___________________
+- Signature: ___________________
+
+**Status:** ⏳ In Progress / ✅ Complete / ❌ Failed
+
+---
+
+## Next Steps
+
+After completing this checklist:
+
+1. ✅ Mark Task 10 as complete in tasks.md
+2. ➡️ Proceed to Task 11: Monitor Production Metrics
+3. 📊 Continue monitoring for any issues
+4. 📝 Update documentation as needed
+
+---
+
+*Last Updated: [Date]*  
+*Version: 1.0*

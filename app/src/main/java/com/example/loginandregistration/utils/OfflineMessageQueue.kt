@@ -5,166 +5,192 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.example.loginandregistration.models.Message
 import com.example.loginandregistration.models.MessageStatus
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.util.Date
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
- * Helper class to manage offline message queue Stores messages locally when offline and sends them
- * when connection is restored
+ * Manages offline message queue for reliable message delivery.
+ * Stores messages locally when they fail to send and retries them when connection is restored.
  */
 class OfflineMessageQueue(context: Context) {
-
+    
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val gson = Gson()
+    
     companion object {
         private const val TAG = "OfflineMessageQueue"
         private const val PREFS_NAME = "offline_message_queue"
         private const val KEY_QUEUED_MESSAGES = "queued_messages"
     }
-
-    private val prefs: SharedPreferences =
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    /** Queue a message for sending when online */
+    
+    /**
+     * Add a message to the queue
+     */
     fun queueMessage(message: Message) {
         try {
             val queuedMessages = getQueuedMessages().toMutableList()
-
-            // Update message status to SENDING
-            val queuedMessage = message.copy(status = MessageStatus.SENDING)
-            queuedMessages.add(queuedMessage)
-
-            saveQueuedMessages(queuedMessages)
-            Log.d(TAG, "Message queued: ${message.id}")
+            
+            // Check if message already exists in queue
+            val existingIndex = queuedMessages.indexOfFirst { it.id == message.id }
+            if (existingIndex != -1) {
+                // Update existing message
+                queuedMessages[existingIndex] = message
+                Log.d(TAG, "Updated message ${message.id} in queue")
+            } else {
+                // Add new message
+                queuedMessages.add(message)
+                Log.d(TAG, "Added message ${message.id} to queue")
+            }
+            
+            saveQueue(queuedMessages)
         } catch (e: Exception) {
             Log.e(TAG, "Error queueing message", e)
         }
     }
-
-    /** Get all queued messages */
+    
+    /**
+     * Remove a message from the queue (after successful send)
+     */
+    fun removeMessage(messageId: String) {
+        try {
+            val queuedMessages = getQueuedMessages().toMutableList()
+            val removed = queuedMessages.removeAll { it.id == messageId }
+            
+            if (removed) {
+                saveQueue(queuedMessages)
+                Log.d(TAG, "Removed message $messageId from queue")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing message from queue", e)
+        }
+    }
+    
+    /**
+     * Mark a message as failed
+     */
+    fun markMessageAsFailed(messageId: String) {
+        try {
+            val queuedMessages = getQueuedMessages().toMutableList()
+            val messageIndex = queuedMessages.indexOfFirst { it.id == messageId }
+            
+            if (messageIndex != -1) {
+                queuedMessages[messageIndex] = queuedMessages[messageIndex].copy(
+                    status = MessageStatus.FAILED
+                )
+                saveQueue(queuedMessages)
+                Log.d(TAG, "Marked message $messageId as FAILED")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error marking message as failed", e)
+        }
+    }
+    
+    /**
+     * Update message status
+     */
+    fun updateMessageStatus(messageId: String, status: MessageStatus) {
+        try {
+            val queuedMessages = getQueuedMessages().toMutableList()
+            val messageIndex = queuedMessages.indexOfFirst { it.id == messageId }
+            
+            if (messageIndex != -1) {
+                queuedMessages[messageIndex] = queuedMessages[messageIndex].copy(
+                    status = status
+                )
+                saveQueue(queuedMessages)
+                Log.d(TAG, "Updated message $messageId status to $status")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating message status", e)
+        }
+    }
+    
+    /**
+     * Get all queued messages
+     */
     fun getQueuedMessages(): List<Message> {
         return try {
             val json = prefs.getString(KEY_QUEUED_MESSAGES, null)
             if (json.isNullOrEmpty()) {
                 emptyList()
             } else {
-                val jsonArray = JSONArray(json)
-                val messages = mutableListOf<Message>()
-                for (i in 0 until jsonArray.length()) {
-                    val jsonObject = jsonArray.getJSONObject(i)
-                    messages.add(messageFromJson(jsonObject))
-                }
-                messages
+                val type = object : TypeToken<List<Message>>() {}.type
+                gson.fromJson(json, type) ?: emptyList()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error getting queued messages", e)
             emptyList()
         }
     }
-
-    /** Remove a message from the queue */
-    fun removeMessage(messageId: String) {
-        try {
-            val queuedMessages = getQueuedMessages().toMutableList()
-            queuedMessages.removeAll { it.id == messageId }
-            saveQueuedMessages(queuedMessages)
-            Log.d(TAG, "Message removed from queue: $messageId")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error removing message from queue", e)
-        }
+    
+    /**
+     * Get queued messages for a specific chat
+     */
+    fun getQueuedMessagesForChat(chatId: String): List<Message> {
+        return getQueuedMessages().filter { it.chatId == chatId }
     }
-
-    /** Mark a message as failed */
-    fun markMessageAsFailed(messageId: String) {
-        try {
-            val queuedMessages = getQueuedMessages().toMutableList()
-            val index = queuedMessages.indexOfFirst { it.id == messageId }
-
-            if (index != -1) {
-                val failedMessage = queuedMessages[index].copy(status = MessageStatus.FAILED)
-                queuedMessages[index] = failedMessage
-                saveQueuedMessages(queuedMessages)
-                Log.d(TAG, "Message marked as failed: $messageId")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error marking message as failed", e)
-        }
+    
+    /**
+     * Get count of pending messages (SENDING status)
+     */
+    fun getPendingMessageCount(): Int {
+        return getQueuedMessages().count { it.status == MessageStatus.SENDING }
     }
-
-    /** Update message status */
-    fun updateMessageStatus(messageId: String, status: MessageStatus) {
-        try {
-            val queuedMessages = getQueuedMessages().toMutableList()
-            val index = queuedMessages.indexOfFirst { it.id == messageId }
-
-            if (index != -1) {
-                val updatedMessage = queuedMessages[index].copy(status = status)
-                queuedMessages[index] = updatedMessage
-                saveQueuedMessages(queuedMessages)
-                Log.d(TAG, "Message status updated: $messageId -> $status")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error updating message status", e)
-        }
+    
+    /**
+     * Get count of failed messages
+     */
+    fun getFailedMessageCount(): Int {
+        return getQueuedMessages().count { it.status == MessageStatus.FAILED }
     }
-
-    /** Clear all queued messages */
+    
+    /**
+     * Clear all messages from queue
+     */
     fun clearQueue() {
         try {
             prefs.edit().remove(KEY_QUEUED_MESSAGES).apply()
-            Log.d(TAG, "Queue cleared")
+            Log.d(TAG, "Cleared message queue")
         } catch (e: Exception) {
             Log.e(TAG, "Error clearing queue", e)
         }
     }
-
-    /** Get count of queued messages */
-    fun getQueuedMessageCount(): Int {
-        return getQueuedMessages().size
-    }
-
-    /** Check if a message is queued */
-    fun isMessageQueued(messageId: String): Boolean {
-        return getQueuedMessages().any { it.id == messageId }
-    }
-
-    /** Get queued messages for a specific chat */
-    fun getQueuedMessagesForChat(chatId: String): List<Message> {
-        return getQueuedMessages().filter { it.chatId == chatId }
-    }
-
-    private fun saveQueuedMessages(messages: List<Message>) {
+    
+    /**
+     * Clear only failed messages from queue
+     */
+    fun clearFailedMessages() {
         try {
-            val jsonArray = JSONArray()
-            messages.forEach { message -> jsonArray.put(messageToJson(message)) }
-            prefs.edit().putString(KEY_QUEUED_MESSAGES, jsonArray.toString()).apply()
+            val queuedMessages = getQueuedMessages().filter { it.status != MessageStatus.FAILED }
+            saveQueue(queuedMessages)
+            Log.d(TAG, "Cleared failed messages from queue")
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving queued messages", e)
+            Log.e(TAG, "Error clearing failed messages", e)
         }
     }
-
-    private fun messageToJson(message: Message): JSONObject {
-        return JSONObject().apply {
-            put("id", message.id)
-            put("chatId", message.chatId)
-            put("senderId", message.senderId)
-            put("senderName", message.senderName)
-            put("senderImageUrl", message.senderImageUrl)
-            put("text", message.text)
-            put("timestamp", message.timestamp?.time ?: System.currentTimeMillis())
-            put("status", message.status.name)
+    
+    /**
+     * Get messages that need retry (SENDING status and older than retry threshold)
+     */
+    fun getMessagesNeedingRetry(retryThresholdMs: Long = 30000): List<Message> {
+        val currentTime = System.currentTimeMillis()
+        return getQueuedMessages().filter { message ->
+            message.status == MessageStatus.SENDING &&
+            message.timestamp != null &&
+            (currentTime - message.timestamp.time) > retryThresholdMs
         }
     }
-
-    private fun messageFromJson(json: JSONObject): Message {
-        return Message(
-                id = json.getString("id"),
-                chatId = json.getString("chatId"),
-                senderId = json.getString("senderId"),
-                senderName = json.getString("senderName"),
-                senderImageUrl = json.optString("senderImageUrl", ""),
-                text = json.getString("text"),
-                timestamp = Date(json.getLong("timestamp")),
-                status = MessageStatus.valueOf(json.getString("status"))
-        )
+    
+    /**
+     * Save queue to SharedPreferences
+     */
+    private fun saveQueue(messages: List<Message>) {
+        try {
+            val json = gson.toJson(messages)
+            prefs.edit().putString(KEY_QUEUED_MESSAGES, json).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving queue", e)
+        }
     }
 }

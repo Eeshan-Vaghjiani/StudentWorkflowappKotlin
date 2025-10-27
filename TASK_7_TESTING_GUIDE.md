@@ -1,334 +1,565 @@
-# Task 7: Offline Message Queue - Testing Guide
+# Task 7: Tasks Display Testing Guide
+
+## Overview
+This guide provides step-by-step instructions for testing the Tasks display functionality with proper query support, error handling, and statistics.
+
+---
 
 ## Prerequisites
-- App installed on Android device or emulator
-- At least two user accounts for testing
-- Ability to control network connectivity (airplane mode or network settings)
+
+### 1. Firebase Setup
+- ✅ Firestore security rules deployed
+- ✅ Firestore indexes created (userId, dueDate composite index)
+- ✅ Firebase Authentication enabled
+- ✅ User account created and logged in
+
+### 2. Test Data Setup
+Create test tasks with various scenarios:
+- Tasks with different due dates (past, today, future)
+- Tasks with different statuses (pending, completed)
+- Tasks with different categories (personal, group, assignment)
+- Tasks with different priorities (low, medium, high)
+
+---
 
 ## Test Scenarios
 
-### Test 1: Queue Messages When Offline
+### Test 1: Basic Task Display
+
+**Objective:** Verify tasks load and display correctly
 
 **Steps:**
-1. Open the app and navigate to a chat
-2. Turn on airplane mode on your device
-3. Type a message and tap send
-4. Observe the message in the chat
+1. Open the app and navigate to Tasks screen
+2. Observe the task list
 
 **Expected Results:**
-- ✅ Message appears in chat immediately
-- ✅ Message shows clock icon (SENDING status)
-- ✅ Toast notification appears: "No internet connection. Messages will be sent when connection is restored."
-- ✅ Message remains in chat with SENDING status
+- ✅ Tasks load without errors
+- ✅ Tasks are displayed in a list
+- ✅ Each task shows: title, subject, due date, status
+- ✅ Tasks are sorted by due date (earliest first)
+- ✅ Loading indicator appears briefly during load
 
-**What to Check:**
-- Message text is correct
-- Timestamp is shown
-- Clock icon is visible on the right side
-- Message is aligned to the right (sent message)
+**Pass Criteria:**
+- All tasks visible
+- No error messages
+- Correct sorting order
 
 ---
 
-### Test 2: Auto-Send When Connection Restored
+### Test 2: Task Statistics Display
+
+**Objective:** Verify task statistics are calculated correctly
 
 **Steps:**
-1. With messages queued from Test 1, turn off airplane mode
-2. Wait a few seconds
-3. Observe the queued messages
+1. Navigate to Tasks screen
+2. Observe the statistics card at the top
+3. Count tasks manually:
+   - Overdue tasks (past due date, not completed)
+   - Due today tasks (due date is today)
+   - Completed tasks (status = completed)
 
 **Expected Results:**
-- ✅ Messages automatically change from clock icon to checkmark
-- ✅ Messages are sent to Firestore
-- ✅ Other user receives the messages
-- ✅ Messages show SENT status (single checkmark)
+- ✅ "Overdue" count matches actual overdue tasks
+- ✅ "Due Today" count matches tasks due today
+- ✅ "Completed" count matches completed tasks
+- ✅ Statistics update in real-time
 
-**What to Check:**
-- All queued messages are sent
-- Messages appear in correct order
-- Timestamps are preserved
-- No duplicate messages
+**Pass Criteria:**
+- All counts are accurate
+- Statistics match manual count
+
+**Test Data Example:**
+```
+Task 1: Due yesterday, status=pending → Overdue
+Task 2: Due today, status=pending → Due Today
+Task 3: Due tomorrow, status=pending → Neither
+Task 4: Due yesterday, status=completed → Completed
+Task 5: Due today, status=completed → Completed
+
+Expected Stats:
+- Overdue: 1
+- Due Today: 1
+- Completed: 2
+```
 
 ---
 
-### Test 3: Failed Message After Retry Attempts
+### Test 3: Real-time Task Updates
+
+**Objective:** Verify tasks update in real-time without manual refresh
 
 **Steps:**
-1. Turn on airplane mode
-2. Send a message (it will be queued)
-3. Turn off airplane mode briefly (1-2 seconds)
-4. Turn airplane mode back on before message sends
-5. Repeat step 3-4 several times to exhaust retry attempts
+1. Open Tasks screen on device/emulator
+2. Click "Add Task" button
+3. Fill in task details:
+   - Title: "Test Real-time Task"
+   - Category: Personal
+   - Due Date: Today
+   - Priority: High
+4. Click "Create Task"
+5. Observe the task list
 
 **Expected Results:**
-- ✅ After 3 failed attempts, message shows error icon (red)
-- ✅ Message status changes to FAILED
-- ✅ Message remains in chat
+- ✅ New task appears immediately in the list
+- ✅ Task is sorted correctly by due date
+- ✅ Statistics update automatically
+- ✅ "Due Today" count increases by 1
+- ✅ Success message appears: "Task created successfully!"
 
-**What to Check:**
-- Error icon is red and visible
-- Message is still readable
-- Message can be tapped
+**Pass Criteria:**
+- Task appears without manual refresh
+- Statistics update immediately
+- No errors or delays
 
 ---
 
-### Test 4: Manual Retry of Failed Message
+### Test 4: Category Filtering
+
+**Objective:** Verify category filters work correctly
 
 **Steps:**
-1. With a failed message from Test 3, ensure you have internet connection
-2. Tap on the failed message
-3. Observe the dialog that appears
-4. Tap "Retry" button
+1. Navigate to Tasks screen
+2. Click "All Tasks" button
+3. Observe displayed tasks
+4. Click "Personal" button
+5. Observe displayed tasks
+6. Click "Group" button
+7. Observe displayed tasks
+8. Click "Assignments" button
+9. Observe displayed tasks
 
 **Expected Results:**
-- ✅ Confirmation dialog appears with title "Retry Message"
-- ✅ Dialog asks "Do you want to retry sending this message?"
-- ✅ Dialog has "Retry" and "Cancel" buttons
-- ✅ After tapping Retry, message status changes to SENDING
-- ✅ Message is successfully sent
-- ✅ Message shows checkmark (SENT status)
+- ✅ "All Tasks": Shows all tasks regardless of category
+- ✅ "Personal": Shows only tasks with category="personal"
+- ✅ "Group": Shows only tasks with category="group"
+- ✅ "Assignments": Shows only tasks with category="assignment"
+- ✅ Empty state shows appropriate message when no tasks in category
 
-**What to Check:**
-- Dialog is clear and user-friendly
-- Cancel button dismisses dialog without action
-- Retry button attempts to send message
-- Message updates correctly after retry
+**Pass Criteria:**
+- Filtering works correctly for each category
+- Task count matches filter
+- Empty states show correct messages
 
 ---
 
-### Test 5: Multiple Messages Queued
+### Test 5: Error Handling - Missing Index
+
+**Objective:** Verify FAILED_PRECONDITION error is handled gracefully
+
+**Note:** This test requires the Firestore index to be missing or building.
 
 **Steps:**
-1. Turn on airplane mode
-2. Send 5 different messages
-3. Observe all messages in chat
-4. Turn off airplane mode
-5. Wait for all messages to send
+1. Delete the (userId, dueDate) composite index in Firebase Console
+2. Open Tasks screen
+3. Observe error message
 
 **Expected Results:**
-- ✅ All 5 messages appear with clock icons
-- ✅ All messages show SENDING status
-- ✅ When connection restored, all messages are sent
-- ✅ Messages are sent in correct order
-- ✅ All messages show checkmarks
+- ✅ User-friendly error message appears
+- ✅ Message says: "Database is being configured. This may take a few minutes. Please try again shortly."
+- ✅ "Retry" button is available
+- ✅ No app crash
 
-**What to Check:**
-- Message order is preserved
-- No messages are lost
-- No duplicate messages
-- All messages update to SENT status
+**Pass Criteria:**
+- Error message is clear and helpful
+- Retry button works
+- App remains stable
+
+**Recovery:**
+1. Recreate the index in Firebase Console
+2. Wait for index to build (check status in console)
+3. Click "Retry" button
+4. Tasks should load successfully
 
 ---
 
-### Test 6: Queue Persistence Across App Restarts
+### Test 6: Error Handling - Permission Denied
+
+**Objective:** Verify permission errors are handled gracefully
+
+**Note:** This test requires modifying Firestore security rules temporarily.
 
 **Steps:**
-1. Turn on airplane mode
-2. Send 2-3 messages
-3. Close the app completely (swipe away from recent apps)
-4. Reopen the app
-5. Navigate to the same chat
-6. Observe the queued messages
-7. Turn off airplane mode
+1. Temporarily modify Firestore rules to deny read access to tasks
+2. Open Tasks screen
+3. Observe error message
 
 **Expected Results:**
-- ✅ Queued messages still appear in chat after restart
-- ✅ Messages still show SENDING status
-- ✅ When connection restored, messages are sent
-- ✅ Messages update to SENT status
+- ✅ Error message appears
+- ✅ Message indicates permission issue
+- ✅ "Retry" button is available
+- ✅ No app crash
 
-**What to Check:**
-- Messages persist in SharedPreferences
-- Message content is intact
-- Timestamps are correct
-- Messages are sent after connection restored
+**Pass Criteria:**
+- Error message is clear
+- App remains stable
+
+**Recovery:**
+1. Restore correct Firestore security rules
+2. Click "Retry" button
+3. Tasks should load successfully
 
 ---
 
-### Test 7: Connection Status Indicator
+### Test 7: Error Handling - Network Error
+
+**Objective:** Verify network errors are handled gracefully
 
 **Steps:**
-1. Open a chat with internet connection
-2. Turn on airplane mode
-3. Observe any notifications or indicators
-4. Turn off airplane mode
-5. Observe any changes
+1. Enable Airplane Mode on device
+2. Open Tasks screen (or pull to refresh)
+3. Observe error message
 
 **Expected Results:**
-- ✅ When offline, toast shows "No internet connection" message
-- ✅ When online, no special indicator (normal operation)
+- ✅ Network error message appears
+- ✅ Message indicates network issue
+- ✅ "Retry" button is available
+- ✅ No app crash
 
-**What to Check:**
-- Toast message is clear and helpful
-- Toast doesn't block UI
-- Connection status is detected quickly
+**Pass Criteria:**
+- Error message is clear
+- App remains stable
+
+**Recovery:**
+1. Disable Airplane Mode
+2. Click "Retry" button
+3. Tasks should load successfully
 
 ---
 
-### Test 8: Mixed Online and Offline Messages
+### Test 8: Empty State Display
+
+**Objective:** Verify empty state shows when no tasks exist
 
 **Steps:**
-1. With internet connection, send 2 messages
-2. Turn on airplane mode
-3. Send 2 more messages
-4. Turn off airplane mode
-5. Send 2 more messages
+1. Delete all tasks for the test user
+2. Navigate to Tasks screen
+3. Observe empty state
 
 **Expected Results:**
-- ✅ First 2 messages send immediately (checkmarks)
-- ✅ Next 2 messages show clock icons (queued)
-- ✅ When connection restored, queued messages send
-- ✅ Last 2 messages send immediately
-- ✅ All messages appear in correct order
+- ✅ Empty state layout is visible
+- ✅ Shows emoji: 📋
+- ✅ Shows message: "No tasks yet"
+- ✅ Task list is hidden
+- ✅ Statistics show all zeros
 
-**What to Check:**
-- Message order is correct
-- Status indicators are appropriate for each message
-- No messages are lost or duplicated
+**Pass Criteria:**
+- Empty state is clear and helpful
+- No errors or blank screens
+
+**Test with Filters:**
+1. Create only personal tasks
+2. Click "Group" filter
+3. Verify empty state shows: "No group tasks yet"
 
 ---
 
-### Test 9: Queued Messages in Different Chats
+### Test 9: Swipe to Refresh
+
+**Objective:** Verify manual refresh works correctly
 
 **Steps:**
-1. Turn on airplane mode
-2. Open Chat A and send a message
-3. Navigate to Chat B and send a message
-4. Navigate to Chat C and send a message
-5. Turn off airplane mode
-6. Check all three chats
+1. Navigate to Tasks screen
+2. Pull down on the task list to trigger refresh
+3. Observe loading indicator
+4. Wait for refresh to complete
 
 **Expected Results:**
-- ✅ Each chat shows its queued message
-- ✅ All messages are sent when connection restored
-- ✅ Messages appear in correct chats
-- ✅ No cross-chat message mixing
+- ✅ Loading indicator appears
+- ✅ Tasks reload from Firestore
+- ✅ Statistics update
+- ✅ Loading indicator disappears
+- ✅ No errors
 
-**What to Check:**
-- Messages are in correct chats
-- Each chat's queue is independent
-- All messages are sent successfully
+**Pass Criteria:**
+- Refresh completes successfully
+- Data is up-to-date
 
 ---
 
-### Test 10: Cancel Retry Dialog
+### Test 10: Task Sorting Verification
+
+**Objective:** Verify tasks are sorted by due date correctly
+
+**Test Data:**
+Create tasks with these due dates:
+1. Task A: Due in 5 days
+2. Task B: Due yesterday (overdue)
+3. Task C: Due today
+4. Task D: Due in 2 days
+5. Task E: Due in 1 week
 
 **Steps:**
-1. Create a failed message (see Test 3)
-2. Tap on the failed message
-3. Tap "Cancel" button in dialog
+1. Navigate to Tasks screen
+2. Observe task order in the list
+
+**Expected Order (earliest first):**
+1. Task B (yesterday - overdue)
+2. Task C (today)
+3. Task D (in 2 days)
+4. Task A (in 5 days)
+5. Task E (in 1 week)
+
+**Pass Criteria:**
+- Tasks are in correct chronological order
+- Overdue tasks appear first
+- Future tasks are sorted correctly
+
+---
+
+### Test 11: Task Creation Flow
+
+**Objective:** Verify new tasks can be created and appear immediately
+
+**Steps:**
+1. Navigate to Tasks screen
+2. Click "Add Task" button (+ icon in toolbar)
+3. Fill in task details:
+   - Title: "Integration Test Task"
+   - Description: "Testing task creation"
+   - Subject: "Testing"
+   - Category: Personal
+   - Priority: High
+   - Due Date: Tomorrow
+4. Click "Create Task" button
+5. Observe the result
 
 **Expected Results:**
-- ✅ Dialog dismisses
-- ✅ Message remains in FAILED status
-- ✅ No retry attempt is made
-- ✅ Message can be tapped again later
+- ✅ Dialog closes
+- ✅ Success message appears: "Task created successfully!"
+- ✅ New task appears in the list immediately
+- ✅ Task is sorted correctly by due date
+- ✅ Statistics update if applicable
 
-**What to Check:**
-- Cancel button works correctly
-- Message state doesn't change
-- User can retry later if desired
-
----
-
-## Edge Cases to Test
-
-### Edge Case 1: Very Long Message
-- Send a very long message (1000+ characters) while offline
-- Verify it queues and sends correctly
-
-### Edge Case 2: Special Characters
-- Send messages with emojis, special characters while offline
-- Verify they are preserved correctly
-
-### Edge Case 3: Rapid Connection Changes
-- Toggle airplane mode on/off rapidly while messages are queued
-- Verify messages eventually send without duplicates
-
-### Edge Case 4: Low Memory
-- Queue many messages (20+) while offline
-- Verify all are stored and sent correctly
-
-### Edge Case 5: App Killed While Sending
-- Queue messages, turn on connection
-- Kill app immediately while messages are sending
-- Reopen app and verify messages are handled correctly
+**Pass Criteria:**
+- Task creation succeeds
+- Task appears without manual refresh
+- No errors
 
 ---
 
-## Common Issues and Solutions
+### Test 12: Statistics Accuracy
 
-### Issue: Messages not sending after connection restored
-**Solution:** 
-- Check if ConnectionMonitor is working correctly
-- Verify processQueuedMessages() is called
-- Check Firestore permissions
+**Objective:** Verify statistics calculations are accurate
 
-### Issue: Duplicate messages
-**Solution:**
-- Verify messages are removed from queue after successful send
-- Check message ID uniqueness
+**Test Setup:**
+Create exactly these tasks:
+1. Task 1: Due yesterday, status=pending
+2. Task 2: Due yesterday, status=pending
+3. Task 3: Due today, status=pending
+4. Task 4: Due today, status=pending
+5. Task 5: Due today, status=pending
+6. Task 6: Due tomorrow, status=pending
+7. Task 7: Due yesterday, status=completed
+8. Task 8: Due today, status=completed
 
-### Issue: Messages lost after app restart
-**Solution:**
-- Verify SharedPreferences is saving correctly
-- Check JSON serialization/deserialization
+**Steps:**
+1. Navigate to Tasks screen
+2. Observe statistics
 
-### Issue: Failed status not showing
-**Solution:**
-- Verify retry count is being tracked
-- Check MessageAdapter status icon logic
+**Expected Statistics:**
+- Overdue: 2 (Tasks 1, 2)
+- Due Today: 3 (Tasks 3, 4, 5)
+- Completed: 2 (Tasks 7, 8)
 
----
-
-## Performance Checks
-
-1. **Queue Size:** Test with 50+ queued messages
-2. **Send Speed:** Verify messages send quickly when online
-3. **UI Responsiveness:** Ensure UI doesn't freeze during queue processing
-4. **Memory Usage:** Monitor memory with many queued messages
-5. **Battery Impact:** Check battery usage with connection monitoring
+**Pass Criteria:**
+- All statistics match expected values exactly
 
 ---
 
-## Accessibility Testing
+### Test 13: Lifecycle Handling
 
-1. **Screen Reader:** Verify message status is announced
-2. **High Contrast:** Check status icons are visible
-3. **Large Text:** Verify layout works with large text sizes
-4. **Touch Targets:** Ensure failed messages are easy to tap
+**Objective:** Verify app handles lifecycle events correctly
 
----
+**Steps:**
+1. Open Tasks screen
+2. Rotate device (portrait ↔ landscape)
+3. Observe tasks and statistics
+4. Press Home button
+5. Return to app
+6. Observe tasks and statistics
 
-## Success Criteria
+**Expected Results:**
+- ✅ Tasks remain visible after rotation
+- ✅ Statistics remain accurate after rotation
+- ✅ No data loss
+- ✅ No duplicate listeners
+- ✅ App resumes correctly
 
-All tests pass with:
-- ✅ No crashes or errors
-- ✅ Messages queue correctly when offline
-- ✅ Messages send automatically when online
-- ✅ Failed messages can be retried manually
-- ✅ Message order is preserved
-- ✅ No duplicate or lost messages
-- ✅ Queue persists across app restarts
-- ✅ UI is responsive and clear
-- ✅ Connection status is accurately detected
-
----
-
-## Reporting Issues
-
-When reporting issues, include:
-1. Device model and Android version
-2. Steps to reproduce
-3. Expected vs actual behavior
-4. Screenshots or screen recording
-5. Logcat output (filter by "ChatRepository", "OfflineMessageQueue", "ConnectionMonitor")
+**Pass Criteria:**
+- Data persists across lifecycle events
+- No memory leaks
+- No crashes
 
 ---
 
-## Next Steps After Testing
+### Test 14: Multiple Task Operations
 
-Once all tests pass:
-1. Mark Task 7 as complete ✅
-2. Proceed to Task 8: Set up Firebase Cloud Messaging service
-3. Document any issues found for future improvement
-4. Consider additional features (e.g., retry count display, queue size indicator)
+**Objective:** Verify multiple operations work correctly in sequence
+
+**Steps:**
+1. Create a new task
+2. Verify it appears in the list
+3. Create another task
+4. Verify both tasks appear
+5. Pull to refresh
+6. Verify both tasks still appear
+7. Switch to "Personal" filter
+8. Verify correct tasks show
+9. Switch back to "All Tasks"
+10. Verify all tasks show
+
+**Expected Results:**
+- ✅ All operations complete successfully
+- ✅ Data remains consistent
+- ✅ No errors or crashes
+
+**Pass Criteria:**
+- All operations work correctly
+- Data integrity maintained
+
+---
+
+## Performance Testing
+
+### Test 15: Load Time
+
+**Objective:** Verify tasks load quickly
+
+**Steps:**
+1. Clear app data
+2. Log in
+3. Navigate to Tasks screen
+4. Measure time from screen open to tasks displayed
+
+**Expected Results:**
+- ✅ Tasks load in < 2 seconds on good network
+- ✅ Loading indicator shows during load
+- ✅ No UI freezing
+
+**Pass Criteria:**
+- Acceptable load time
+- Smooth UI experience
+
+---
+
+### Test 16: Large Task List
+
+**Objective:** Verify app handles many tasks efficiently
+
+**Test Setup:**
+Create 50+ tasks with various due dates
+
+**Steps:**
+1. Navigate to Tasks screen
+2. Scroll through the task list
+3. Observe scrolling performance
+
+**Expected Results:**
+- ✅ Smooth scrolling
+- ✅ No lag or stuttering
+- ✅ All tasks load correctly
+- ✅ Statistics calculate correctly
+
+**Pass Criteria:**
+- Good performance with large dataset
+- No UI issues
+
+---
+
+## Regression Testing
+
+### Test 17: Existing Features Still Work
+
+**Objective:** Verify changes didn't break existing functionality
+
+**Features to Test:**
+- ✅ Task creation dialog opens
+- ✅ AI Assistant button works
+- ✅ Export button shows message
+- ✅ Filter buttons work
+- ✅ View toggle buttons work
+- ✅ Search button shows message
+
+**Pass Criteria:**
+- All existing features work as before
+
+---
+
+## Bug Reporting Template
+
+If you find issues during testing, report them using this template:
+
+```
+**Bug Title:** [Brief description]
+
+**Severity:** [Critical/High/Medium/Low]
+
+**Steps to Reproduce:**
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+**Expected Result:**
+[What should happen]
+
+**Actual Result:**
+[What actually happened]
+
+**Screenshots/Logs:**
+[Attach if available]
+
+**Device Info:**
+- Device: [e.g., Pixel 6]
+- Android Version: [e.g., Android 13]
+- App Version: [version number]
+
+**Additional Notes:**
+[Any other relevant information]
+```
+
+---
+
+## Test Results Summary
+
+After completing all tests, fill out this summary:
+
+| Test # | Test Name | Status | Notes |
+|--------|-----------|--------|-------|
+| 1 | Basic Task Display | ⬜ Pass / ⬜ Fail | |
+| 2 | Task Statistics | ⬜ Pass / ⬜ Fail | |
+| 3 | Real-time Updates | ⬜ Pass / ⬜ Fail | |
+| 4 | Category Filtering | ⬜ Pass / ⬜ Fail | |
+| 5 | Missing Index Error | ⬜ Pass / ⬜ Fail | |
+| 6 | Permission Error | ⬜ Pass / ⬜ Fail | |
+| 7 | Network Error | ⬜ Pass / ⬜ Fail | |
+| 8 | Empty State | ⬜ Pass / ⬜ Fail | |
+| 9 | Swipe to Refresh | ⬜ Pass / ⬜ Fail | |
+| 10 | Task Sorting | ⬜ Pass / ⬜ Fail | |
+| 11 | Task Creation | ⬜ Pass / ⬜ Fail | |
+| 12 | Statistics Accuracy | ⬜ Pass / ⬜ Fail | |
+| 13 | Lifecycle Handling | ⬜ Pass / ⬜ Fail | |
+| 14 | Multiple Operations | ⬜ Pass / ⬜ Fail | |
+| 15 | Load Time | ⬜ Pass / ⬜ Fail | |
+| 16 | Large Task List | ⬜ Pass / ⬜ Fail | |
+| 17 | Regression Testing | ⬜ Pass / ⬜ Fail | |
+
+**Overall Status:** ⬜ All Tests Passed / ⬜ Issues Found
+
+**Sign-off:**
+- Tester Name: _______________
+- Date: _______________
+- Signature: _______________
+
+---
+
+## Conclusion
+
+This testing guide covers all aspects of Task 7 implementation:
+- ✅ Query functionality
+- ✅ Error handling
+- ✅ Statistics accuracy
+- ✅ Real-time updates
+- ✅ User experience
+- ✅ Performance
+
+Complete all tests to ensure the Tasks display works correctly and meets all requirements.

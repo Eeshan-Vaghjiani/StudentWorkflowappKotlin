@@ -1,11 +1,14 @@
 package com.example.loginandregistration.repository
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.example.loginandregistration.models.*
 import com.example.loginandregistration.utils.OfflineMessageQueue
+import com.example.loginandregistration.utils.safeFirestoreCall
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import java.util.Date
@@ -20,6 +23,8 @@ class ChatRepository(
         private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
         private val context: Context? = null
 ) {
+    private val storageRepository: StorageRepository? =
+            context?.let { StorageRepository(storage, auth, it) }
     companion object {
         private const val TAG = "ChatRepository"
         private const val CHATS_COLLECTION = "chats"
@@ -50,10 +55,36 @@ class ChatRepository(
                         .addSnapshotListener { snapshot, error ->
                             if (error != null) {
                                 Log.e(TAG, "Error listening to chats: ${error.message}", error)
-                                // If it's an index error, log specific message
-                                if (error.message?.contains("index", ignoreCase = true) == true) {
-                                    Log.e(TAG, "FIRESTORE INDEX REQUIRED: Create a composite index for 'chats' collection with fields: participants (array-contains) and lastMessageTime (descending)")
+
+                                // Handle specific Firestore errors
+                                when (error) {
+                                    is FirebaseFirestoreException -> {
+                                        when (error.code) {
+                                            FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                                                Log.e(
+                                                        TAG,
+                                                        "PERMISSION_DENIED: User does not have permission to access chats"
+                                                )
+                                            }
+                                            FirebaseFirestoreException.Code.FAILED_PRECONDITION -> {
+                                                Log.e(
+                                                        TAG,
+                                                        "FIRESTORE INDEX REQUIRED: Create a composite index for 'chats' collection with fields: participants (array-contains) and lastMessageTime (descending)"
+                                                )
+                                            }
+                                            FirebaseFirestoreException.Code.UNAVAILABLE -> {
+                                                Log.e(
+                                                        TAG,
+                                                        "UNAVAILABLE: Firestore service is temporarily unavailable"
+                                                )
+                                            }
+                                            else -> {
+                                                Log.e(TAG, "Firestore error code: ${error.code}")
+                                            }
+                                        }
+                                    }
                                 }
+
                                 // Still try to send empty list rather than failing completely
                                 trySend(emptyList())
                                 return@addSnapshotListener
@@ -65,23 +96,35 @@ class ChatRepository(
                                 return@addSnapshotListener
                             }
 
-                            Log.d(TAG, "getUserChats: Received ${snapshot.documents.size} chat documents")
+                            Log.d(
+                                    TAG,
+                                    "getUserChats: Received ${snapshot.documents.size} chat documents"
+                            )
 
                             val chats =
-                                    snapshot.documents.mapNotNull { doc ->
-                                        try {
-                                            val chat = doc.toObject(Chat::class.java)
-                                            if (chat != null) {
-                                                Log.d(TAG, "Parsed chat: ${chat.chatId}, type: ${chat.type}, participants: ${chat.participants.size}")
+                                    snapshot.documents
+                                            .mapNotNull { doc ->
+                                                try {
+                                                    val chat = doc.toObject(Chat::class.java)
+                                                    if (chat != null) {
+                                                        Log.d(
+                                                                TAG,
+                                                                "Parsed chat: ${chat.chatId}, type: ${chat.type}, participants: ${chat.participants.size}"
+                                                        )
+                                                    }
+                                                    chat
+                                                } catch (e: Exception) {
+                                                    Log.e(
+                                                            TAG,
+                                                            "Error parsing chat document ${doc.id}",
+                                                            e
+                                                    )
+                                                    null
+                                                }
                                             }
-                                            chat
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error parsing chat document ${doc.id}", e)
-                                            null
-                                        }
-                                    }
-                                    // Sort manually by lastMessageTime since we can't use orderBy without index
-                                    .sortedByDescending { it.lastMessageTime }
+                                            // Sort manually by lastMessageTime since we can't use
+                                            // orderBy without index
+                                            .sortedByDescending { it.lastMessageTime }
 
                             Log.d(TAG, "getUserChats: Sending ${chats.size} chats to UI")
                             trySend(chats)
@@ -94,28 +137,30 @@ class ChatRepository(
     }
 
     /**
-     * Creates a user document in Firestore from UserInfo.
-     * This is used when a user is found in search but doesn't have a Firestore document yet.
+     * Creates a user document in Firestore from UserInfo. This is used when a user is found in
+     * search but doesn't have a Firestore document yet.
      */
     private suspend fun createUserDocument(userInfo: UserInfo): Result<Unit> {
         return try {
             Log.d(TAG, "createUserDocument: Creating document for ${userInfo.displayName}")
-            
-            val userDoc = mapOf(
-                "uid" to userInfo.userId,
-                "email" to userInfo.email,
-                "displayName" to userInfo.displayName,
-                "photoUrl" to userInfo.profileImageUrl,
-                "isOnline" to userInfo.online,
-                "lastActive" to (userInfo.lastSeen ?: Date())
+
+            val userDoc =
+                    mapOf(
+                            "uid" to userInfo.userId,
+                            "email" to userInfo.email,
+                            "displayName" to userInfo.displayName,
+                            "photoUrl" to userInfo.profileImageUrl,
+                            "initials" to userInfo.initials,
+                            "isOnline" to userInfo.online,
+                            "lastActive" to (userInfo.lastSeen ?: Date())
+                    )
+
+            firestore.collection(USERS_COLLECTION).document(userInfo.userId).set(userDoc).await()
+
+            Log.d(
+                    TAG,
+                    "createUserDocument: Successfully created document for ${userInfo.displayName}"
             )
-            
-            firestore.collection(USERS_COLLECTION)
-                .document(userInfo.userId)
-                .set(userDoc)
-                .await()
-            
-            Log.d(TAG, "createUserDocument: Successfully created document for ${userInfo.displayName}")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "createUserDocument: Error creating user document", e)
@@ -123,7 +168,10 @@ class ChatRepository(
         }
     }
 
-    suspend fun getOrCreateDirectChat(otherUserId: String, otherUserInfo: UserInfo? = null): Result<Chat> {
+    suspend fun getOrCreateDirectChat(
+            otherUserId: String,
+            otherUserInfo: UserInfo? = null
+    ): Result<Chat> {
         return try {
             if (getCurrentUserId().isEmpty()) {
                 return Result.failure(Exception("User not authenticated"))
@@ -153,36 +201,39 @@ class ChatRepository(
             }
 
             Log.d(TAG, "Fetching user info for otherUserId: $otherUserId")
-            
+
             // If UserInfo was provided (from search results), try to create the document first
             if (otherUserInfo != null) {
                 Log.d(TAG, "UserInfo provided, attempting to create user document if needed")
                 createUserDocument(otherUserInfo)
             }
-            
+
             val otherUserResult = getUserInfo(otherUserId)
             if (otherUserResult.isFailure) {
                 Log.e(
                         TAG,
                         "Failed to get other user info: ${otherUserResult.exceptionOrNull()?.message}"
                 )
-                
+
                 // If we have UserInfo from search, use it directly
                 if (otherUserInfo != null) {
                     Log.d(TAG, "Using UserInfo from search results: ${otherUserInfo.displayName}")
                 } else {
                     return Result.failure(
-                            Exception("Cannot create chat: The other user needs to log into the app at least once to create their profile. Please ask them to open the app and sign in.")
+                            Exception(
+                                    "Cannot create chat: The other user needs to log into the app at least once to create their profile. Please ask them to open the app and sign in."
+                            )
                     )
                 }
             }
-            
-            val otherUser = if (otherUserResult.isSuccess) {
-                otherUserResult.getOrThrow()
-            } else {
-                otherUserInfo!! // We know it's not null because we checked above
-            }
-            
+
+            val otherUser =
+                    if (otherUserResult.isSuccess) {
+                        otherUserResult.getOrThrow()
+                    } else {
+                        otherUserInfo!! // We know it's not null because we checked above
+                    }
+
             Log.d(TAG, "Other user found: ${otherUser.displayName}")
 
             Log.d(TAG, "Fetching user info for currentUserId: ${getCurrentUserId()}")
@@ -236,14 +287,33 @@ class ChatRepository(
 
             Log.d(TAG, "getOrCreateGroupChat: Checking for existing chat for group $groupId")
 
+            // Check for existing chat with error handling
             val existingChats =
-                    firestore
-                            .collection(CHATS_COLLECTION)
-                            .whereEqualTo("type", ChatType.GROUP.name)
-                            .whereEqualTo("groupId", groupId)
-                            .get()
-                            .await()
+                    try {
+                        firestore
+                                .collection(CHATS_COLLECTION)
+                                .whereEqualTo("type", ChatType.GROUP.name)
+                                .whereEqualTo("groupId", groupId)
+                                .get()
+                                .await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "getOrCreateGroupChat: Error checking existing chats", e)
 
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            return Result.failure(
+                                    Exception("You don't have permission to access this chat")
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(
+                                TAG,
+                                "getOrCreateGroupChat: Unexpected error checking existing chats",
+                                e
+                        )
+                        return Result.failure(e)
+                    }
             if (!existingChats.isEmpty) {
                 val chat = existingChats.documents.first().toObject(Chat::class.java)
                 Log.d(TAG, "getOrCreateGroupChat: Found existing chat ${chat?.chatId}")
@@ -255,20 +325,52 @@ class ChatRepository(
             }
 
             Log.d(TAG, "getOrCreateGroupChat: Creating new chat for group $groupId")
-            val groupDoc = firestore.collection("groups").document(groupId).get().await()
 
+            // Fetch group document with error handling
+            val groupDoc =
+                    try {
+                        firestore.collection("groups").document(groupId).get().await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "getOrCreateGroupChat: Error fetching group document", e)
+
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            return Result.failure(
+                                    Exception("You don't have permission to access this group")
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(
+                                TAG,
+                                "getOrCreateGroupChat: Unexpected error fetching group document",
+                                e
+                        )
+                        return Result.failure(e)
+                    }
             if (!groupDoc.exists()) {
-                Log.e(TAG, "getOrCreateGroupChat: Group document does not exist for groupId: $groupId")
+                Log.e(
+                        TAG,
+                        "getOrCreateGroupChat: Group document does not exist for groupId: $groupId"
+                )
                 return Result.failure(Exception("Group not found"))
             }
 
             val groupName = groupDoc.getString("name") ?: "Group Chat"
-            val members = groupDoc.get("members") as? List<String> ?: emptyList()
+            // FIXED: Use memberIds instead of members to match the actual field name in groups
+            // collection
+            val memberIds = groupDoc.get("memberIds") as? List<String> ?: emptyList()
 
-            Log.d(TAG, "getOrCreateGroupChat: Group '$groupName' has ${members.size} members")
+            Log.d(TAG, "getOrCreateGroupChat: Group '$groupName' has ${memberIds.size} members")
+
+            // Verify all members are included in participants array
+            if (memberIds.isEmpty()) {
+                Log.e(TAG, "getOrCreateGroupChat: Group has no members")
+                return Result.failure(Exception("Group has no members"))
+            }
 
             val participantDetails = mutableMapOf<String, UserInfo>()
-            for (memberId in members) {
+            for (memberId in memberIds) {
                 getUserInfo(memberId).getOrNull()?.let { userInfo ->
                     participantDetails[memberId] = userInfo
                 }
@@ -279,30 +381,60 @@ class ChatRepository(
                     Chat(
                             chatId = chatId,
                             type = ChatType.GROUP,
-                            participants = members,
+                            participants = memberIds, // All group members included in participants
                             participantDetails = participantDetails,
                             lastMessage = "",
                             lastMessageTime = Date(),
                             lastMessageSenderId = "",
-                            unreadCount = members.associateWith { 0 },
+                            unreadCount = memberIds.associateWith { 0 },
                             groupId = groupId,
                             groupName = groupName,
                             createdAt = Date()
                     )
 
-            firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
-            Log.d(TAG, "getOrCreateGroupChat: Successfully created chat $chatId for group $groupId")
+            // Create chat with error handling
+            try {
+                firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
+            } catch (e: FirebaseFirestoreException) {
+                Log.e(TAG, "getOrCreateGroupChat: Error creating chat", e)
+
+                if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    return Result.failure(
+                            Exception("You don't have permission to create a chat for this group")
+                    )
+                }
+
+                return Result.failure(e)
+            } catch (e: Exception) {
+                Log.e(TAG, "getOrCreateGroupChat: Unexpected error creating chat", e)
+                return Result.failure(e)
+            }
+
+            Log.d(
+                    TAG,
+                    "getOrCreateGroupChat: Successfully created chat $chatId for group $groupId with ${memberIds.size} participants"
+            )
 
             Result.success(chat)
         } catch (e: Exception) {
             Log.e(TAG, "Error creating group chat", e)
+
+            // Handle permission errors gracefully
+            if (e is FirebaseFirestoreException &&
+                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+            ) {
+                return Result.failure(
+                        Exception("You don't have permission to access this group chat")
+                )
+            }
+
             Result.failure(e)
         }
     }
 
     /**
-     * Auto-creates chats for all groups the user is a member of.
-     * This should be called when the user opens the Chat tab or logs in.
+     * Auto-creates chats for all groups the user is a member of. This should be called when the
+     * user opens the Chat tab or logs in.
      */
     suspend fun ensureGroupChatsExist(): Result<Int> {
         return try {
@@ -312,40 +444,81 @@ class ChatRepository(
 
             Log.d(TAG, "ensureGroupChatsExist: Fetching user's groups")
 
-            // Get all groups where user is a member
-            val groupsSnapshot = firestore
-                .collection("groups")
-                .whereArrayContains("members", getCurrentUserId())
-                .get()
-                .await()
+            // Get all groups where user is a member with error handling
+            // FIXED: Use memberIds instead of members to match the actual field name in groups
+            // collection
+            val groupsSnapshot =
+                    try {
+                        firestore
+                                .collection("groups")
+                                .whereArrayContains("memberIds", getCurrentUserId())
+                                .get()
+                                .await()
+                    } catch (e: FirebaseFirestoreException) {
+                        Log.e(TAG, "ensureGroupChatsExist: Error fetching groups", e)
 
+                        // Handle permission errors gracefully
+                        if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            Log.e(
+                                    TAG,
+                                    "ensureGroupChatsExist: Permission denied when fetching groups"
+                            )
+                            return Result.failure(
+                                    Exception(
+                                            "You don't have permission to access groups. Please try logging out and back in."
+                                    )
+                            )
+                        }
+
+                        return Result.failure(e)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "ensureGroupChatsExist: Unexpected error fetching groups", e)
+                        return Result.failure(e)
+                    }
             Log.d(TAG, "ensureGroupChatsExist: Found ${groupsSnapshot.documents.size} groups")
 
             var createdCount = 0
             for (groupDoc in groupsSnapshot.documents) {
                 val groupId = groupDoc.id
                 val groupName = groupDoc.getString("name") ?: "Group"
-                
+
                 Log.d(TAG, "ensureGroupChatsExist: Checking group '$groupName' ($groupId)")
 
-                // Check if chat already exists for this group
-                val existingChat = firestore
-                    .collection(CHATS_COLLECTION)
-                    .whereEqualTo("type", ChatType.GROUP.name)
-                    .whereEqualTo("groupId", groupId)
-                    .limit(1)
-                    .get()
-                    .await()
-
+                // Check if chat already exists for this group with error handling
+                val existingChat =
+                        try {
+                            firestore
+                                    .collection(CHATS_COLLECTION)
+                                    .whereEqualTo("type", ChatType.GROUP.name)
+                                    .whereEqualTo("groupId", groupId)
+                                    .limit(1)
+                                    .get()
+                                    .await()
+                        } catch (e: Exception) {
+                            Log.e(
+                                    TAG,
+                                    "ensureGroupChatsExist: Error checking existing chat for group '$groupName'",
+                                    e
+                            )
+                            // Continue to next group instead of failing completely
+                            continue
+                        }
                 if (existingChat.isEmpty) {
                     // Create chat for this group
                     Log.d(TAG, "ensureGroupChatsExist: Creating chat for group '$groupName'")
                     val result = getOrCreateGroupChat(groupId)
                     if (result.isSuccess) {
                         createdCount++
-                        Log.d(TAG, "ensureGroupChatsExist: Successfully created chat for group '$groupName'")
+                        Log.d(
+                                TAG,
+                                "ensureGroupChatsExist: Successfully created chat for group '$groupName'"
+                        )
                     } else {
-                        Log.e(TAG, "ensureGroupChatsExist: Failed to create chat for group '$groupName': ${result.exceptionOrNull()?.message}")
+                        Log.e(
+                                TAG,
+                                "ensureGroupChatsExist: Failed to create chat for group '$groupName': ${result.exceptionOrNull()?.message}"
+                        )
+                        // Continue to next group instead of failing completely
                     }
                 } else {
                     Log.d(TAG, "ensureGroupChatsExist: Chat already exists for group '$groupName'")
@@ -356,6 +529,19 @@ class ChatRepository(
             Result.success(createdCount)
         } catch (e: Exception) {
             Log.e(TAG, "Error ensuring group chats exist", e)
+
+            // Handle permission errors gracefully
+            if (e is FirebaseFirestoreException &&
+                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+            ) {
+                Log.e(TAG, "ensureGroupChatsExist: Permission denied error caught")
+                return Result.failure(
+                        Exception(
+                                "You don't have permission to access chat data. Please try logging out and back in."
+                        )
+                )
+            }
+
             Result.failure(e)
         }
     }
@@ -366,7 +552,15 @@ class ChatRepository(
                 return Result.failure(Exception("User not authenticated"))
             }
 
-            if (text.isBlank()) {
+            // Validate and sanitize message text
+            val (validation, sanitizedText) =
+                    com.example.loginandregistration.utils.InputValidator
+                            .validateAndSanitizeMessage(text)
+            if (!validation.isValid) {
+                return Result.failure(Exception(validation.errorMessage ?: "Invalid message"))
+            }
+
+            if (sanitizedText.isNullOrBlank()) {
                 return Result.failure(Exception("Message cannot be empty"))
             }
 
@@ -389,7 +583,7 @@ class ChatRepository(
                             senderId = getCurrentUserId(),
                             senderName = currentUser.displayName,
                             senderImageUrl = currentUser.profileImageUrl,
-                            text = text,
+                            text = sanitizedText,
                             timestamp = Date(),
                             readBy = listOf(getCurrentUserId()),
                             status = MessageStatus.SENDING
@@ -398,8 +592,8 @@ class ChatRepository(
             // Queue message for offline support
             offlineQueue?.queueMessage(message)
 
-            try {
-                // Attempt to send message
+            // Use safeFirestoreCall for proper error handling
+            val sendResult = safeFirestoreCall {
                 firestore
                         .collection(CHATS_COLLECTION)
                         .document(chatId)
@@ -407,18 +601,23 @@ class ChatRepository(
                         .document(messageId)
                         .set(message.copy(status = MessageStatus.SENT))
                         .await()
+            }
 
-                updateChatLastMessage(chatId, text, getCurrentUserId())
+            if (sendResult.isFailure) {
+                val exception = sendResult.exceptionOrNull()
+                Log.e(TAG, "Error sending message (attempt ${retryCount + 1})", exception)
 
-                // Remove from queue on success
-                offlineQueue?.removeMessage(messageId)
-
-                // Trigger notifications for recipients
-                triggerNotifications(chatId, message)
-
-                Result.success(message.copy(status = MessageStatus.SENT))
-            } catch (sendError: Exception) {
-                Log.e(TAG, "Error sending message (attempt ${retryCount + 1})", sendError)
+                // Check if it's a permission error (don't retry these)
+                if (exception is FirebaseFirestoreException &&
+                                exception.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                            Exception(
+                                    "Permission denied: You don't have access to send messages in this chat"
+                            )
+                    )
+                }
 
                 // If we've exceeded retry attempts, mark as failed
                 if (retryCount >= MAX_RETRY_ATTEMPTS) {
@@ -428,17 +627,282 @@ class ChatRepository(
                     )
                 }
 
-                // Keep message in queue with SENDING status
+                // Keep message in queue with SENDING status for retry
                 offlineQueue?.updateMessageStatus(messageId, MessageStatus.SENDING)
-                throw sendError
+                return Result.failure(exception ?: Exception("Failed to send message"))
             }
+
+            // Update chat last message
+            val updateResult = safeFirestoreCall {
+                updateChatLastMessage(chatId, sanitizedText, getCurrentUserId())
+            }
+
+            if (updateResult.isFailure) {
+                Log.w(
+                        TAG,
+                        "Failed to update chat last message, but message was sent",
+                        updateResult.exceptionOrNull()
+                )
+            }
+
+            // Remove from queue on success
+            offlineQueue?.removeMessage(messageId)
+
+            // Trigger notifications for recipients (don't fail if this fails)
+            try {
+                triggerNotifications(chatId, message)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to trigger notifications, but message was sent", e)
+            }
+
+            Result.success(message.copy(status = MessageStatus.SENT))
         } catch (e: Exception) {
             Log.e(TAG, "Error sending message", e)
             Result.failure(e)
         }
     }
 
+    /**
+     * Sends an image message to a chat. Compresses the image before upload and shows progress.
+     *
+     * @param chatId ID of the chat
+     * @param imageUri URI of the image to send
+     * @param onProgress Callback for upload progress (0-100)
+     * @return Result with the sent message on success
+     */
+    suspend fun sendImageMessage(
+            chatId: String,
+            imageUri: Uri,
+            onProgress: (Int) -> Unit = {}
+    ): Result<Message> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            if (storageRepository == null) {
+                return Result.failure(Exception("Storage repository not initialized"))
+            }
+
+            Log.d(TAG, "sendImageMessage: Starting image upload for chat $chatId")
+
+            val currentUser =
+                    getUserInfo(getCurrentUserId()).getOrNull()
+                            ?: return Result.failure(Exception("User not found"))
+
+            // Create message ID first
+            val messageId =
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .collection(MESSAGES_COLLECTION)
+                            .document()
+                            .id
+
+            // Create temporary message with SENDING status
+            val tempMessage =
+                    Message(
+                            id = messageId,
+                            chatId = chatId,
+                            senderId = getCurrentUserId(),
+                            senderName = currentUser.displayName,
+                            senderImageUrl = currentUser.profileImageUrl,
+                            text = "", // Empty text for image messages
+                            imageUrl = null, // Will be set after upload
+                            timestamp = Date(),
+                            readBy = listOf(getCurrentUserId()),
+                            status = MessageStatus.SENDING
+                    )
+
+            // Queue message for offline support
+            offlineQueue?.queueMessage(tempMessage)
+
+            try {
+                // Upload image to Storage
+                val storagePath = storageRepository.getChatImagePath(chatId)
+                val uploadResult =
+                        storageRepository.uploadImage(
+                                uri = imageUri,
+                                path = storagePath,
+                                onProgress = onProgress
+                        )
+
+                if (uploadResult.isFailure) {
+                    Log.e(
+                            TAG,
+                            "sendImageMessage: Image upload failed",
+                            uploadResult.exceptionOrNull()
+                    )
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                            uploadResult.exceptionOrNull() ?: Exception("Image upload failed")
+                    )
+                }
+
+                val imageUrl = uploadResult.getOrThrow()
+                Log.d(TAG, "sendImageMessage: Image uploaded successfully: $imageUrl")
+
+                // Create final message with image URL
+                val message = tempMessage.copy(imageUrl = imageUrl, status = MessageStatus.SENT)
+
+                // Save message to Firestore
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(MESSAGES_COLLECTION)
+                        .document(messageId)
+                        .set(message)
+                        .await()
+
+                // Update chat's last message
+                updateChatLastMessage(chatId, "📷 Photo", getCurrentUserId())
+
+                // Remove from queue on success
+                offlineQueue?.removeMessage(messageId)
+
+                // Trigger notifications for recipients
+                triggerNotifications(chatId, message.copy(text = "📷 Photo"))
+
+                Log.d(TAG, "sendImageMessage: Image message sent successfully")
+                Result.success(message)
+            } catch (sendError: Exception) {
+                Log.e(TAG, "sendImageMessage: Error sending image message", sendError)
+                offlineQueue?.markMessageAsFailed(messageId)
+                Result.failure(sendError)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendImageMessage: Unexpected error", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sends a document message to a chat. Uploads the document and shows progress.
+     *
+     * @param chatId ID of the chat
+     * @param documentUri URI of the document to send
+     * @param onProgress Callback for upload progress (0-100)
+     * @return Result with the sent message on success
+     */
+    suspend fun sendDocumentMessage(
+            chatId: String,
+            documentUri: Uri,
+            onProgress: (Int) -> Unit = {}
+    ): Result<Message> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            if (storageRepository == null) {
+                return Result.failure(Exception("Storage repository not initialized"))
+            }
+
+            Log.d(TAG, "sendDocumentMessage: Starting document upload for chat $chatId")
+
+            val currentUser =
+                    getUserInfo(getCurrentUserId()).getOrNull()
+                            ?: return Result.failure(Exception("User not found"))
+
+            // Get file info from URI
+            val fileInfo = storageRepository.getFileInfoFromUri(documentUri)
+            val fileName = fileInfo.first
+            val fileSize = fileInfo.second
+
+            Log.d(TAG, "sendDocumentMessage: Document name: $fileName, size: ${fileSize / 1024}KB")
+
+            // Create message ID first
+            val messageId =
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .collection(MESSAGES_COLLECTION)
+                            .document()
+                            .id
+
+            // Create temporary message with SENDING status
+            val tempMessage =
+                    Message(
+                            id = messageId,
+                            chatId = chatId,
+                            senderId = getCurrentUserId(),
+                            senderName = currentUser.displayName,
+                            senderImageUrl = currentUser.profileImageUrl,
+                            text = "", // Empty text for document messages
+                            documentUrl = null, // Will be set after upload
+                            documentName = fileName,
+                            documentSize = fileSize,
+                            timestamp = Date(),
+                            readBy = listOf(getCurrentUserId()),
+                            status = MessageStatus.SENDING
+                    )
+
+            // Queue message for offline support
+            offlineQueue?.queueMessage(tempMessage)
+
+            try {
+                // Upload document to Storage
+                val storagePath = storageRepository.getChatDocumentPath(chatId)
+                val uploadResult =
+                        storageRepository.uploadDocument(
+                                uri = documentUri,
+                                path = storagePath,
+                                onProgress = onProgress
+                        )
+
+                if (uploadResult.isFailure) {
+                    Log.e(
+                            TAG,
+                            "sendDocumentMessage: Document upload failed",
+                            uploadResult.exceptionOrNull()
+                    )
+                    offlineQueue?.markMessageAsFailed(messageId)
+                    return Result.failure(
+                            uploadResult.exceptionOrNull() ?: Exception("Document upload failed")
+                    )
+                }
+
+                val documentUrl = uploadResult.getOrThrow()
+                Log.d(TAG, "sendDocumentMessage: Document uploaded successfully: $documentUrl")
+
+                // Create final message with document URL
+                val message =
+                        tempMessage.copy(documentUrl = documentUrl, status = MessageStatus.SENT)
+
+                // Save message to Firestore
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(MESSAGES_COLLECTION)
+                        .document(messageId)
+                        .set(message)
+                        .await()
+
+                // Update chat's last message
+                updateChatLastMessage(chatId, "📄 $fileName", getCurrentUserId())
+
+                // Remove from queue on success
+                offlineQueue?.removeMessage(messageId)
+
+                // Trigger notifications for recipients
+                triggerNotifications(chatId, message.copy(text = "📄 $fileName"))
+
+                Log.d(TAG, "sendDocumentMessage: Document message sent successfully")
+                Result.success(message)
+            } catch (sendError: Exception) {
+                Log.e(TAG, "sendDocumentMessage: Error sending document message", sendError)
+                offlineQueue?.markMessageAsFailed(messageId)
+                Result.failure(sendError)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendDocumentMessage: Unexpected error", e)
+            Result.failure(e)
+        }
+    }
+
     fun getChatMessages(chatId: String, limit: Int = 50): Flow<List<Message>> = callbackFlow {
+        Log.d(TAG, "getChatMessages: Setting up listener for chat $chatId")
+
         val listener =
                 firestore
                         .collection(CHATS_COLLECTION)
@@ -448,27 +912,67 @@ class ChatRepository(
                         .limit(limit.toLong())
                         .addSnapshotListener { snapshot, error ->
                             if (error != null) {
-                                Log.e(TAG, "Error listening to messages", error)
+                                Log.e(TAG, "Error listening to messages: ${error.message}", error)
+
+                                // Handle specific Firestore errors
+                                when (error) {
+                                    is FirebaseFirestoreException -> {
+                                        when (error.code) {
+                                            FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                                                Log.e(
+                                                        TAG,
+                                                        "PERMISSION_DENIED: User does not have permission to read messages in chat $chatId"
+                                                )
+                                            }
+                                            FirebaseFirestoreException.Code.UNAVAILABLE -> {
+                                                Log.e(
+                                                        TAG,
+                                                        "UNAVAILABLE: Firestore service is temporarily unavailable"
+                                                )
+                                            }
+                                            else -> {
+                                                Log.e(TAG, "Firestore error code: ${error.code}")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Send empty list on error to prevent UI from breaking
+                                trySend(emptyList())
                                 return@addSnapshotListener
                             }
 
+                            if (snapshot == null) {
+                                Log.w(TAG, "getChatMessages: Snapshot is null")
+                                trySend(emptyList())
+                                return@addSnapshotListener
+                            }
+
+                            Log.d(
+                                    TAG,
+                                    "getChatMessages: Received ${snapshot.documents.size} messages"
+                            )
+
                             val messages =
-                                    snapshot?.documents
-                                            ?.mapNotNull { doc ->
+                                    snapshot.documents
+                                            .mapNotNull { doc ->
                                                 try {
                                                     doc.toObject(Message::class.java)
                                                 } catch (e: Exception) {
-                                                    Log.e(TAG, "Error parsing message", e)
+                                                    Log.e(TAG, "Error parsing message ${doc.id}", e)
                                                     null
                                                 }
                                             }
-                                            ?.reversed()
-                                            ?: emptyList()
+                                            .reversed() // Reverse to show oldest first
 
+                            Log.d(TAG, "getChatMessages: Sending ${messages.size} messages to UI")
                             trySend(messages)
                         }
 
-        awaitClose { listener.remove() }
+        awaitClose {
+            Log.d(TAG, "getChatMessages: Closing listener for chat $chatId")
+            listener.remove()
+        }
     }
 
     suspend fun loadMoreMessages(
@@ -507,101 +1011,139 @@ class ChatRepository(
         }
     }
 
-    suspend fun markMessagesAsRead(chatId: String, messageIds: List<String>) {
-        try {
-            if (getCurrentUserId().isEmpty()) return
+    suspend fun markMessagesAsRead(chatId: String, messageIds: List<String>): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
 
-            val batch = firestore.batch()
+            if (messageIds.isEmpty()) {
+                return Result.success(Unit)
+            }
 
-            for (messageId in messageIds) {
-                val messageRef =
-                        firestore
-                                .collection(CHATS_COLLECTION)
-                                .document(chatId)
-                                .collection(MESSAGES_COLLECTION)
-                                .document(messageId)
+            Log.d(
+                    TAG,
+                    "markMessagesAsRead: Marking ${messageIds.size} messages as read in chat $chatId"
+            )
 
-                // Add current user to readBy array
-                batch.update(
-                        messageRef,
-                        mapOf(
-                                "readBy" to
-                                        com.google.firebase.firestore.FieldValue.arrayUnion(
-                                                getCurrentUserId()
-                                        ),
-                                "status" to MessageStatus.READ.name
-                        )
+            // Use safeFirestoreCall for proper error handling
+            val batchResult = safeFirestoreCall {
+                val batch = firestore.batch()
+
+                for (messageId in messageIds) {
+                    val messageRef =
+                            firestore
+                                    .collection(CHATS_COLLECTION)
+                                    .document(chatId)
+                                    .collection(MESSAGES_COLLECTION)
+                                    .document(messageId)
+
+                    // Add current user to readBy array
+                    batch.update(
+                            messageRef,
+                            mapOf(
+                                    "readBy" to
+                                            com.google.firebase.firestore.FieldValue.arrayUnion(
+                                                    getCurrentUserId()
+                                            ),
+                                    "status" to MessageStatus.READ.name
+                            )
+                    )
+                }
+
+                batch.commit().await()
+            }
+
+            if (batchResult.isFailure) {
+                val exception = batchResult.exceptionOrNull()
+                Log.e(TAG, "Error marking messages as read (batch update)", exception)
+
+                // If it's a permission error, log but don't fail completely
+                if (exception is FirebaseFirestoreException &&
+                                exception.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    Log.w(
+                            TAG,
+                            "Permission denied when marking messages as read - user may not have access"
+                    )
+                    return Result.failure(
+                            Exception("Permission denied: Cannot mark messages as read")
+                    )
+                }
+
+                return Result.failure(exception ?: Exception("Failed to mark messages as read"))
+            }
+
+            // Update unread count for the chat
+            val unreadResult = safeFirestoreCall {
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .update("unreadCount.${getCurrentUserId()}", 0)
+                        .await()
+            }
+
+            if (unreadResult.isFailure) {
+                Log.w(
+                        TAG,
+                        "Failed to update unread count, but messages were marked as read",
+                        unreadResult.exceptionOrNull()
                 )
             }
 
-            batch.commit().await()
-
-            firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .update("unreadCount.${getCurrentUserId()}", 0)
-                    .await()
+            Log.d(TAG, "markMessagesAsRead: Successfully marked messages as read")
+            Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Error marking messages as read", e)
+            Result.failure(e)
         }
     }
 
-    suspend fun updateTypingStatus(chatId: String, isTyping: Boolean) {
-        try {
-            if (getCurrentUserId().isEmpty()) return
+    suspend fun updateTypingStatus(chatId: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
 
-            firestore
-                    .collection(CHATS_COLLECTION)
-                    .document(chatId)
-                    .collection(TYPING_STATUS_COLLECTION)
-                    .document(getCurrentUserId())
-                    .set(
-                            TypingStatus(
-                                    userId = getCurrentUserId(),
-                                    isTyping = isTyping,
-                                    timestamp = System.currentTimeMillis()
-                            )
-                    )
-                    .await()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error updating typing status", e)
-        }
-    }
-
-    fun getTypingUsers(chatId: String): Flow<List<String>> = callbackFlow {
-        val listener =
+            // Use safeFirestoreCall for proper error handling
+            val result = safeFirestoreCall {
                 firestore
                         .collection(CHATS_COLLECTION)
                         .document(chatId)
                         .collection(TYPING_STATUS_COLLECTION)
-                        .addSnapshotListener { snapshot, error ->
-                            if (error != null) {
-                                Log.e(TAG, "Error listening to typing status", error)
-                                return@addSnapshotListener
-                            }
+                        .document(getCurrentUserId())
+                        .set(
+                                TypingStatus(
+                                        userId = getCurrentUserId(),
+                                        isTyping = isTyping,
+                                        timestamp = System.currentTimeMillis()
+                                )
+                        )
+                        .await()
+            }
 
-                            val typingUsers =
-                                    snapshot?.documents?.mapNotNull { doc ->
-                                        try {
-                                            val status = doc.toObject(TypingStatus::class.java)
-                                            if (status?.isTyping == true &&
-                                                            status.userId != getCurrentUserId()
-                                            ) {
-                                                status.userId
-                                            } else {
-                                                null
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error parsing typing status", e)
-                                            null
-                                        }
-                                    }
-                                            ?: emptyList()
+            if (result.isFailure) {
+                val exception = result.exceptionOrNull()
+                // Log but don't fail the UI - typing status is not critical
+                Log.w(TAG, "Error updating typing status (non-critical)", exception)
 
-                            trySend(typingUsers)
-                        }
+                if (exception is FirebaseFirestoreException &&
+                                exception.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    Log.w(
+                            TAG,
+                            "Permission denied for typing status - user may not have access to this chat"
+                    )
+                }
 
-        awaitClose { listener.remove() }
+                return Result.failure(exception ?: Exception("Unknown error"))
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error updating typing status", e)
+            Result.failure(e)
+        }
     }
 
     suspend fun searchUsers(query: String): Result<List<UserInfo>> {
@@ -634,7 +1176,10 @@ class ChatRepository(
                             .get()
                             .await()
 
-            Log.d(TAG, "searchUsers: Found ${nameResults.size()} by name, ${emailResults.size()} by email")
+            Log.d(
+                    TAG,
+                    "searchUsers: Found ${nameResults.size()} by name, ${emailResults.size()} by email"
+            )
 
             val users = mutableSetOf<UserInfo>()
 
@@ -642,22 +1187,31 @@ class ChatRepository(
             nameResults.documents.forEach { doc ->
                 try {
                     val userId = doc.id
-                    val displayName = doc.getString("displayName") ?: doc.getString("display_name") ?: "Unknown"
+                    val displayName =
+                            doc.getString("displayName")
+                                    ?: doc.getString("display_name") ?: "Unknown"
                     val email = doc.getString("email") ?: ""
-                    val profileImageUrl = doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val profileImageUrl =
+                            doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val initials = doc.getString("initials") ?: generateInitials(displayName, email)
                     val online = doc.getBoolean("isOnline") ?: doc.getBoolean("online") ?: false
                     val lastSeen = doc.getDate("lastActive") ?: doc.getDate("lastSeen")
-                    
-                    val userInfo = UserInfo(
-                        userId = userId,
-                        displayName = displayName,
-                        email = email,
-                        profileImageUrl = profileImageUrl,
-                        online = online,
-                        lastSeen = lastSeen
-                    )
+
+                    val userInfo =
+                            UserInfo(
+                                    userId = userId,
+                                    displayName = displayName,
+                                    email = email,
+                                    profileImageUrl = profileImageUrl,
+                                    initials = initials,
+                                    online = online,
+                                    lastSeen = lastSeen
+                            )
                     users.add(userInfo)
-                    Log.d(TAG, "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})")
+                    Log.d(
+                            TAG,
+                            "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
                 }
@@ -668,30 +1222,42 @@ class ChatRepository(
                     val userId = doc.id
                     // Skip if already added
                     if (users.any { it.userId == userId }) return@forEach
-                    
-                    val displayName = doc.getString("displayName") ?: doc.getString("display_name") ?: "Unknown"
+
+                    val displayName =
+                            doc.getString("displayName")
+                                    ?: doc.getString("display_name") ?: "Unknown"
                     val email = doc.getString("email") ?: ""
-                    val profileImageUrl = doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val profileImageUrl =
+                            doc.getString("photoUrl") ?: doc.getString("profileImageUrl") ?: ""
+                    val initials = doc.getString("initials") ?: generateInitials(displayName, email)
                     val online = doc.getBoolean("isOnline") ?: doc.getBoolean("online") ?: false
                     val lastSeen = doc.getDate("lastActive") ?: doc.getDate("lastSeen")
-                    
-                    val userInfo = UserInfo(
-                        userId = userId,
-                        displayName = displayName,
-                        email = email,
-                        profileImageUrl = profileImageUrl,
-                        online = online,
-                        lastSeen = lastSeen
-                    )
+
+                    val userInfo =
+                            UserInfo(
+                                    userId = userId,
+                                    displayName = displayName,
+                                    email = email,
+                                    profileImageUrl = profileImageUrl,
+                                    initials = initials,
+                                    online = online,
+                                    lastSeen = lastSeen
+                            )
                     users.add(userInfo)
-                    Log.d(TAG, "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})")
+                    Log.d(
+                            TAG,
+                            "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
+                    )
                 } catch (e: Exception) {
                     Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
                 }
             }
 
             val filteredUsers = users.filter { it.userId != getCurrentUserId() }
-            Log.d(TAG, "searchUsers: Returning ${filteredUsers.size} users (filtered out current user)")
+            Log.d(
+                    TAG,
+                    "searchUsers: Returning ${filteredUsers.size} users (filtered out current user)"
+            )
 
             Result.success(filteredUsers.toList())
         } catch (e: Exception) {
@@ -707,34 +1273,42 @@ class ChatRepository(
 
             if (!doc.exists()) {
                 Log.e(TAG, "getUserInfo: User document does not exist for userId: $userId")
-                Log.e(TAG, "getUserInfo: Make sure the user has logged in at least once to create their profile")
-                return Result.failure(Exception("User not found: Invalid document reference. Document ID: $userId"))
+                Log.e(
+                        TAG,
+                        "getUserInfo: Make sure the user has logged in at least once to create their profile"
+                )
+                return Result.failure(
+                        Exception(
+                                "User not found: Invalid document reference. Document ID: $userId"
+                        )
+                )
             }
 
             Log.d(TAG, "getUserInfo: User document found. Fields: ${doc.data?.keys}")
 
-            // Handle both field name variations (displayName vs display_name, photoUrl vs profileImageUrl, etc.)
-            val displayName = doc.getString("displayName") 
-                ?: doc.getString("display_name")
-                ?: doc.getString("name")
-                ?: "Unknown User"
-            
+            // Handle both field name variations (displayName vs display_name, photoUrl vs
+            // profileImageUrl, etc.)
+            val displayName =
+                    doc.getString("displayName")
+                            ?: doc.getString("display_name") ?: doc.getString("name")
+                                    ?: "Unknown User"
+
             val email = doc.getString("email") ?: ""
-            
-            val profileImageUrl = doc.getString("profileImageUrl")
-                ?: doc.getString("photoUrl")
-                ?: doc.getString("photo_url")
-                ?: doc.getString("profile_image_url")
-                ?: ""
-            
-            val online = doc.getBoolean("online") 
-                ?: doc.getBoolean("isOnline")
-                ?: false
-            
-            val lastSeen = doc.getDate("lastSeen") 
-                ?: doc.getDate("lastActive")
-                ?: doc.getDate("last_active")
-                ?: doc.getTimestamp("lastActive")?.toDate()
+
+            val profileImageUrl =
+                    doc.getString("profileImageUrl")
+                            ?: doc.getString("photoUrl") ?: doc.getString("photo_url")
+                                    ?: doc.getString("profile_image_url") ?: ""
+
+            val online = doc.getBoolean("online") ?: doc.getBoolean("isOnline") ?: false
+
+            val lastSeen =
+                    doc.getDate("lastSeen")
+                            ?: doc.getDate("lastActive") ?: doc.getDate("last_active")
+                                    ?: doc.getTimestamp("lastActive")?.toDate()
+
+            // Get initials from document or generate from displayName/email
+            val initials = doc.getString("initials") ?: generateInitials(displayName, email)
 
             val userInfo =
                     UserInfo(
@@ -742,6 +1316,7 @@ class ChatRepository(
                             displayName = displayName,
                             email = email,
                             profileImageUrl = profileImageUrl,
+                            initials = initials,
                             online = online,
                             lastSeen = lastSeen
                     )
@@ -752,6 +1327,27 @@ class ChatRepository(
             Log.e(TAG, "getUserInfo: Error getting user info for $userId", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Generate initials from display name or email
+     * @param displayName User's display name
+     * @param email User's email address
+     * @return Initials string (up to 2 characters)
+     */
+    private fun generateInitials(displayName: String, email: String): String {
+        // Generate from display name
+        if (displayName.isNotEmpty() && displayName != "Unknown User") {
+            return displayName
+                    .trim()
+                    .split(" ")
+                    .mapNotNull { it.firstOrNull()?.uppercaseChar() }
+                    .take(2)
+                    .joinToString("")
+        }
+
+        // Fallback to email first character
+        return email.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     }
 
     private suspend fun updateChatLastMessage(chatId: String, message: String, senderId: String) {
@@ -800,14 +1396,23 @@ class ChatRepository(
     /** Retry sending a failed message */
     suspend fun retryMessage(message: Message): Result<Message> {
         return try {
+            Log.d(TAG, "retryMessage: Retrying message ${message.id}")
+
             // Reset message status to SENDING
             offlineQueue?.updateMessageStatus(message.id, MessageStatus.SENDING)
 
-            // Attempt to send
+            // Attempt to send with retry count
             val result = sendMessage(message.chatId, message.text, retryCount = 0)
 
             if (result.isSuccess) {
                 offlineQueue?.removeMessage(message.id)
+                Log.d(TAG, "retryMessage: Successfully sent message ${message.id}")
+            } else {
+                Log.w(
+                        TAG,
+                        "retryMessage: Failed to send message ${message.id}",
+                        result.exceptionOrNull()
+                )
             }
 
             result
@@ -822,18 +1427,53 @@ class ChatRepository(
     suspend fun processQueuedMessages(): Result<Int> {
         return try {
             val queuedMessages = offlineQueue?.getQueuedMessages() ?: emptyList()
-            var successCount = 0
+            val pendingMessages = queuedMessages.filter { it.status == MessageStatus.SENDING }
 
-            for (message in queuedMessages) {
-                if (message.status == MessageStatus.SENDING) {
+            if (pendingMessages.isEmpty()) {
+                Log.d(TAG, "No pending messages to process")
+                return Result.success(0)
+            }
+
+            Log.d(TAG, "Processing ${pendingMessages.size} queued messages")
+            var successCount = 0
+            var failureCount = 0
+
+            for (message in pendingMessages) {
+                try {
+                    // Add small delay between retries to avoid overwhelming the server
+                    kotlinx.coroutines.delay(500)
+
                     val result = sendMessage(message.chatId, message.text, retryCount = 0)
                     if (result.isSuccess) {
                         successCount++
+                        Log.d(TAG, "Successfully sent queued message ${message.id}")
+                    } else {
+                        failureCount++
+                        Log.w(
+                                TAG,
+                                "Failed to send queued message ${message.id}",
+                                result.exceptionOrNull()
+                        )
+
+                        // Check if it's a permission error - if so, mark as failed permanently
+                        val exception = result.exceptionOrNull()
+                        if (exception?.message?.contains("Permission denied", ignoreCase = true) ==
+                                        true
+                        ) {
+                            offlineQueue?.markMessageAsFailed(message.id)
+                            Log.w(
+                                    TAG,
+                                    "Marked message ${message.id} as permanently failed due to permission error"
+                            )
+                        }
                     }
+                } catch (e: Exception) {
+                    failureCount++
+                    Log.e(TAG, "Error processing queued message ${message.id}", e)
                 }
             }
 
-            Log.d(TAG, "Processed $successCount queued messages")
+            Log.d(TAG, "Processed queued messages: $successCount succeeded, $failureCount failed")
             Result.success(successCount)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing queued messages", e)
@@ -844,6 +1484,61 @@ class ChatRepository(
     /** Clear the offline message queue */
     fun clearOfflineQueue() {
         offlineQueue?.clearQueue()
+    }
+
+    /**
+     * Retry messages with exponential backoff strategy. This should be called periodically (e.g.,
+     * when app comes to foreground or network is restored)
+     */
+    suspend fun retryPendingMessagesWithBackoff(): Result<Int> {
+        return try {
+            val messagesToRetry = offlineQueue?.getMessagesNeedingRetry() ?: emptyList()
+
+            if (messagesToRetry.isEmpty()) {
+                Log.d(TAG, "No messages need retry")
+                return Result.success(0)
+            }
+
+            Log.d(TAG, "Retrying ${messagesToRetry.size} pending messages with backoff")
+            var successCount = 0
+
+            for (message in messagesToRetry) {
+                try {
+                    // Calculate backoff delay based on message age
+                    val messageAge = System.currentTimeMillis() - (message.timestamp?.time ?: 0)
+                    val backoffDelay = calculateBackoffDelay(messageAge)
+
+                    Log.d(TAG, "Retrying message ${message.id} after ${backoffDelay}ms backoff")
+                    kotlinx.coroutines.delay(backoffDelay)
+
+                    val result = retryMessage(message)
+                    if (result.isSuccess) {
+                        successCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error retrying message ${message.id} with backoff", e)
+                }
+            }
+
+            Log.d(TAG, "Retry with backoff completed: $successCount succeeded")
+            Result.success(successCount)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in retry with backoff", e)
+            Result.failure(e)
+        }
+    }
+
+    /** Calculate exponential backoff delay based on message age */
+    private fun calculateBackoffDelay(messageAgeMs: Long): Long {
+        // Start with 1 second, double for each 30 seconds of age, max 30 seconds
+        val baseDelay = 1000L
+        val maxDelay = 30000L
+        val doubleInterval = 30000L
+
+        val multiplier = (messageAgeMs / doubleInterval).toInt()
+        val delay = baseDelay * (1 shl multiplier.coerceAtMost(5)) // Max 2^5 = 32x
+
+        return delay.coerceAtMost(maxDelay)
     }
 
     /**
@@ -908,5 +1603,251 @@ class ChatRepository(
             // Don't fail the message send if notification fails
             Log.e(TAG, "Error triggering notifications", e)
         }
+    }
+
+    /**
+     * Deletes a message from a chat. Only the sender can delete their own messages.
+     *
+     * @param chatId ID of the chat
+     * @param message Message to delete
+     * @return Result indicating success or failure
+     */
+    suspend fun deleteMessage(chatId: String, message: Message): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            // Verify that the current user is the sender
+            if (message.senderId != getCurrentUserId()) {
+                return Result.failure(Exception("You can only delete your own messages"))
+            }
+
+            Log.d(TAG, "deleteMessage: Deleting message ${message.id} from chat $chatId")
+
+            // Delete the message document
+            firestore
+                    .collection(CHATS_COLLECTION)
+                    .document(chatId)
+                    .collection(MESSAGES_COLLECTION)
+                    .document(message.id)
+                    .delete()
+                    .await()
+
+            // If this was the last message, update the chat's last message
+            val chatDoc = firestore.collection(CHATS_COLLECTION).document(chatId).get().await()
+
+            val lastMessageId = chatDoc.getString("lastMessageId")
+            if (lastMessageId == message.id) {
+                // Get the new last message
+                val lastMessageSnapshot =
+                        firestore
+                                .collection(CHATS_COLLECTION)
+                                .document(chatId)
+                                .collection(MESSAGES_COLLECTION)
+                                .orderBy("timestamp", Query.Direction.DESCENDING)
+                                .limit(1)
+                                .get()
+                                .await()
+
+                if (!lastMessageSnapshot.isEmpty) {
+                    val newLastMessage =
+                            lastMessageSnapshot.documents.first().toObject(Message::class.java)
+                    if (newLastMessage != null) {
+                        updateChatLastMessage(chatId, newLastMessage.text, newLastMessage.senderId)
+                    }
+                } else {
+                    // No more messages, clear last message
+                    firestore
+                            .collection(CHATS_COLLECTION)
+                            .document(chatId)
+                            .update(
+                                    mapOf(
+                                            "lastMessage" to "",
+                                            "lastMessageTime" to Date(),
+                                            "lastMessageSenderId" to ""
+                                    )
+                            )
+                            .await()
+                }
+            }
+
+            Log.d(TAG, "deleteMessage: Message deleted successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "deleteMessage: Error deleting message", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Sets the typing status for the current user in a chat.
+     *
+     * @param chatId ID of the chat
+     * @param isTyping Whether the user is currently typing
+     * @return Result indicating success or failure
+     */
+    suspend fun setTypingStatus(chatId: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            if (getCurrentUserId().isEmpty()) {
+                Log.w(TAG, "setTypingStatus: User not authenticated")
+                return Result.failure(Exception("User not authenticated"))
+            }
+
+            Log.d(TAG, "setTypingStatus: Setting typing status to $isTyping for chat $chatId")
+
+            val typingData =
+                    mapOf(
+                            "userId" to getCurrentUserId(),
+                            "isTyping" to isTyping,
+                            "timestamp" to Date()
+                    )
+
+            // Use safeFirestoreCall for proper error handling
+            val result = safeFirestoreCall {
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(TYPING_STATUS_COLLECTION)
+                        .document(getCurrentUserId())
+                        .set(typingData)
+                        .await()
+            }
+
+            if (result.isFailure) {
+                val exception = result.exceptionOrNull()
+                Log.e(TAG, "setTypingStatus: Failed to set typing status", exception)
+
+                // Handle permission errors gracefully - don't fail the UI
+                if (exception is FirebaseFirestoreException &&
+                                exception.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    Log.w(TAG, "setTypingStatus: Permission denied, but continuing gracefully")
+                    // Return success to prevent UI errors, but log the issue
+                    return Result.success(Unit)
+                }
+
+                return Result.failure(exception ?: Exception("Failed to set typing status"))
+            }
+
+            Log.d(TAG, "setTypingStatus: Successfully set typing status")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "setTypingStatus: Unexpected error", e)
+            // Handle gracefully - typing indicators are not critical
+            Result.success(Unit)
+        }
+    }
+
+    /**
+     * Gets a flow of users currently typing in a chat.
+     *
+     * @param chatId ID of the chat
+     * @return Flow emitting list of user IDs who are currently typing
+     */
+    fun getTypingUsers(chatId: String): Flow<List<String>> = callbackFlow {
+        if (getCurrentUserId().isEmpty()) {
+            Log.w(TAG, "getTypingUsers: User not authenticated")
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        Log.d(TAG, "getTypingUsers: Setting up listener for chat $chatId")
+
+        val listener =
+                firestore
+                        .collection(CHATS_COLLECTION)
+                        .document(chatId)
+                        .collection(TYPING_STATUS_COLLECTION)
+                        .addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                Log.e(
+                                        TAG,
+                                        "getTypingUsers: Error listening to typing status",
+                                        error
+                                )
+
+                                // Handle permission errors gracefully
+                                if (error is FirebaseFirestoreException &&
+                                                error.code ==
+                                                        FirebaseFirestoreException.Code
+                                                                .PERMISSION_DENIED
+                                ) {
+                                    Log.w(
+                                            TAG,
+                                            "getTypingUsers: Permission denied, sending empty list"
+                                    )
+                                    trySend(emptyList())
+                                    return@addSnapshotListener
+                                }
+
+                                // For other errors, send empty list and continue
+                                trySend(emptyList())
+                                return@addSnapshotListener
+                            }
+
+                            if (snapshot == null) {
+                                Log.w(TAG, "getTypingUsers: Snapshot is null")
+                                trySend(emptyList())
+                                return@addSnapshotListener
+                            }
+
+                            try {
+                                val currentTime = Date()
+                                val typingUsers =
+                                        snapshot.documents.mapNotNull { doc ->
+                                            try {
+                                                val userId = doc.getString("userId")
+                                                val isTyping = doc.getBoolean("isTyping") ?: false
+                                                val timestamp = doc.getDate("timestamp")
+
+                                                // Only include users who are typing and updated
+                                                // within last 5 seconds
+                                                // Exclude current user from the list
+                                                if (userId != null &&
+                                                                userId != getCurrentUserId() &&
+                                                                isTyping &&
+                                                                timestamp != null &&
+                                                                (currentTime.time -
+                                                                        timestamp.time) < 5000
+                                                ) {
+                                                    userId
+                                                } else {
+                                                    null
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e(
+                                                        TAG,
+                                                        "getTypingUsers: Error parsing typing status document",
+                                                        e
+                                                )
+                                                null
+                                            }
+                                        }
+
+                                Log.d(TAG, "getTypingUsers: ${typingUsers.size} users typing")
+                                trySend(typingUsers)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "getTypingUsers: Error processing typing status", e)
+                                trySend(emptyList())
+                            }
+                        }
+
+        awaitClose {
+            Log.d(TAG, "getTypingUsers: Closing listener")
+            listener.remove()
+        }
+    }
+
+    /**
+     * Clears the typing status for the current user in a chat. This should be called when the user
+     * stops typing or sends a message.
+     *
+     * @param chatId ID of the chat
+     * @return Result indicating success or failure
+     */
+    suspend fun clearTypingStatus(chatId: String): Result<Unit> {
+        return setTypingStatus(chatId, false)
     }
 }

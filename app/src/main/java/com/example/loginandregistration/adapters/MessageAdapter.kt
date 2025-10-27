@@ -1,5 +1,6 @@
 package com.example.loginandregistration.adapters
 
+import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -8,37 +9,72 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import coil.transform.CircleCropTransformation
+import com.example.loginandregistration.ImageViewerActivity
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
+import com.example.loginandregistration.utils.AnimationUtils
+import com.example.loginandregistration.utils.DefaultAvatarGenerator
+import com.example.loginandregistration.utils.LinkifyHelper
+import com.example.loginandregistration.utils.MessageGrouper
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MessageAdapter(
         private val currentUserId: String,
-        private val onRetryMessage: ((Message) -> Unit)? = null
-) : ListAdapter<MessageAdapter.MessageItem, RecyclerView.ViewHolder>(MessageDiffCallback()) {
+        private val onRetryMessage: ((Message) -> Unit)? = null,
+        private val onDocumentClick: ((Message) -> Unit)? = null,
+        private val onMessageLongClick: ((Message, View) -> Unit)? = null
+) : ListAdapter<MessageGrouper.MessageItem, RecyclerView.ViewHolder>(MessageDiffCallback()) {
 
     companion object {
         private const val VIEW_TYPE_SENT = 1
         private const val VIEW_TYPE_RECEIVED = 2
         private const val VIEW_TYPE_TIMESTAMP_HEADER = 3
-    }
-
-    sealed class MessageItem {
-        data class MessageData(val message: Message, val showSenderInfo: Boolean) : MessageItem()
-        data class TimestampHeader(val timestamp: String) : MessageItem()
+        
+        fun getDocumentIcon(fileName: String, mimeType: String? = null): Int {
+            // Check MIME type first if available
+            mimeType?.let {
+                when {
+                    it.startsWith("audio/") -> return android.R.drawable.ic_lock_silent_mode_off
+                    it.startsWith("video/") -> return android.R.drawable.ic_menu_slideshow
+                    it.startsWith("image/") -> return android.R.drawable.ic_menu_gallery
+                    it == "application/pdf" -> return android.R.drawable.ic_menu_save
+                    it.contains("word") || it.contains("document") -> return android.R.drawable.ic_menu_edit
+                    it.contains("sheet") || it.contains("excel") -> return android.R.drawable.ic_menu_sort_by_size
+                    it.contains("presentation") || it.contains("powerpoint") -> return android.R.drawable.ic_menu_slideshow
+                    it.contains("zip") || it.contains("compressed") -> return android.R.drawable.ic_menu_upload
+                    it == "text/plain" -> return android.R.drawable.ic_menu_edit
+                }
+            }
+            
+            // Fall back to file extension
+            return when (fileName.substringAfterLast('.', "").lowercase()) {
+                "pdf" -> android.R.drawable.ic_menu_save
+                "doc", "docx" -> android.R.drawable.ic_menu_edit
+                "xls", "xlsx" -> android.R.drawable.ic_menu_sort_by_size
+                "ppt", "pptx" -> android.R.drawable.ic_menu_slideshow
+                "zip", "rar" -> android.R.drawable.ic_menu_upload
+                "txt" -> android.R.drawable.ic_menu_edit
+                "mp3", "wav", "ogg", "m4a" -> android.R.drawable.ic_lock_silent_mode_off
+                "mp4", "avi", "mkv", "mov" -> android.R.drawable.ic_menu_slideshow
+                "jpg", "jpeg", "png", "gif" -> android.R.drawable.ic_menu_gallery
+                else -> android.R.drawable.ic_menu_save
+            }
+        }
     }
 
     override fun getItemViewType(position: Int): Int {
         return when (val item = getItem(position)) {
-            is MessageItem.MessageData -> {
+            is MessageGrouper.MessageItem.MessageData -> {
                 if (item.message.senderId == currentUserId) {
                     VIEW_TYPE_SENT
                 } else {
                     VIEW_TYPE_RECEIVED
                 }
             }
-            is MessageItem.TimestampHeader -> VIEW_TYPE_TIMESTAMP_HEADER
+            is MessageGrouper.MessageItem.TimestampHeader -> VIEW_TYPE_TIMESTAMP_HEADER
         }
     }
 
@@ -63,141 +99,151 @@ class MessageAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = getItem(position)) {
-            is MessageItem.MessageData -> {
+            is MessageGrouper.MessageItem.MessageData -> {
                 when (holder) {
-                    is SentMessageViewHolder -> holder.bind(item.message, onRetryMessage)
-                    is ReceivedMessageViewHolder -> holder.bind(item.message, item.showSenderInfo)
+                    is SentMessageViewHolder ->
+                            holder.bind(
+                                    item.message,
+                                    onRetryMessage,
+                                    onDocumentClick,
+                                    onMessageLongClick
+                            )
+                    is ReceivedMessageViewHolder ->
+                            holder.bind(
+                                    item.message,
+                                    item.showSenderInfo,
+                                    onDocumentClick,
+                                    onMessageLongClick
+                            )
                 }
             }
-            is MessageItem.TimestampHeader -> {
+            is MessageGrouper.MessageItem.TimestampHeader -> {
                 (holder as TimestampHeaderViewHolder).bind(item.timestamp)
             }
         }
     }
 
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        // Clear any pending animations to prevent attachment issues
+        holder.itemView.clearAnimation()
+        
+        // Clean up resources and listeners to prevent memory leaks and crashes
+        when (holder) {
+            is SentMessageViewHolder -> holder.cleanup()
+            is ReceivedMessageViewHolder -> holder.cleanup()
+            is TimestampHeaderViewHolder -> holder.cleanup()
+        }
+    }
+
+    /**
+     * Submit messages to the adapter with proper grouping. Uses MessageGrouper utility to group
+     * consecutive messages from the same sender and add timestamp headers.
+     */
     fun submitMessages(messages: List<Message>) {
-        val items = mutableListOf<MessageItem>()
-        var lastTimestampHeader: String? = null
-        var lastSenderId: String? = null
-        var lastMessageTime: Long = 0
-
-        messages.forEach { message ->
-            val timestamp = message.timestamp?.time ?: 0
-            val timestampHeader = getTimestampHeader(timestamp)
-
-            // Add timestamp header if it's different from the last one
-            if (timestampHeader != lastTimestampHeader) {
-                items.add(MessageItem.TimestampHeader(timestampHeader))
-                lastTimestampHeader = timestampHeader
-            }
-
-            // Determine if we should show sender info
-            // Show if: different sender OR more than 5 minutes since last message
-            val showSenderInfo =
-                    message.senderId != currentUserId &&
-                            (message.senderId != lastSenderId ||
-                                    (timestamp - lastMessageTime) > 5 * 60 * 1000)
-
-            items.add(MessageItem.MessageData(message, showSenderInfo))
-
-            lastSenderId = message.senderId
-            lastMessageTime = timestamp
-        }
-
-        submitList(items)
-    }
-
-    private fun getTimestampHeader(timestamp: Long): String {
-        val messageDate = Calendar.getInstance().apply { timeInMillis = timestamp }
-        val today = Calendar.getInstance()
-        val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-
-        return when {
-            isSameDay(messageDate, today) -> "Today"
-            isSameDay(messageDate, yesterday) -> "Yesterday"
-            else -> SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault()).format(Date(timestamp))
-        }
-    }
-
-    private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
-        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+        val groupedItems = MessageGrouper.groupMessages(messages, currentUserId)
+        submitList(groupedItems)
     }
 
     class SentMessageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
+        private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
+        private val documentContainer: View = itemView.findViewById(R.id.documentContainer)
+        private val documentIconImageView: ImageView =
+                itemView.findViewById(R.id.documentIconImageView)
+        private val documentNameTextView: TextView =
+                itemView.findViewById(R.id.documentNameTextView)
+        private val documentSizeTextView: TextView =
+                itemView.findViewById(R.id.documentSizeTextView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
-        private val readReceiptImageView: ImageView =
-                itemView.findViewById(R.id.readReceiptImageView)
+        private val messageStatusView: com.example.loginandregistration.views.MessageStatusView =
+                itemView.findViewById(R.id.messageStatusView)
 
-        fun bind(message: Message, onRetryMessage: ((Message) -> Unit)?) {
-            messageTextView.text = message.text
+        fun bind(
+                message: Message,
+                onRetryMessage: ((Message) -> Unit)?,
+                onDocumentClick: ((Message) -> Unit)?,
+                onMessageLongClick: ((Message, View) -> Unit)?
+        ) {
+            // Handle document messages (including audio and video as documents)
+            if (message.hasDocument() || message.hasAudio() || message.hasVideo()) {
+                documentContainer.visibility = View.VISIBLE
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility =
+                        if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+                documentNameTextView.text = message.resolveAttachmentFileName() ?: "Document"
+                documentSizeTextView.text = message.getFormattedFileSize()
+
+                // Set icon based on file type or MIME type
+                documentIconImageView.setImageResource(
+                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                )
+
+                // Click to download/open document
+                documentContainer.setOnClickListener { onDocumentClick?.invoke(message) }
+            }
+            // Handle image messages
+            else if (message.hasImage()) {
+                messageImageView.visibility = View.VISIBLE
+                documentContainer.visibility = View.GONE
+                messageTextView.visibility =
+                        if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+                // Load image using Coil (supports both legacy and new fields)
+                val imageUrl = message.resolveAttachmentUrl()
+                messageImageView.load(imageUrl) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_report_image)
+                }
+
+                // Click to view full screen
+                messageImageView.setOnClickListener {
+                    val intent =
+                            Intent(itemView.context, ImageViewerActivity::class.java).apply {
+                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, imageUrl)
+                            }
+                    itemView.context.startActivity(intent)
+                }
+            } else {
+                messageImageView.visibility = View.GONE
+                documentContainer.visibility = View.GONE
+                messageTextView.visibility = View.VISIBLE
+            }
+
+            // Make URLs clickable in message text
+            if (message.text.isNotEmpty()) {
+                LinkifyHelper.makeLinksClickable(messageTextView, message.text)
+            } else {
+                messageTextView.text = message.text
+            }
             timestampTextView.text = formatTime(message.timestamp?.time ?: 0)
 
-            // Update read receipt icon based on message status
-            updateReadReceipt(message)
+            // Update message status view
+            messageStatusView.setMessage(message, message.senderId)
+            messageStatusView.setOnRetryClickListener { onRetryMessage?.invoke(message) }
 
-            // Set click listener for failed messages
-            if (message.status == com.example.loginandregistration.models.MessageStatus.FAILED) {
-                itemView.setOnClickListener { onRetryMessage?.invoke(message) }
-                itemView.isClickable = true
-            } else {
-                itemView.setOnClickListener(null)
-                itemView.isClickable = false
-            }
-        }
-
-        private fun updateReadReceipt(message: Message) {
-            when {
-                message.status == com.example.loginandregistration.models.MessageStatus.SENDING -> {
-                    // Sending: show clock icon
-                    readReceiptImageView.setImageResource(android.R.drawable.ic_menu_recent_history)
-                    readReceiptImageView.setColorFilter(
-                            itemView.context.getColor(android.R.color.white)
-                    )
-                    readReceiptImageView.visibility = View.VISIBLE
-                }
-                message.status == com.example.loginandregistration.models.MessageStatus.FAILED -> {
-                    // Failed: show error icon
-                    readReceiptImageView.setImageResource(android.R.drawable.ic_dialog_alert)
-                    readReceiptImageView.setColorFilter(
-                            itemView.context.getColor(android.R.color.holo_red_light)
-                    )
-                    readReceiptImageView.visibility = View.VISIBLE
-                }
-                message.readBy.size > 1 -> {
-                    // Read by others: double checkmark (blue)
-                    readReceiptImageView.setImageResource(R.drawable.ic_check_double)
-                    readReceiptImageView.setColorFilter(
-                            itemView.context.getColor(android.R.color.holo_blue_light)
-                    )
-                    readReceiptImageView.visibility = View.VISIBLE
-                }
-                message.status ==
-                        com.example.loginandregistration.models.MessageStatus.DELIVERED -> {
-                    // Delivered: double checkmark (gray)
-                    readReceiptImageView.setImageResource(R.drawable.ic_check_double)
-                    readReceiptImageView.setColorFilter(
-                            itemView.context.getColor(android.R.color.white)
-                    )
-                    readReceiptImageView.visibility = View.VISIBLE
-                }
-                message.status == com.example.loginandregistration.models.MessageStatus.SENT -> {
-                    // Sent: single checkmark
-                    readReceiptImageView.setImageResource(R.drawable.ic_check)
-                    readReceiptImageView.setColorFilter(
-                            itemView.context.getColor(android.R.color.white)
-                    )
-                    readReceiptImageView.visibility = View.VISIBLE
-                }
-                else -> {
-                    readReceiptImageView.visibility = View.GONE
-                }
+            // Set long-click listener on the entire item view
+            itemView.setOnLongClickListener {
+                onMessageLongClick?.invoke(message, it)
+                true
             }
         }
 
         private fun formatTime(timestamp: Long): String {
             return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
+        }
+
+        fun cleanup() {
+            // Clear click listeners to prevent memory leaks
+            messageImageView.setOnClickListener(null)
+            documentContainer.setOnClickListener(null)
+            itemView.setOnLongClickListener(null)
+            messageStatusView.setOnRetryClickListener { }
+            
+            // Clear image to free memory
+            messageImageView.setImageDrawable(null)
         }
     }
 
@@ -208,31 +254,113 @@ class MessageAdapter(
                 itemView.findViewById(R.id.senderAvatarTextView)
         private val senderNameTextView: TextView = itemView.findViewById(R.id.senderNameTextView)
         private val messageTextView: TextView = itemView.findViewById(R.id.messageTextView)
+        private val messageImageView: ImageView = itemView.findViewById(R.id.messageImageView)
+        private val documentContainer: View = itemView.findViewById(R.id.documentContainer)
+        private val documentIconImageView: ImageView =
+                itemView.findViewById(R.id.documentIconImageView)
+        private val documentNameTextView: TextView =
+                itemView.findViewById(R.id.documentNameTextView)
+        private val documentSizeTextView: TextView =
+                itemView.findViewById(R.id.documentSizeTextView)
         private val timestampTextView: TextView = itemView.findViewById(R.id.timestampTextView)
 
-        fun bind(message: Message, showSenderInfo: Boolean) {
-            messageTextView.text = message.text
+        fun bind(
+                message: Message,
+                showSenderInfo: Boolean,
+                onDocumentClick: ((Message) -> Unit)?,
+                onMessageLongClick: ((Message, View) -> Unit)?
+        ) {
+            // Handle document messages (including audio and video as documents)
+            if (message.hasDocument() || message.hasAudio() || message.hasVideo()) {
+                documentContainer.visibility = View.VISIBLE
+                messageImageView.visibility = View.GONE
+                messageTextView.visibility =
+                        if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+                documentNameTextView.text = message.resolveAttachmentFileName() ?: "Document"
+                documentSizeTextView.text = message.getFormattedFileSize()
+
+                // Set icon based on file type or MIME type
+                documentIconImageView.setImageResource(
+                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                )
+
+                // Click to download/open document
+                documentContainer.setOnClickListener { onDocumentClick?.invoke(message) }
+            }
+            // Handle image messages
+            else if (message.hasImage()) {
+                messageImageView.visibility = View.VISIBLE
+                documentContainer.visibility = View.GONE
+                messageTextView.visibility =
+                        if (message.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+                // Load image using Coil (supports both legacy and new fields)
+                val imageUrl = message.resolveAttachmentUrl()
+                messageImageView.load(imageUrl) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_report_image)
+                }
+
+                // Click to view full screen
+                messageImageView.setOnClickListener {
+                    val intent =
+                            Intent(itemView.context, ImageViewerActivity::class.java).apply {
+                                putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, imageUrl)
+                            }
+                    itemView.context.startActivity(intent)
+                }
+            } else {
+                messageImageView.visibility = View.GONE
+                documentContainer.visibility = View.GONE
+                messageTextView.visibility = View.VISIBLE
+            }
+
+            // Make URLs clickable in message text
+            if (message.text.isNotEmpty()) {
+                LinkifyHelper.makeLinksClickable(messageTextView, message.text)
+            } else {
+                messageTextView.text = message.text
+            }
             timestampTextView.text = formatTime(message.timestamp?.time ?: 0)
 
             if (showSenderInfo) {
                 senderNameTextView.visibility = View.VISIBLE
                 senderNameTextView.text = message.senderName
 
-                // Show avatar with initials
-                senderAvatarTextView.text = getInitials(message.senderName)
-                senderAvatarTextView.visibility = View.VISIBLE
-                senderProfileImageView.visibility = View.GONE
+                // Load profile image if available, otherwise show avatar with initials
+                if (message.senderImageUrl.isNotEmpty()) {
+                    senderProfileImageView.visibility = View.VISIBLE
+                    senderAvatarTextView.visibility = View.GONE
+                    senderProfileImageView.load(message.senderImageUrl) {
+                        crossfade(true)
+                        transformations(CircleCropTransformation())
+                        placeholder(android.R.drawable.ic_menu_gallery)
+                        error(android.R.drawable.ic_menu_gallery)
+                    }
+                } else {
+                    senderProfileImageView.visibility = View.GONE
+                    senderAvatarTextView.visibility = View.VISIBLE
 
-                // TODO: Load profile image if available using Coil
-                // if (message.senderImageUrl.isNotEmpty()) {
-                //     senderProfileImageView.load(message.senderImageUrl)
-                //     senderProfileImageView.visibility = View.VISIBLE
-                //     senderAvatarTextView.visibility = View.GONE
-                // }
+                    // Generate avatar with initials
+                    val initials = DefaultAvatarGenerator.getInitials(message.senderName)
+                    senderAvatarTextView.text = initials
+
+                    // Generate consistent color based on sender ID
+                    val color = DefaultAvatarGenerator.generateColorFromString(message.senderId)
+                    senderAvatarTextView.setBackgroundColor(color)
+                }
             } else {
                 senderNameTextView.visibility = View.GONE
                 senderAvatarTextView.visibility = View.INVISIBLE
                 senderProfileImageView.visibility = View.INVISIBLE
+            }
+
+            // Set long-click listener on the entire item view
+            itemView.setOnLongClickListener {
+                onMessageLongClick?.invoke(message, it)
+                true
             }
         }
 
@@ -248,6 +376,17 @@ class MessageAdapter(
         private fun formatTime(timestamp: Long): String {
             return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
         }
+
+        fun cleanup() {
+            // Clear click listeners to prevent memory leaks
+            messageImageView.setOnClickListener(null)
+            documentContainer.setOnClickListener(null)
+            itemView.setOnLongClickListener(null)
+            
+            // Clear images to free memory
+            messageImageView.setImageDrawable(null)
+            senderProfileImageView.setImageDrawable(null)
+        }
     }
 
     class TimestampHeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -257,21 +396,34 @@ class MessageAdapter(
         fun bind(timestamp: String) {
             timestampHeaderTextView.text = timestamp
         }
+
+        fun cleanup() {
+            // No resources to clean up for timestamp header
+        }
     }
 
-    class MessageDiffCallback : DiffUtil.ItemCallback<MessageItem>() {
-        override fun areItemsTheSame(oldItem: MessageItem, newItem: MessageItem): Boolean {
+    class MessageDiffCallback : DiffUtil.ItemCallback<MessageGrouper.MessageItem>() {
+        override fun areItemsTheSame(
+                oldItem: MessageGrouper.MessageItem,
+                newItem: MessageGrouper.MessageItem
+        ): Boolean {
             return when {
-                oldItem is MessageItem.MessageData && newItem is MessageItem.MessageData ->
+                oldItem is MessageGrouper.MessageItem.MessageData &&
+                        newItem is MessageGrouper.MessageItem.MessageData ->
                         oldItem.message.id == newItem.message.id
-                oldItem is MessageItem.TimestampHeader && newItem is MessageItem.TimestampHeader ->
+                oldItem is MessageGrouper.MessageItem.TimestampHeader &&
+                        newItem is MessageGrouper.MessageItem.TimestampHeader ->
                         oldItem.timestamp == newItem.timestamp
                 else -> false
             }
         }
 
-        override fun areContentsTheSame(oldItem: MessageItem, newItem: MessageItem): Boolean {
+        override fun areContentsTheSame(
+                oldItem: MessageGrouper.MessageItem,
+                newItem: MessageGrouper.MessageItem
+        ): Boolean {
             return oldItem == newItem
         }
     }
 }
+

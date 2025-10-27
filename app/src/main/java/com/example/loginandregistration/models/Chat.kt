@@ -64,16 +64,7 @@ data class UserInfo(
         val displayName: String = "",
         val email: String = "",
         val profileImageUrl: String = "",
+        val initials: String = "",
         val online: Boolean = false,
         val lastSeen: Date? = null
-) {
-    /** Get display initials for avatar */
-    fun getInitials(): String {
-        val names = displayName.trim().split(" ")
-        return when {
-            names.size >= 2 -> "${names[0].first()}${names[1].first()}".uppercase()
-            names.isNotEmpty() -> names[0].take(2).uppercase()
-            else -> "?"
-        }
-    }
-}
+)

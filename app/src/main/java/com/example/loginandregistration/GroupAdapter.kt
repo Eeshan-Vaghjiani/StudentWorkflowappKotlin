@@ -6,12 +6,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 
-class GroupAdapter(private val groups: List<Group>, private val onGroupClick: (Group) -> Unit) :
-        RecyclerView.Adapter<GroupAdapter.GroupViewHolder>() {
+class GroupAdapter(private val onGroupClick: (Group) -> Unit) :
+        ListAdapter<Group, GroupAdapter.GroupViewHolder>(GroupDiffCallback()) {
 
     class GroupViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val iconBackground: MaterialCardView =
@@ -28,7 +30,7 @@ class GroupAdapter(private val groups: List<Group>, private val onGroupClick: (G
     }
 
     override fun onBindViewHolder(holder: GroupViewHolder, position: Int) {
-        val group = groups[position]
+        val group = getItem(position)
 
         holder.groupName.text = group.name
         holder.groupDetails.text = group.details
@@ -48,5 +50,19 @@ class GroupAdapter(private val groups: List<Group>, private val onGroupClick: (G
         holder.itemView.setOnClickListener { onGroupClick(group) }
     }
 
-    override fun getItemCount(): Int = groups.size
+    override fun onViewRecycled(holder: GroupViewHolder) {
+        super.onViewRecycled(holder)
+        // Clear click listener to prevent memory leaks
+        holder.itemView.setOnClickListener(null)
+    }
+
+    class GroupDiffCallback : DiffUtil.ItemCallback<Group>() {
+        override fun areItemsTheSame(oldItem: Group, newItem: Group): Boolean {
+            return oldItem.name == newItem.name
+        }
+
+        override fun areContentsTheSame(oldItem: Group, newItem: Group): Boolean {
+            return oldItem == newItem
+        }
+    }
 }

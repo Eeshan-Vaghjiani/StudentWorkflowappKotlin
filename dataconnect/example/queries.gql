@@ -1,0 +1,39 @@
+mutation CreateGroup($name: String!, $description: String, $invitationCode: String) @auth(level: USER) {
+  group_insert(data: {
+    name: $name,
+    description: $description,
+    invitationCode: $invitationCode,
+    createdById_expr: "auth.uid",
+    createdAt_expr: "request.time"
+  })
+}
+
+query ListGroupsForUser @auth(level: USER) {
+  groups(where: {createdById: {eq_expr: "auth.uid"}}) {
+    id
+    name
+    description
+    invitationCode
+    createdAt
+  }
+}
+
+mutation JoinGroup($groupId: UUID!) @auth(level: USER) {
+  groupMembership_insert(data: {
+    groupId: $groupId,
+    userId_expr: "auth.uid",
+    joinedAt_expr: "request.time",
+    role: "member"
+  })
+}
+
+query ListTasksForGroup($groupId: UUID!) @auth(level: USER) {
+  tasks(where: {groupId: {eq: $groupId}}) {
+    id
+    title
+    description
+    priority
+    dueDate
+    completedAt
+  }
+}

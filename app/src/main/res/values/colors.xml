@@ -46,6 +46,25 @@
     <color name="completed_color">@color/colorGreen</color>
     <color name="card_background">@color/colorCardBackground</color>
     
+    <!-- Material 3 Surface Colors -->
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F2F2F7</color>
+    
+    <!-- Auth Screen Colors - Matching Mockup Spec -->
+    <color name="auth_gradient_start">#007AFF</color>
+    <color name="auth_gradient_end">#5856D6</color>
+    <color name="auth_register_gradient_start">#34C759</color>
+    <color name="auth_register_gradient_end">#007AFF</color>
+    <color name="auth_input_background">#F2F2F7</color>
+    <color name="auth_input_border">#E5E5EA</color>
+    <color name="auth_error_background">#FFF5F5</color>
+    <color name="auth_success_background">#F0FFF4</color>
+    <color name="auth_button_disabled">#D1D1D6</color>
+    <color name="auth_password_weak">#FF3B30</color>
+    <color name="auth_password_fair">#FF9500</color>
+    <color name="auth_password_good">#FFCC02</color>
+    <color name="auth_password_strong">#34C759</color>
+    
     <!-- Dark Mode Colors -->
     <color name="dark_background">#1C1C1E</color>
     <color name="dark_card_background">#2C2C2E</color>
@@ -57,4 +76,26 @@
     <color name="admin_badge_color">#FF9500</color>
     <color name="join_code_background">#F2F2F7</color>
     <color name="join_code_border">#E5E5EA</color>
+    
+    <!-- Task Priority Colors -->
+    <color name="high_priority_color">#F44336</color>
+    <color name="medium_priority_color">#FF9800</color>
+    <color name="low_priority_color">#4CAF50</color>
+    
+    <!-- Divider Color -->
+    <color name="divider_color">#E5E5EA</color>
+    
+    <!-- Connection Status Colors -->
+    <color name="colorError">#FF3B30</color>
+    <color name="colorWarning">#FF9500</color>
+    
+    <!-- Skeleton Loader Colors -->
+    <color name="skeleton_base">#E0E0E0</color>
+    <color name="skeleton_shimmer">#F5F5F5</color>
+    <color name="skeleton_background">#E0E0E0</color>
+    
+    <!-- Missing Colors -->
+    <color name="background">@color/colorBackground</color>
+    <color name="primary_blue">@color/colorPrimaryBlue</color>
+    <color name="colorBorder">#E5E5EA</color>
 </resources>

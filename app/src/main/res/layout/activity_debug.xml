@@ -25,6 +25,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="List All Users"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnMemoryMonitor"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Memory Monitor"
         android:layout_marginBottom="24dp" />
 
     <ScrollView

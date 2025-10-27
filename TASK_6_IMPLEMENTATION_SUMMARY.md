@@ -1,108 +1,198 @@
-# Task 6: Message Pagination Implementation Summary
+# Task 6: Update ChatRepository Error Handling - Implementation Summary
 
 ## Overview
-Successfully implemented message pagination for the chat system, allowing users to load older messages by scrolling to the top of the chat.
+Implemented comprehensive error handling for ChatRepository to prevent chat screen crashes from permission errors when fetching groups for chats.
 
 ## Changes Made
 
-### 1. ChatRepository.kt
-**Added `loadMoreMessages()` function:**
-- Loads the next 50 messages starting after the oldest message
-- Uses Firestore's `startAfter()` for pagination
-- Orders by timestamp in descending order
-- Returns messages in chronological order (reversed)
-- Handles errors gracefully with Result type
+### 1. ChatRepository.kt - `ensureGroupChatsExist()` Function
 
-### 2. ChatRoomViewModel.kt
-**Added pagination state management:**
-- `_isLoadingMore`: StateFlow to track pagination loading state
-- `hasMoreMessages`: Flag to prevent loading when no more messages exist
-- `isLoadingMoreMessages`: Flag to prevent duplicate loading requests
+**Location:** `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
 
-**Added `loadMoreMessages()` function:**
-- Validates chat ID and current state
-- Prevents duplicate loading with flag check
-- Gets the oldest message from current list
-- Calls repository to load more messages
-- Prepends older messages to the beginning of the list
-- Updates `hasMoreMessages` flag when no more messages are available
-- Handles errors and updates error state
+**Changes:**
+- Added try-catch error handling when fetching user's groups
+- Specifically handles `FirebaseFirestoreException.Code.PERMISSION_DENIED` errors
+- Returns user-friendly error messages instead of crashing
+- Continues processing remaining groups if one fails (graceful degradation)
 
-### 3. ChatRoomActivity.kt
-**Added scroll detection:**
-- Created scroll listener on RecyclerView
-- Detects when user scrolls to top (position 0)
-- Triggers `viewModel.loadMoreMessages()` when scrolled up
+**Error Handling Added:**
+```kotlin
+// Fetching groups with error handling
+val groupsSnapshot = try {
+    firestore
+        .collection("groups")
+        .whereArrayContains("memberIds", getCurrentUserId())
+        .get()
+        .await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access groups. Please try logging out and back in.")
+        )
+    }
+    return Result.failure(e)
+} catch (e: Exception) {
+    return Result.failure(e)
+}
 
-**Improved message list handling:**
-- Tracks previous message count
-- Maintains scroll position when loading older messages
-- Scrolls to bottom only for new messages or first load
-- Calculates offset to maintain user's view when prepending messages
+// Checking existing chats with error handling
+val existingChat = try {
+    firestore
+        .collection(CHATS_COLLECTION)
+        .whereEqualTo("type", ChatType.GROUP.name)
+        .whereEqualTo("groupId", groupId)
+        .limit(1)
+        .get()
+        .await()
+} catch (e: Exception) {
+    // Continue to next group instead of failing completely
+    continue
+}
+```
 
-**Added loading indicator observer:**
-- Observes `isLoadingMore` state
-- Shows/hides `loadMoreProgressBar` during pagination
+### 2. ChatRepository.kt - `getOrCreateGroupChat()` Function
 
-### 4. activity_chat_room.xml
-**Added pagination loading indicator:**
-- `loadMoreProgressBar`: Small progress bar at top of messages
-- Positioned below toolbar
-- Hidden by default, shown during pagination
+**Location:** `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
 
-## Features Implemented
+**Changes:**
+- Added error handling when checking for existing chats
+- Added error handling when fetching group documents
+- Added error handling when creating new chats
+- All permission errors return user-friendly messages
 
-✅ **Load initial 50 messages** - Existing functionality maintained
-✅ **Detect scroll to top** - RecyclerView scroll listener detects when user reaches top
-✅ **Load next 50 messages** - Pagination loads 50 messages at a time
-✅ **Show loading indicator** - Progress bar appears at top while loading
-✅ **Prevent duplicate loading** - Flag prevents multiple simultaneous requests
-✅ **Handle no more messages** - Stops attempting to load when all messages are loaded
-✅ **Maintain scroll position** - User's view is preserved when older messages are prepended
+**Error Handling Added:**
+```kotlin
+// Check existing chats
+val existingChats = try {
+    firestore.collection(CHATS_COLLECTION)
+        .whereEqualTo("type", ChatType.GROUP.name)
+        .whereEqualTo("groupId", groupId)
+        .get()
+        .await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access this chat")
+        )
+    }
+    return Result.failure(e)
+}
 
-## How It Works
+// Fetch group document
+val groupDoc = try {
+    firestore.collection("groups").document(groupId).get().await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to access this group")
+        )
+    }
+    return Result.failure(e)
+}
 
-1. **Initial Load**: When chat opens, first 50 messages are loaded via real-time listener
-2. **User Scrolls Up**: When user scrolls to the very top of the chat
-3. **Trigger Pagination**: Scroll listener detects position 0 and calls `loadMoreMessages()`
-4. **Prevent Duplicates**: Flags check prevents multiple simultaneous loads
-5. **Load Older Messages**: Repository queries Firestore for next 50 messages before oldest
-6. **Update UI**: Older messages are prepended to list, scroll position is maintained
-7. **Loading Indicator**: Progress bar shows at top during load
-8. **No More Messages**: When empty result returned, pagination stops
+// Create chat
+try {
+    firestore.collection(CHATS_COLLECTION).document(chatId).set(chat).await()
+} catch (e: FirebaseFirestoreException) {
+    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+        return Result.failure(
+            Exception("You don't have permission to create a chat for this group")
+        )
+    }
+    return Result.failure(e)
+}
+```
 
-## Testing Checklist
+### 3. ChatFragment.kt - User-Friendly Error Display
 
-- [ ] Open a chat with more than 50 messages
-- [ ] Verify initial 50 messages load
-- [ ] Scroll to top of chat
-- [ ] Verify loading indicator appears
-- [ ] Verify next 50 messages load
-- [ ] Verify scroll position is maintained (not jumped to bottom)
-- [ ] Continue scrolling to top to load more batches
-- [ ] Verify pagination stops when all messages are loaded
-- [ ] Verify no duplicate loading occurs
-- [ ] Send a new message and verify it appears at bottom
-- [ ] Verify error handling if network fails during pagination
+**Location:** `app/src/main/java/com/example/loginandregistration/ChatFragment.kt`
 
-## Requirements Satisfied
+**Changes:**
+- Enhanced error handling when `ensureGroupChatsExist()` fails
+- Shows Toast message to user for permission errors
+- Provides actionable guidance (log out and back in)
 
-✅ **Requirement 1.8**: "WHEN loading older messages THEN the system SHALL implement pagination to load 50 messages at a time"
+**Error Display Added:**
+```kotlin
+lifecycleScope.launch {
+    val result = chatRepository.ensureGroupChatsExist()
+    if (result.isSuccess) {
+        val count = result.getOrNull() ?: 0
+        if (count > 0) {
+            android.util.Log.d("ChatFragment", "Created $count group chats")
+        }
+    } else {
+        val exception = result.exceptionOrNull()
+        android.util.Log.e(
+            "ChatFragment",
+            "Failed to ensure group chats: ${exception?.message}"
+        )
+        
+        // Show user-friendly error message for permission errors
+        val errorMessage = exception?.message ?: "Failed to load group chats"
+        if (errorMessage.contains("permission", ignoreCase = true)) {
+            Toast.makeText(
+                requireContext(),
+                "Unable to access group chats. Please try logging out and back in.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+}
+```
 
-All sub-tasks completed:
-- ✅ Add pagination to `getChatMessages()` in repository
-- ✅ Load initial 50 messages
-- ✅ Detect scroll to top in RecyclerView
-- ✅ Load next 50 messages when scrolled to top
-- ✅ Show loading indicator while loading more
-- ✅ Prevent duplicate loading
-- ✅ Handle case when no more messages exist
+## Requirements Addressed
 
-## Technical Notes
+### Requirement 5.1: User-Friendly Error Messages
+✅ Permission errors now display: "You don't have permission to access groups. Please try logging out and back in."
+✅ Chat screen shows Toast message for permission errors
 
-- Uses Firestore's `startAfter()` for cursor-based pagination
-- Maintains real-time listener for new messages
-- Pagination only loads historical messages
-- Scroll position calculation ensures smooth UX
-- Memory efficient: only loads messages as needed
-- Works offline with Firestore cache
+### Requirement 5.3: No Crashes on Permission Errors
+✅ All Firestore operations wrapped in try-catch blocks
+✅ Permission errors return Result.failure instead of throwing exceptions
+✅ App continues to function even when some operations fail
+
+## Error Handling Strategy
+
+1. **Graceful Degradation**: If fetching groups fails, the function returns an error but doesn't crash
+2. **Continue on Partial Failure**: If checking one group's chat fails, continue processing other groups
+3. **User-Friendly Messages**: All error messages provide actionable guidance
+4. **Comprehensive Logging**: All errors are logged with context for debugging
+
+## Testing Recommendations
+
+1. **Test Permission Denied Scenario**:
+   - Temporarily modify Firestore rules to deny access to groups collection
+   - Open Chat tab
+   - Verify Toast message appears
+   - Verify app doesn't crash
+
+2. **Test Partial Failure**:
+   - Have user in multiple groups
+   - Deny access to one specific group
+   - Verify other group chats still load
+
+3. **Test Network Errors**:
+   - Turn off network
+   - Open Chat tab
+   - Verify appropriate error handling
+
+## Files Modified
+
+1. `app/src/main/java/com/example/loginandregistration/repository/ChatRepository.kt`
+   - Updated `ensureGroupChatsExist()` function
+   - Updated `getOrCreateGroupChat()` function
+
+2. `app/src/main/java/com/example/loginandregistration/ChatFragment.kt`
+   - Enhanced error display in `onViewCreated()`
+
+## Status
+
+✅ Task 6 Complete - All sub-tasks implemented:
+- ✅ Add error handling to `ensureGroupChatsExist()`
+- ✅ Handle permission errors when fetching groups for chats
+- ✅ Prevent chat screen crashes from permission errors
+
+## Next Steps
+
+Continue with Task 7: Verify Query Patterns in Repositories

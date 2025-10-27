@@ -34,12 +34,21 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "New FCM token: $token")
 
         // Save token to user document in Firestore using NotificationRepository
+        // Note: This will fail if user is not authenticated yet, which is expected
         serviceScope.launch {
             val result = notificationRepository.saveFcmToken()
             if (result.isSuccess) {
                 Log.d(TAG, "FCM token saved successfully via repository")
             } else {
-                Log.e(TAG, "Failed to save FCM token via repository", result.exceptionOrNull())
+                val exception = result.exceptionOrNull()
+                if (exception?.message?.contains("not authenticated") == true) {
+                    Log.w(
+                            TAG,
+                            "FCM token not saved - user not authenticated yet. Token will be saved on login."
+                    )
+                } else {
+                    Log.e(TAG, "Failed to save FCM token via repository", exception)
+                }
             }
         }
     }

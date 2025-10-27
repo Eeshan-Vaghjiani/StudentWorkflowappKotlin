@@ -58,6 +58,68 @@
             android:orientation="vertical"
             android:padding="12dp">
 
+            <!-- Image message -->
+            <ImageView
+                android:id="@+id/messageImageView"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:layout_marginBottom="4dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="Image message"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                tools:src="@android:drawable/ic_menu_gallery" />
+
+            <!-- Document message -->
+            <LinearLayout
+                android:id="@+id/documentContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_document"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/documentIconImageView"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="Document icon"
+                    android:src="@android:drawable/ic_menu_save"
+                    android:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/documentNameTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        tools:text="document.pdf" />
+
+                    <TextView
+                        android:id="@+id/documentSizeTextView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        tools:text="2.5 MB" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Text message -->
             <TextView
                 android:id="@+id/messageTextView"
                 android:layout_width="wrap_content"

@@ -4,13 +4,12 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- First checkmark -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M0.41,13.41L6,19l1.41,-1.42L1.83,12l5.58,-5.59L6,4.99L0.41,10.6c-0.78,0.78 -0.78,2.05 0,2.81z" />
+        android:pathData="M6,16.17L1.83,12l-1.42,1.41L6,19L18,7l-1.41,-1.41L6,16.17z" />
+    <!-- Second checkmark (offset) -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M6,18l7.5,-7.5 -1.42,-1.42L6,15.17l-1.59,-1.59L3,15l3,3zM17.59,5L12,10.59 13.41,12 19,6.41 17.59,5z" />
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M22.24,5.59L11.66,16.17 7.48,12l-1.41,1.41L11.66,19l12,-12 -1.42,-1.41z" />
+        android:pathData="M11,16.17L6.83,12l-1.42,1.41L11,19L23,7l-1.41,-1.41L11,16.17z" />
 </vector>

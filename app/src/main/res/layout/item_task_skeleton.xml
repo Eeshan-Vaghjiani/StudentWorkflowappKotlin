@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="16dp">
+
+    <!-- Task Icon Skeleton -->
+    <com.example.loginandregistration.views.SkeletonLoader
+        android:id="@+id/iconSkeleton"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="16dp" />
+
+    <!-- Task Content Skeleton -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Task Title Skeleton -->
+        <com.example.loginandregistration.views.SkeletonLoader
+            android:layout_width="match_parent"
+            android:layout_height="18dp" />
+
+        <!-- Task Subtitle Skeleton -->
+        <com.example.loginandregistration.views.SkeletonLoader
+            android:layout_width="200dp"
+            android:layout_height="16dp"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+
+    <!-- Task Status Skeleton -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <!-- Status Chip Skeleton -->
+        <com.example.loginandregistration.views.SkeletonLoader
+            android:id="@+id/chipSkeleton"
+            android:layout_width="80dp"
+            android:layout_height="24dp"
+            android:layout_marginBottom="4dp" />
+
+        <!-- Arrow Skeleton -->
+        <com.example.loginandregistration.views.SkeletonLoader
+            android:layout_width="12dp"
+            android:layout_height="12dp" />
+    </LinearLayout>
+</LinearLayout>

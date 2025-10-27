@@ -9,143 +9,52 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class DashboardRepository {
-    private val db = FirebaseFirestore.getInstance()
-    private val auth = FirebaseAuth.getInstance()
-    private val groupsCollection = db.collection("groups")
-    private val tasksCollection = db.collection("tasks")
-    private val activitiesCollection = db.collection("group_activities")
+        private val db = FirebaseFirestore.getInstance()
+        private val auth = FirebaseAuth.getInstance()
+        private val groupsCollection = db.collection("groups")
+        private val tasksCollection = db.collection("tasks")
+        private val activitiesCollection = db.collection("group_activities")
+        private val usersCollection = db.collection("users")
+        private val sessionsCollection = db.collection("sessions")
 
-    /** Provides real-time comprehensive dashboard statistics */
-    fun getDashboardStatsFlow(): Flow<ComprehensiveDashboardStats> = callbackFlow {
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            trySend(ComprehensiveDashboardStats())
-            close()
-            return@callbackFlow
-        }
+        /** Provides real-time comprehensive dashboard statistics */
+        fun getDashboardStatsFlow(): Flow<ComprehensiveDashboardStats> = callbackFlow {
+                val userId = auth.currentUser?.uid
+                if (userId == null) {
+                        trySend(ComprehensiveDashboardStats())
+                        close()
+                        return@callbackFlow
+                }
 
-        // Listen to user's groups
-        val groupsListener =
-                groupsCollection
-                        .whereArrayContains("memberIds", userId)
-                        .whereEqualTo("isActive", true)
-                        .addSnapshotListener { groupSnapshot, error ->
-                            if (error != null) {
-                                trySend(ComprehensiveDashboardStats())
-                                return@addSnapshotListener
-                            }
+                // Listen to user's groups
+                val groupsListener =
+                        groupsCollection
+                                .whereArrayContains("memberIds", userId)
+                                .whereEqualTo("isActive", true)
+                                .addSnapshotListener { groupSnapshot, error ->
+                                        if (error != null) {
+                                                trySend(ComprehensiveDashboardStats())
+                                                return@addSnapshotListener
+                                        }
 
-                            val groups =
-                                    groupSnapshot?.toObjects(
-                                            com.example.loginandregistration.models
-                                                            .FirebaseGroup::class
-                                                    .java
-                                    )
-                                            ?: emptyList()
-                            val groupIds = groups.map { it.id }
+                                        val groups =
+                                                groupSnapshot?.toObjects(
+                                                        com.example.loginandregistration.models
+                                                                        .FirebaseGroup::class
+                                                                .java
+                                                )
+                                                        ?: emptyList()
+                                        val groupIds = groups.map { it.id }
 
-                            // Listen to user's tasks
-                            val tasksListener =
-                                    tasksCollection.whereEqualTo("userId", userId)
-                                            .addSnapshotListener { taskSnapshot, taskError ->
-                                                if (taskError != null) {
-                                                    trySend(
-                                                            ComprehensiveDashboardStats(
-                                                                    totalGroups = groups.size,
-                                                                    myGroups = groups.size,
-                                                                    adminGroups =
-                                                                            groups.count {
-                                                                                it.owner == userId
-                                                                            }
-                                                            )
-                                                    )
-                                                    return@addSnapshotListener
-                                                }
-
-                                                val tasks =
-                                                        taskSnapshot?.toObjects(
-                                                                com.example.loginandregistration
-                                                                                .models
-                                                                                .FirebaseTask::class
-                                                                        .java
-                                                        )
-                                                                ?: emptyList()
-                                                val now = com.google.firebase.Timestamp.now()
-
-                                                // Calculate task statistics
-                                                var overdueTasks = 0
-                                                var dueTodayTasks = 0
-                                                var completedTasks = 0
-                                                var totalTasks = tasks.size
-                                                var personalTasks = 0
-                                                var groupTasks = 0
-                                                var assignmentTasks = 0
-
-                                                tasks.forEach { task ->
-                                                    when (task.category) {
-                                                        "personal" -> personalTasks++
-                                                        "group" -> groupTasks++
-                                                        "assignment" -> assignmentTasks++
-                                                    }
-
-                                                    when {
-                                                        task.status == "completed" ->
-                                                                completedTasks++
-                                                        task.dueDate != null &&
-                                                                task.dueDate!! < now ->
-                                                                overdueTasks++
-                                                        task.dueDate != null &&
-                                                                isSameDay(task.dueDate!!, now) ->
-                                                                dueTodayTasks++
-                                                    }
-                                                }
-
-                                                // Listen to activities for message count
-                                                if (groupIds.isNotEmpty()) {
-                                                    val activitiesListener =
-                                                            activitiesCollection
-                                                                    .whereIn(
-                                                                            "groupId",
-                                                                            groupIds.take(10)
-                                                                    ) // Firestore limit
-                                                                    .orderBy(
-                                                                            "createdAt",
-                                                                            Query.Direction
-                                                                                    .DESCENDING
-                                                                    )
-                                                                    .limit(50)
-                                                                    .addSnapshotListener {
-                                                                            activitySnapshot,
-                                                                            activityError ->
-                                                                        val activities =
-                                                                                activitySnapshot
-                                                                                        ?.toObjects(
-                                                                                                com.example
-                                                                                                                .loginandregistration
-                                                                                                                .models
-                                                                                                                .GroupActivity::class
-                                                                                                        .java
-                                                                                        )
-                                                                                        ?: emptyList()
-                                                                        val newMessages =
-                                                                                activities
-                                                                                        .filter {
-                                                                                            it.type ==
-                                                                                                    "message"
-                                                                                        }
-                                                                                        .size
-                                                                        val activeAssignments =
-                                                                                activities
-                                                                                        .filter {
-                                                                                            it.type ==
-                                                                                                    "assignment"
-                                                                                        }
-                                                                                        .size
-
+                                        // Listen to user's tasks
+                                        val tasksListener =
+                                                tasksCollection.whereEqualTo("userId", userId)
+                                                        .addSnapshotListener {
+                                                                taskSnapshot,
+                                                                taskError ->
+                                                                if (taskError != null) {
                                                                         trySend(
                                                                                 ComprehensiveDashboardStats(
-                                                                                        // Group
-                                                                                        // stats
                                                                                         totalGroups =
                                                                                                 groups.size,
                                                                                         myGroups =
@@ -153,16 +62,166 @@ class DashboardRepository {
                                                                                         adminGroups =
                                                                                                 groups
                                                                                                         .count {
-                                                                                                            it.owner ==
-                                                                                                                    userId
-                                                                                                        },
-                                                                                        activeAssignments =
-                                                                                                activeAssignments,
-                                                                                        newMessages =
-                                                                                                newMessages,
+                                                                                                                it.owner ==
+                                                                                                                        userId
+                                                                                                        }
+                                                                                )
+                                                                        )
+                                                                        return@addSnapshotListener
+                                                                }
 
-                                                                                        // Task
-                                                                                        // stats
+                                                                val tasks =
+                                                                        taskSnapshot?.toObjects(
+                                                                                com.example
+                                                                                                .loginandregistration
+                                                                                                .models
+                                                                                                .FirebaseTask::class
+                                                                                        .java
+                                                                        )
+                                                                                ?: emptyList()
+                                                                val now =
+                                                                        com.google.firebase
+                                                                                .Timestamp.now()
+
+                                                                // Calculate task statistics
+                                                                var overdueTasks = 0
+                                                                var dueTodayTasks = 0
+                                                                var completedTasks = 0
+                                                                var totalTasks = tasks.size
+                                                                var personalTasks = 0
+                                                                var groupTasks = 0
+                                                                var assignmentTasks = 0
+
+                                                                tasks.forEach { task ->
+                                                                        when (task.category) {
+                                                                                "personal" ->
+                                                                                        personalTasks++
+                                                                                "group" ->
+                                                                                        groupTasks++
+                                                                                "assignment" ->
+                                                                                        assignmentTasks++
+                                                                        }
+
+                                                                        when {
+                                                                                task.status ==
+                                                                                        "completed" ->
+                                                                                        completedTasks++
+                                                                                task.dueDate !=
+                                                                                        null &&
+                                                                                        task.dueDate!! <
+                                                                                                now ->
+                                                                                        overdueTasks++
+                                                                                task.dueDate !=
+                                                                                        null &&
+                                                                                        isSameDay(
+                                                                                                task.dueDate!!,
+                                                                                                now
+                                                                                        ) ->
+                                                                                        dueTodayTasks++
+                                                                        }
+                                                                }
+
+                                                                // Listen to activities for message
+                                                                // count
+                                                                if (groupIds.isNotEmpty()) {
+                                                                        val activitiesListener =
+                                                                                activitiesCollection
+                                                                                        .whereIn(
+                                                                                                "groupId",
+                                                                                                groupIds.take(
+                                                                                                        10
+                                                                                                )
+                                                                                        ) // Firestore limit
+                                                                                        .orderBy(
+                                                                                                "createdAt",
+                                                                                                Query.Direction
+                                                                                                        .DESCENDING
+                                                                                        )
+                                                                                        .limit(50)
+                                                                                        .addSnapshotListener {
+                                                                                                activitySnapshot,
+                                                                                                activityError
+                                                                                                ->
+                                                                                                val activities =
+                                                                                                        activitySnapshot
+                                                                                                                ?.toObjects(
+                                                                                                                        com.example
+                                                                                                                                        .loginandregistration
+                                                                                                                                        .models
+                                                                                                                                        .GroupActivity::class
+                                                                                                                                .java
+                                                                                                                )
+                                                                                                                ?: emptyList()
+                                                                                                val newMessages =
+                                                                                                        activities
+                                                                                                                .filter {
+                                                                                                                        it.type ==
+                                                                                                                                "message"
+                                                                                                                }
+                                                                                                                .size
+                                                                                                val activeAssignments =
+                                                                                                        activities
+                                                                                                                .filter {
+                                                                                                                        it.type ==
+                                                                                                                                "assignment"
+                                                                                                                }
+                                                                                                                .size
+
+                                                                                                trySend(
+                                                                                                        ComprehensiveDashboardStats(
+                                                                                                                // Group
+                                                                                                                // stats
+                                                                                                                totalGroups =
+                                                                                                                        groups.size,
+                                                                                                                myGroups =
+                                                                                                                        groups.size,
+                                                                                                                adminGroups =
+                                                                                                                        groups
+                                                                                                                                .count {
+                                                                                                                                        it.owner ==
+                                                                                                                                                userId
+                                                                                                                                },
+                                                                                                                activeAssignments =
+                                                                                                                        activeAssignments,
+                                                                                                                newMessages =
+                                                                                                                        newMessages,
+
+                                                                                                                // Task
+                                                                                                                // stats
+                                                                                                                totalTasks =
+                                                                                                                        totalTasks,
+                                                                                                                overdueTasks =
+                                                                                                                        overdueTasks,
+                                                                                                                dueTodayTasks =
+                                                                                                                        dueTodayTasks,
+                                                                                                                completedTasks =
+                                                                                                                        completedTasks,
+                                                                                                                personalTasks =
+                                                                                                                        personalTasks,
+                                                                                                                groupTasks =
+                                                                                                                        groupTasks,
+                                                                                                                assignmentTasks =
+                                                                                                                        assignmentTasks,
+
+                                                                                                                // Calculated stats
+                                                                                                                tasksDue =
+                                                                                                                        overdueTasks +
+                                                                                                                                dueTodayTasks,
+                                                                                                                completionRate =
+                                                                                                                        if (totalTasks >
+                                                                                                                                        0
+                                                                                                                        )
+                                                                                                                                (completedTasks *
+                                                                                                                                        100) /
+                                                                                                                                        totalTasks
+                                                                                                                        else
+                                                                                                                                0
+                                                                                                        )
+                                                                                                )
+                                                                                        }
+                                                                } else {
+                                                                        trySend(
+                                                                                ComprehensiveDashboardStats(
                                                                                         totalTasks =
                                                                                                 totalTasks,
                                                                                         overdueTasks =
@@ -177,8 +236,6 @@ class DashboardRepository {
                                                                                                 groupTasks,
                                                                                         assignmentTasks =
                                                                                                 assignmentTasks,
-
-                                                                                        // Calculated stats
                                                                                         tasksDue =
                                                                                                 overdueTasks +
                                                                                                         dueTodayTasks,
@@ -193,90 +250,268 @@ class DashboardRepository {
                                                                                                         0
                                                                                 )
                                                                         )
-                                                                    }
-                                                } else {
-                                                    trySend(
-                                                            ComprehensiveDashboardStats(
-                                                                    totalTasks = totalTasks,
-                                                                    overdueTasks = overdueTasks,
-                                                                    dueTodayTasks = dueTodayTasks,
-                                                                    completedTasks = completedTasks,
-                                                                    personalTasks = personalTasks,
-                                                                    groupTasks = groupTasks,
-                                                                    assignmentTasks =
-                                                                            assignmentTasks,
-                                                                    tasksDue =
-                                                                            overdueTasks +
-                                                                                    dueTodayTasks,
-                                                                    completionRate =
-                                                                            if (totalTasks > 0)
-                                                                                    (completedTasks *
-                                                                                            100) /
-                                                                                            totalTasks
-                                                                            else 0
-                                                            )
-                                                    )
-                                                }
-                                            }
+                                                                }
+                                                        }
+                                }
+
+                awaitClose {
+                        // Cleanup listeners if needed
+                }
+        }
+
+        private fun isSameDay(
+                date1: com.google.firebase.Timestamp,
+                date2: com.google.firebase.Timestamp
+        ): Boolean {
+                val cal1 = java.util.Calendar.getInstance().apply { time = date1.toDate() }
+                val cal2 = java.util.Calendar.getInstance().apply { time = date2.toDate() }
+                return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+                        cal1.get(java.util.Calendar.DAY_OF_YEAR) ==
+                                cal2.get(java.util.Calendar.DAY_OF_YEAR)
+        }
+
+        /** Get quick stats for widgets or summary views */
+        suspend fun getQuickStats(): QuickStats {
+                val userId = auth.currentUser?.uid ?: return QuickStats()
+                return try {
+                        // Get groups count
+                        val groupsSnapshot =
+                                groupsCollection
+                                        .whereArrayContains("memberIds", userId)
+                                        .whereEqualTo("isActive", true)
+                                        .get()
+                                        .await()
+                        val groupsCount = groupsSnapshot.size()
+
+                        // Get tasks count
+                        val tasksSnapshot =
+                                tasksCollection.whereEqualTo("userId", userId).get().await()
+                        val tasks =
+                                tasksSnapshot.toObjects(
+                                        com.example.loginandregistration.models.FirebaseTask::class
+                                                .java
+                                )
+                        val now = com.google.firebase.Timestamp.now()
+
+                        val overdue =
+                                tasks.count {
+                                        it.dueDate != null &&
+                                                it.dueDate!! < now &&
+                                                it.status != "completed"
+                                }
+                        val dueToday =
+                                tasks.count {
+                                        it.dueDate != null &&
+                                                isSameDay(it.dueDate!!, now) &&
+                                                it.status != "completed"
+                                }
+
+                        QuickStats(
+                                groupsCount = groupsCount,
+                                tasksDue = overdue + dueToday,
+                                overdueTasks = overdue,
+                                dueTodayTasks = dueToday
+                        )
+                } catch (e: Exception) {
+                        QuickStats()
+                }
+        }
+
+        /** Get task statistics with real-time updates */
+        fun getTaskStats(): Flow<com.example.loginandregistration.repository.TaskStats> =
+                callbackFlow {
+                        val userId = auth.currentUser?.uid
+                        if (userId == null) {
+                                trySend(com.example.loginandregistration.repository.TaskStats())
+                                close()
+                                return@callbackFlow
                         }
 
-        awaitClose {
-            // Cleanup listeners if needed
+                        val listener =
+                                tasksCollection.whereEqualTo("userId", userId)
+                                        .addSnapshotListener { snapshot, error ->
+                                                if (error != null) {
+                                                        trySend(
+                                                                com.example.loginandregistration
+                                                                        .repository.TaskStats()
+                                                        )
+                                                        return@addSnapshotListener
+                                                }
+
+                                                val tasks =
+                                                        snapshot?.toObjects(
+                                                                com.example.loginandregistration
+                                                                                .models
+                                                                                .FirebaseTask::class
+                                                                        .java
+                                                        )
+                                                                ?: emptyList()
+
+                                                val now = com.google.firebase.Timestamp.now()
+                                                val completed =
+                                                        tasks.count { it.status == "completed" }
+                                                val overdue =
+                                                        tasks.count {
+                                                                it.dueDate != null &&
+                                                                        it.dueDate!! < now &&
+                                                                        it.status != "completed"
+                                                        }
+                                                val dueToday =
+                                                        tasks.count {
+                                                                it.dueDate != null &&
+                                                                        isSameDay(
+                                                                                it.dueDate!!,
+                                                                                now
+                                                                        ) &&
+                                                                        it.status != "completed"
+                                                        }
+
+                                                trySend(
+                                                        com.example.loginandregistration.repository
+                                                                .TaskStats(
+                                                                        overdue = overdue,
+                                                                        dueToday = dueToday,
+                                                                        completed = completed
+                                                                )
+                                                )
+                                        }
+
+                        awaitClose { listener.remove() }
+                }
+
+        /** Get group count with real-time updates */
+        fun getGroupCount(): Flow<Int> = callbackFlow {
+                val userId = auth.currentUser?.uid
+                if (userId == null) {
+                        trySend(0)
+                        close()
+                        return@callbackFlow
+                }
+
+                val listener =
+                        groupsCollection
+                                .whereArrayContains("memberIds", userId)
+                                .whereEqualTo("isActive", true)
+                                .addSnapshotListener { snapshot, error ->
+                                        if (error != null) {
+                                                trySend(0)
+                                                return@addSnapshotListener
+                                        }
+
+                                        trySend(snapshot?.size() ?: 0)
+                                }
+
+                awaitClose { listener.remove() }
         }
-    }
 
-    private fun isSameDay(
-            date1: com.google.firebase.Timestamp,
-            date2: com.google.firebase.Timestamp
-    ): Boolean {
-        val cal1 = java.util.Calendar.getInstance().apply { time = date1.toDate() }
-        val cal2 = java.util.Calendar.getInstance().apply { time = date2.toDate() }
-        return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
-                cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
-    }
+        /** Get session statistics with real-time updates */
+        fun getSessionStats(): Flow<com.example.loginandregistration.repository.SessionStats> =
+                callbackFlow {
+                        val userId = auth.currentUser?.uid
+                        if (userId == null) {
+                                trySend(com.example.loginandregistration.repository.SessionStats())
+                                close()
+                                return@callbackFlow
+                        }
 
-    /** Get quick stats for widgets or summary views */
-    suspend fun getQuickStats(): QuickStats {
-        val userId = auth.currentUser?.uid ?: return QuickStats()
-        return try {
-            // Get groups count
-            val groupsSnapshot =
-                    groupsCollection
-                            .whereArrayContains("memberIds", userId)
-                            .whereEqualTo("isActive", true)
-                            .get()
-                            .await()
-            val groupsCount = groupsSnapshot.size()
+                        val listener =
+                                sessionsCollection.whereEqualTo("userId", userId)
+                                        .addSnapshotListener { snapshot, error ->
+                                                if (error != null) {
+                                                        trySend(
+                                                                com.example.loginandregistration
+                                                                        .repository.SessionStats()
+                                                        )
+                                                        return@addSnapshotListener
+                                                }
 
-            // Get tasks count
-            val tasksSnapshot = tasksCollection.whereEqualTo("userId", userId).get().await()
-            val tasks =
-                    tasksSnapshot.toObjects(
-                            com.example.loginandregistration.models.FirebaseTask::class.java
-                    )
-            val now = com.google.firebase.Timestamp.now()
+                                                val sessions =
+                                                        snapshot?.documents?.mapNotNull { doc ->
+                                                                try {
+                                                                        val duration =
+                                                                                doc.getLong(
+                                                                                                "duration"
+                                                                                        )
+                                                                                        ?.toInt()
+                                                                                        ?: 0
+                                                                        val startTime =
+                                                                                doc.getTimestamp(
+                                                                                        "startTime"
+                                                                                )
+                                                                        SessionData(
+                                                                                duration,
+                                                                                startTime
+                                                                        )
+                                                                } catch (e: Exception) {
+                                                                        null
+                                                                }
+                                                        }
+                                                                ?: emptyList()
 
-            val overdue =
-                    tasks.count {
-                        it.dueDate != null && it.dueDate!! < now && it.status != "completed"
-                    }
-            val dueToday =
-                    tasks.count {
-                        it.dueDate != null &&
-                                isSameDay(it.dueDate!!, now) &&
-                                it.status != "completed"
-                    }
+                                                val todayStart = getTodayStartTimestamp()
 
-            QuickStats(
-                    groupsCount = groupsCount,
-                    tasksDue = overdue + dueToday,
-                    overdueTasks = overdue,
-                    dueTodayTasks = dueToday
-            )
-        } catch (e: Exception) {
-            QuickStats()
+                                                val totalSessions = sessions.size
+                                                val totalMinutes = sessions.sumOf { it.duration }
+                                                val todaySessions =
+                                                        sessions.count { session ->
+                                                                session.startTime != null &&
+                                                                        session.startTime >=
+                                                                                todayStart
+                                                        }
+
+                                                trySend(
+                                                        com.example.loginandregistration.repository
+                                                                .SessionStats(
+                                                                        totalSessions =
+                                                                                totalSessions,
+                                                                        totalMinutes = totalMinutes,
+                                                                        todaySessions =
+                                                                                todaySessions
+                                                                )
+                                                )
+                                        }
+
+                        awaitClose { listener.remove() }
+                }
+
+        /** Get AI usage statistics with real-time updates */
+        fun getAIUsageStats(): Flow<AIUsageStats> = callbackFlow {
+                val userId = auth.currentUser?.uid
+                if (userId == null) {
+                        trySend(AIUsageStats())
+                        close()
+                        return@callbackFlow
+                }
+
+                val listener =
+                        usersCollection.document(userId).addSnapshotListener { snapshot, error ->
+                                if (error != null) {
+                                        trySend(AIUsageStats())
+                                        return@addSnapshotListener
+                                }
+
+                                val used = snapshot?.getLong("aiPromptsUsed")?.toInt() ?: 0
+                                val limit = snapshot?.getLong("aiPromptsLimit")?.toInt() ?: 10
+
+                                trySend(AIUsageStats(used = used, limit = limit))
+                        }
+
+                awaitClose { listener.remove() }
         }
-    }
+
+        private fun getTodayStartTimestamp(): com.google.firebase.Timestamp {
+                val calendar = java.util.Calendar.getInstance()
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                calendar.set(java.util.Calendar.MINUTE, 0)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+                return com.google.firebase.Timestamp(calendar.time)
+        }
+
+        private data class SessionData(
+                val duration: Int,
+                val startTime: com.google.firebase.Timestamp?
+        )
 }
 
 data class ComprehensiveDashboardStats(
@@ -307,3 +542,8 @@ data class QuickStats(
         val overdueTasks: Int = 0,
         val dueTodayTasks: Int = 0
 )
+
+// TaskStats moved to TaskRepository.kt to avoid redeclaration
+// SessionStats moved to SessionRepository.kt to avoid redeclaration
+
+data class AIUsageStats(val used: Int = 0, val limit: Int = 10)

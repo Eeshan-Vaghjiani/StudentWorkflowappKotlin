@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Calendar Header Skeleton -->
+    <View
+        android:layout_width="150dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@color/skeleton_background"
+        android:alpha="0.3" />
+
+    <!-- Calendar Grid Skeleton -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_marginTop="16dp"
+        android:background="@color/skeleton_background"
+        android:alpha="0.2" />
+
+    <!-- Tasks List Header Skeleton -->
+    <View
+        android:layout_width="120dp"
+        android:layout_height="20dp"
+        android:layout_marginTop="24dp"
+        android:background="@color/skeleton_background"
+        android:alpha="0.3" />
+
+    <!-- Task Items Skeleton -->
+    <include layout="@layout/item_task_skeleton"
+        android:layout_marginTop="8dp" />
+    <include layout="@layout/item_task_skeleton" />
+    <include layout="@layout/item_task_skeleton" />
+
+</LinearLayout>
