@@ -199,6 +199,17 @@ class TasksFragment : Fragment() {
                 val exception =
                         Exception(
                                 when (error) {
+                                        // New error types
+                                        is ErrorHandler.AppError.Permission ->
+                                                "You don't have permission to ${error.operation}"
+                                        is ErrorHandler.AppError.Network ->
+                                                "Network error: ${error.cause}"
+                                        is ErrorHandler.AppError.Validation ->
+                                                "Please fix: ${error.fields.joinToString(", ")}"
+                                        is ErrorHandler.AppError.NotFound ->
+                                                "${error.resource} not found"
+                                        is ErrorHandler.AppError.Unknown -> error.message
+                                        // Legacy error types
                                         is ErrorHandler.AppError.PermissionError -> error.message
                                         is ErrorHandler.AppError.NetworkError -> error.message
                                         is ErrorHandler.AppError.FirestoreError -> error.message

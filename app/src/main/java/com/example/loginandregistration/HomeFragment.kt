@@ -100,14 +100,7 @@ class HomeFragment : Fragment() {
                             override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
                                 return when (menuItem.itemId) {
                                     R.id.action_notifications -> {
-                                        Toast.makeText(
-                                                        context,
-                                                        R.string.navigating_to_notifications,
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                        // TODO: Implement navigation to Notifications
-                                        // screen/fragment
+                                        (activity as? MainActivity)?.navigateToNotifications()
                                         true
                                     }
                                     R.id.action_profile -> {

@@ -12,20 +12,19 @@ data class Message(
         val senderName: String = "",
         val senderImageUrl: String = "",
         val text: String = "",
-        
+
         // Legacy attachment fields (kept for backward compatibility)
         val imageUrl: String? = null,
         val documentUrl: String? = null,
         val documentName: String? = null,
         val documentSize: Long? = null,
-        
+
         // Enhanced attachment fields
         val attachmentUrl: String? = null,
         val attachmentFileName: String? = null,
         val attachmentFileSize: Long? = null,
         val attachmentMimeType: String? = null,
         val attachmentType: String? = null, // "image", "document", "audio", "video"
-        
         @ServerTimestamp val timestamp: Date? = null,
         val readBy: List<String> = emptyList(),
         val status: MessageStatus = MessageStatus.SENDING
@@ -42,14 +41,14 @@ data class Message(
 
     /** Check if message has image attachment */
     fun hasImage(): Boolean {
-        return !imageUrl.isNullOrEmpty() || 
-               (attachmentType == "image" && !attachmentUrl.isNullOrEmpty())
+        return !imageUrl.isNullOrEmpty() ||
+                (attachmentType == "image" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has document attachment */
     fun hasDocument(): Boolean {
-        return !documentUrl.isNullOrEmpty() || 
-               (attachmentType == "document" && !attachmentUrl.isNullOrEmpty())
+        return !documentUrl.isNullOrEmpty() ||
+                (attachmentType == "document" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has audio attachment */
@@ -131,7 +130,9 @@ enum class MessageStatus {
     SENT, // Message sent to server
     DELIVERED, // Message delivered to recipient
     READ, // Message read by recipient
-    FAILED // Message failed to send
+    FAILED, // Message failed to send (generic)
+    FAILED_RETRYABLE, // Message failed but can be retried (network issues)
+    FAILED_PERMANENT // Message failed permanently (permission errors)
 }
 
 /** Type of message content */
@@ -147,5 +148,5 @@ enum class MessageType {
 data class TypingStatus(
         val userId: String = "",
         val isTyping: Boolean = false,
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Date = Date()
 )

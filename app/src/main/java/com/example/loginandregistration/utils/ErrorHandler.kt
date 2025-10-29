@@ -30,6 +30,14 @@ object ErrorHandler {
 
     /** Error types for categorization */
     sealed class AppError {
+        data class Permission(val operation: String, val exception: Throwable? = null) : AppError()
+        data class Network(val cause: String, val exception: Throwable? = null) : AppError()
+        data class Validation(val fields: List<String>, val exception: Throwable? = null) :
+                AppError()
+        data class NotFound(val resource: String, val exception: Throwable? = null) : AppError()
+        data class Unknown(val message: String, val exception: Throwable? = null) : AppError()
+
+        // Legacy error types for backward compatibility
         data class NetworkError(val message: String, val exception: Throwable? = null) : AppError()
         data class AuthError(val message: String, val exception: Throwable? = null) : AppError()
         data class PermissionError(val message: String, val permission: String? = null) :
@@ -39,6 +47,23 @@ object ErrorHandler {
         data class FirestoreError(val message: String, val exception: Throwable? = null) :
                 AppError()
         data class UnknownError(val message: String, val exception: Throwable? = null) : AppError()
+    }
+
+    /** User-friendly error with actionable next steps */
+    data class UserFriendlyError(
+            val title: String,
+            val message: String,
+            val action: ErrorAction,
+            val exception: Throwable? = null
+    )
+
+    /** Actions that can be taken in response to errors */
+    enum class ErrorAction {
+        RETRY,
+        LOGOUT,
+        DISMISS,
+        CONTACT_SUPPORT,
+        OPEN_SETTINGS
     }
 
     /** Handle any exception and show appropriate UI feedback */
@@ -54,7 +79,212 @@ object ErrorHandler {
     }
 
     /** Categorize exception into AppError types */
-    private fun categorizeError(exception: Throwable): AppError {
+    fun categorizeError(exception: Throwable): AppError {
+        return when (exception) {
+            // Validation errors
+            is com.example.loginandregistration.validation.ValidationException -> {
+                AppError.Validation(exception.errors, exception)
+            }
+
+            // Network errors
+            is UnknownHostException,
+            is SocketTimeoutException -> {
+                AppError.Network(exception.message ?: "Connection failed", exception)
+            }
+            is IOException, is FirebaseNetworkException -> {
+                AppError.Network("Network connection issue", exception)
+            }
+
+            // Firestore errors
+            is FirebaseFirestoreException -> {
+                when (exception.code) {
+                    FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                        AppError.Permission("access this data", exception)
+                    }
+                    FirebaseFirestoreException.Code.UNAVAILABLE,
+                    FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> {
+                        AppError.Network("Service temporarily unavailable", exception)
+                    }
+                    FirebaseFirestoreException.Code.UNAUTHENTICATED -> {
+                        AppError.Permission("authenticate", exception)
+                    }
+                    FirebaseFirestoreException.Code.NOT_FOUND -> {
+                        AppError.NotFound("requested data", exception)
+                    }
+                    FirebaseFirestoreException.Code.FAILED_PRECONDITION -> {
+                        AppError.Unknown(
+                                "Database is being configured. Please try again shortly.",
+                                exception
+                        )
+                    }
+                    else -> {
+                        AppError.Unknown(
+                                exception.message ?: "Database operation failed",
+                                exception
+                        )
+                    }
+                }
+            }
+
+            // Auth errors
+            is FirebaseAuthException -> {
+                when (exception.errorCode) {
+                    "ERROR_INVALID_EMAIL" -> {
+                        AppError.Validation(listOf("email"), exception)
+                    }
+                    "ERROR_WRONG_PASSWORD" -> {
+                        AppError.Validation(listOf("password"), exception)
+                    }
+                    "ERROR_USER_NOT_FOUND" -> {
+                        AppError.NotFound("user account", exception)
+                    }
+                    "ERROR_EMAIL_ALREADY_IN_USE" -> {
+                        AppError.Validation(listOf("email"), exception)
+                    }
+                    "ERROR_WEAK_PASSWORD" -> {
+                        AppError.Validation(listOf("password"), exception)
+                    }
+                    "ERROR_USER_DISABLED" -> {
+                        AppError.Permission("access account", exception)
+                    }
+                    "ERROR_TOO_MANY_REQUESTS" -> {
+                        AppError.Unknown("Too many attempts. Please try again later.", exception)
+                    }
+                    else -> {
+                        AppError.Unknown("Authentication failed", exception)
+                    }
+                }
+            }
+
+            // Storage errors
+            is StorageException -> {
+                when (exception.errorCode) {
+                    StorageException.ERROR_OBJECT_NOT_FOUND -> {
+                        AppError.NotFound("file", exception)
+                    }
+                    StorageException.ERROR_QUOTA_EXCEEDED -> {
+                        AppError.Unknown("Storage quota exceeded", exception)
+                    }
+                    StorageException.ERROR_NOT_AUTHENTICATED,
+                    StorageException.ERROR_NOT_AUTHORIZED -> {
+                        AppError.Permission("access file", exception)
+                    }
+                    StorageException.ERROR_RETRY_LIMIT_EXCEEDED -> {
+                        AppError.Network("Upload failed", exception)
+                    }
+                    else -> {
+                        AppError.Unknown("File operation failed", exception)
+                    }
+                }
+            }
+
+            // Security exceptions (permissions)
+            is SecurityException -> {
+                AppError.Permission("perform this action", exception)
+            }
+
+            // Unknown errors
+            else -> {
+                AppError.Unknown(exception.message ?: "An unexpected error occurred", exception)
+            }
+        }
+    }
+
+    /** Convert AppError to UserFriendlyError with actionable messages */
+    fun getUserFriendlyError(error: AppError): UserFriendlyError {
+        return when (error) {
+            is AppError.Permission ->
+                    UserFriendlyError(
+                            title = "Permission Denied",
+                            message =
+                                    "You don't have permission to ${error.operation}. Try logging out and back in to refresh your access.",
+                            action = ErrorAction.LOGOUT,
+                            exception = error.exception
+                    )
+            is AppError.Network ->
+                    UserFriendlyError(
+                            title = "Connection Error",
+                            message =
+                                    "Network error: ${error.cause}. Please check your internet connection and try again.",
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+            is AppError.Validation ->
+                    UserFriendlyError(
+                            title = "Validation Error",
+                            message = "Please fix: ${error.fields.joinToString(", ")}",
+                            action = ErrorAction.DISMISS,
+                            exception = error.exception
+                    )
+            is AppError.NotFound ->
+                    UserFriendlyError(
+                            title = "Not Found",
+                            message = "The ${error.resource} could not be found.",
+                            action = ErrorAction.DISMISS,
+                            exception = error.exception
+                    )
+            is AppError.Unknown ->
+                    UserFriendlyError(
+                            title = "Error",
+                            message = error.message,
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+            // Legacy error types
+            is AppError.NetworkError ->
+                    UserFriendlyError(
+                            title = "Connection Error",
+                            message = error.message,
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+            is AppError.AuthError ->
+                    UserFriendlyError(
+                            title = "Authentication Error",
+                            message = error.message,
+                            action = ErrorAction.LOGOUT,
+                            exception = error.exception
+                    )
+            is AppError.PermissionError ->
+                    UserFriendlyError(
+                            title = "Permission Required",
+                            message = error.message,
+                            action = ErrorAction.OPEN_SETTINGS,
+                            exception = null
+                    )
+            is AppError.StorageError ->
+                    UserFriendlyError(
+                            title = "Storage Error",
+                            message = error.message,
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+            is AppError.ValidationError ->
+                    UserFriendlyError(
+                            title = "Validation Error",
+                            message = error.message,
+                            action = ErrorAction.DISMISS,
+                            exception = null
+                    )
+            is AppError.FirestoreError ->
+                    UserFriendlyError(
+                            title = "Database Error",
+                            message = error.message,
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+            is AppError.UnknownError ->
+                    UserFriendlyError(
+                            title = "Error",
+                            message = error.message,
+                            action = ErrorAction.RETRY,
+                            exception = error.exception
+                    )
+        }
+    }
+
+    /** Legacy categorizeError for backward compatibility */
+    private fun categorizeErrorLegacy(exception: Throwable): AppError {
         return when (exception) {
             // Network errors
             is UnknownHostException,
@@ -180,6 +410,27 @@ object ErrorHandler {
             onRetry: (() -> Unit)?
     ) {
         when (error) {
+            is AppError.Network -> {
+                showNetworkErrorSnackbar(context, view, error.getMessage(), onRetry)
+            }
+            is AppError.Permission -> {
+                if (view != null && onRetry != null) {
+                    showErrorSnackbar(context, view, error.getMessage(), onRetry)
+                } else {
+                    showErrorToast(context, error.getMessage())
+                }
+            }
+            is AppError.Validation -> {
+                showValidationErrorToast(context, error.getMessage())
+            }
+            is AppError.NotFound, is AppError.Unknown -> {
+                if (view != null && onRetry != null) {
+                    showErrorSnackbar(context, view, error.getMessage(), onRetry)
+                } else {
+                    showErrorToast(context, error.getMessage())
+                }
+            }
+            // Legacy error types
             is AppError.NetworkError -> {
                 showNetworkErrorSnackbar(context, view, error.message, onRetry)
             }
@@ -288,6 +539,44 @@ object ErrorHandler {
         val crashlytics = FirebaseCrashlytics.getInstance()
 
         when (error) {
+            is AppError.Permission -> {
+                Log.e(TAG, "Permission Error: Cannot ${error.operation}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "permission")
+                    crashlytics.setCustomKey("operation", error.operation)
+                }
+            }
+            is AppError.Network -> {
+                Log.e(TAG, "Network Error: ${error.cause}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "network")
+                    crashlytics.setCustomKey("cause", error.cause)
+                }
+            }
+            is AppError.Validation -> {
+                Log.w(TAG, "Validation Error: ${error.fields.joinToString(", ")}")
+                // Don't log validation errors to Crashlytics (user input errors)
+                crashlytics.log("Validation Error: ${error.fields.joinToString(", ")}")
+            }
+            is AppError.NotFound -> {
+                Log.w(TAG, "Not Found: ${error.resource}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "not_found")
+                    crashlytics.setCustomKey("resource", error.resource)
+                }
+            }
+            is AppError.Unknown -> {
+                Log.e(TAG, "Unknown Error: ${error.message}", error.exception)
+                error.exception?.let {
+                    crashlytics.recordException(it)
+                    crashlytics.setCustomKey("error_type", "unknown")
+                    crashlytics.setCustomKey("error_message", error.message)
+                }
+            }
+            // Legacy error types
             is AppError.NetworkError -> {
                 Log.e(TAG, "Network Error: ${error.message}", error.exception)
                 error.exception?.let {
@@ -354,6 +643,12 @@ object ErrorHandler {
     /** Get user-friendly message from AppError */
     private fun AppError.getMessage(): String {
         return when (this) {
+            is AppError.Permission -> "You don't have permission to $operation"
+            is AppError.Network -> "Network error: $cause"
+            is AppError.Validation -> "Please fix: ${fields.joinToString(", ")}"
+            is AppError.NotFound -> "$resource not found"
+            is AppError.Unknown -> message
+            // Legacy types
             is AppError.NetworkError -> message
             is AppError.AuthError -> message
             is AppError.PermissionError -> message

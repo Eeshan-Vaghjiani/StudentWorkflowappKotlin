@@ -238,6 +238,14 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNavigation.selectedItemId = R.id.nav_groups
     }
 
+    fun navigateToNotifications() {
+        supportFragmentManager
+                .beginTransaction()
+                .replace(R.id.fragment_container, NotificationsFragment())
+                .addToBackStack(null)
+                .commit()
+    }
+
     /**
      * Monitor network connection status and update the connection status banner. Shows "No internet
      * connection" when offline, "Connecting..." when reconnecting, and hides the banner when

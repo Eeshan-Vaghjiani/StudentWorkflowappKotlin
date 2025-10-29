@@ -13,11 +13,13 @@ import com.example.loginandregistration.models.MessageStatus
 /**
  * Custom view for displaying message status indicators Shows different icons based on message
  * status:
- * - Sending: Clock icon
- * - Sent: Single checkmark
+ * - Sending: Clock icon (white)
+ * - Sent: Single checkmark (white)
  * - Delivered: Double gray checkmark
  * - Read: Double blue checkmark
- * - Failed: Error icon with retry capability
+ * - Failed: Error icon (red) - legacy status
+ * - Failed Retryable: Error icon (orange) with retry capability
+ * - Failed Permanent: Error icon (dark red) - no retry
  */
 class MessageStatusView
 @JvmOverloads
@@ -92,12 +94,34 @@ constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
                 setOnClickListener(null)
             }
             MessageStatus.FAILED -> {
-                // Failed: error icon with retry capability
+                // Failed: error icon with retry capability (legacy)
                 statusIconView.setImageResource(R.drawable.ic_error)
-                statusIconView.clearColorFilter()
+                statusIconView.setColorFilter(
+                        ContextCompat.getColor(context, android.R.color.holo_red_light)
+                )
                 statusIconView.alpha = 1.0f
                 isClickable = true
                 setOnClickListener { onRetryClickListener?.invoke() }
+            }
+            MessageStatus.FAILED_RETRYABLE -> {
+                // Failed but retryable: warning icon with retry capability
+                statusIconView.setImageResource(R.drawable.ic_error)
+                statusIconView.setColorFilter(
+                        ContextCompat.getColor(context, android.R.color.holo_orange_light)
+                )
+                statusIconView.alpha = 1.0f
+                isClickable = true
+                setOnClickListener { onRetryClickListener?.invoke() }
+            }
+            MessageStatus.FAILED_PERMANENT -> {
+                // Failed permanently: error icon, no retry
+                statusIconView.setImageResource(R.drawable.ic_error)
+                statusIconView.setColorFilter(
+                        ContextCompat.getColor(context, android.R.color.holo_red_dark)
+                )
+                statusIconView.alpha = 1.0f
+                isClickable = false
+                setOnClickListener(null)
             }
         }
     }

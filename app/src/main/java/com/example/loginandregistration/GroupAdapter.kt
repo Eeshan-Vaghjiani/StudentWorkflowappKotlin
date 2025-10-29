@@ -16,12 +16,35 @@ class GroupAdapter(private val onGroupClick: (Group) -> Unit) :
         ListAdapter<Group, GroupAdapter.GroupViewHolder>(GroupDiffCallback()) {
 
     class GroupViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val iconBackground: MaterialCardView =
+        private val iconBackground: MaterialCardView =
                 itemView.findViewById<ImageView>(R.id.iv_group_icon).parent as MaterialCardView
-        val groupIcon: ImageView = itemView.findViewById(R.id.iv_group_icon)
-        val groupName: TextView = itemView.findViewById(R.id.tv_group_name)
-        val groupDetails: TextView = itemView.findViewById(R.id.tv_group_details)
-        val assignmentChip: Chip = itemView.findViewById(R.id.chip_assignment_count)
+        private val groupIcon: ImageView = itemView.findViewById(R.id.iv_group_icon)
+        private val groupName: TextView = itemView.findViewById(R.id.tv_group_name)
+        private val groupDetails: TextView = itemView.findViewById(R.id.tv_group_details)
+        private val assignmentChip: Chip = itemView.findViewById(R.id.chip_assignment_count)
+
+        fun bind(group: Group, onGroupClick: (Group) -> Unit) {
+            groupName.text = group.name
+            groupDetails.text = group.details
+            assignmentChip.text = group.assignmentCount.toString()
+
+            // Set icon background color
+            try {
+                val color = Color.parseColor(group.iconColor)
+                iconBackground.setCardBackgroundColor(color)
+            } catch (e: IllegalArgumentException) {
+                iconBackground.setCardBackgroundColor(Color.parseColor("#007AFF"))
+            }
+
+            // Set icon resource
+            groupIcon.setImageResource(group.iconResource)
+
+            itemView.setOnClickListener { onGroupClick(group) }
+        }
+
+        fun updateAssignmentCount(count: Int) {
+            assignmentChip.text = count.toString()
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GroupViewHolder {
@@ -31,23 +54,25 @@ class GroupAdapter(private val onGroupClick: (Group) -> Unit) :
 
     override fun onBindViewHolder(holder: GroupViewHolder, position: Int) {
         val group = getItem(position)
+        holder.bind(group, onGroupClick)
+    }
 
-        holder.groupName.text = group.name
-        holder.groupDetails.text = group.details
-        holder.assignmentChip.text = group.assignmentCount.toString()
-
-        // Set icon background color
-        try {
-            val color = Color.parseColor(group.iconColor)
-            holder.iconBackground.setCardBackgroundColor(color)
-        } catch (e: IllegalArgumentException) {
-            holder.iconBackground.setCardBackgroundColor(Color.parseColor("#007AFF"))
+    override fun onBindViewHolder(
+            holder: GroupViewHolder,
+            position: Int,
+            payloads: MutableList<Any>
+    ) {
+        if (payloads.isEmpty()) {
+            super.onBindViewHolder(holder, position, payloads)
+        } else {
+            val group = getItem(position)
+            if (payloads.contains("ASSIGNMENT_COUNT_CHANGED")) {
+                // Only update assignment count
+                holder.updateAssignmentCount(group.assignmentCount)
+            } else {
+                super.onBindViewHolder(holder, position, payloads)
+            }
         }
-
-        // Set icon resource
-        holder.groupIcon.setImageResource(group.iconResource)
-
-        holder.itemView.setOnClickListener { onGroupClick(group) }
     }
 
     override fun onViewRecycled(holder: GroupViewHolder) {
@@ -63,6 +88,16 @@ class GroupAdapter(private val onGroupClick: (Group) -> Unit) :
 
         override fun areContentsTheSame(oldItem: Group, newItem: Group): Boolean {
             return oldItem == newItem
+        }
+
+        override fun getChangePayload(oldItem: Group, newItem: Group): Any? {
+            // Return payload for partial updates
+            if (oldItem.name == newItem.name) {
+                if (oldItem.assignmentCount != newItem.assignmentCount) {
+                    return "ASSIGNMENT_COUNT_CHANGED"
+                }
+            }
+            return super.getChangePayload(oldItem, newItem)
         }
     }
 }

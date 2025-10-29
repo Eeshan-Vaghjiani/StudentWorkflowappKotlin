@@ -1,393 +1,381 @@
-# Task 7: Tasks Display - Quick Reference
+# Task 7: Enhanced Offline Message Queue - Quick Reference
 
-## Overview
-Quick reference for the Tasks display implementation with proper query support and error handling.
+## For Developers Using This Feature
 
----
+### Message Status Types
 
-## Key Files Modified
-
-### 1. TasksFragment.kt
-**Location:** `app/src/main/java/com/example/loginandregistration/TasksFragment.kt`
-
-**Changes:**
-- Enhanced error handling for FAILED_PRECONDITION errors
-- Added specific check for missing Firestore indexes
-- Improved error messages for better user experience
-
-**Key Method:**
 ```kotlin
-private fun showError(error: ErrorHandler.AppError) {
-    // Checks for FAILED_PRECONDITION and shows user-friendly message
+enum class MessageStatus {
+    SENDING,              // Message is being sent
+    SENT,                 // Message sent successfully
+    DELIVERED,            // Message delivered to recipient
+    READ,                 // Message read by recipient
+    FAILED,               // Generic failure (legacy)
+    FAILED_RETRYABLE,     // Failed but will retry automatically (network issues)
+    FAILED_PERMANENT      // Failed permanently (permission errors, no retry)
 }
 ```
 
----
+### Setting Up Automatic Retry in Your ViewModel
 
-### 2. ErrorHandler.kt
-**Location:** `app/src/main/java/com/example/loginandregistration/utils/ErrorHandler.kt`
-
-**Changes:**
-- Added FAILED_PRECONDITION case to Firestore error handling
-- Provides clear message when database is being configured
-
-**Key Addition:**
 ```kotlin
-FirebaseFirestoreException.Code.FAILED_PRECONDITION -> {
-    AppError.FirestoreError(
-        "Database is being configured. This may take a few minutes. Please try again shortly.",
-        exception
+class ChatRoomViewModel(
+    application: Application,
+    private val chatRepository: ChatRepository
+) : AndroidViewModel(application) {
+    
+    private val retryManager = MessageRetryManager(
+        context = application,
+        chatRepository = chatRepository,
+        scope = viewModelScope
     )
-}
-```
-
----
-
-## Key Components
-
-### TaskRepository
-**Purpose:** Manages Firestore queries for tasks
-
-**Key Methods:**
-- `getUserTasksFlow()` - Real-time task updates
-- `getTaskStatsFlow()` - Real-time statistics
-- `createTask()` - Create new task
-- `updateTask()` - Update existing task
-- `deleteTask()` - Delete task
-
-**Query Details:**
-```kotlin
-tasksCollection
-    .whereEqualTo("userId", userId)
-    .orderBy("dueDate", Query.Direction.ASCENDING)
-```
-
----
-
-### TasksViewModel
-**Purpose:** Manages UI state and business logic
-
-**State Properties:**
-- `tasks: StateFlow<List<FirebaseTask>>` - Task list
-- `isLoading: StateFlow<Boolean>` - Loading state
-- `error: StateFlow<AppError?>` - Error state
-- `successMessage: StateFlow<String?>` - Success messages
-
-**Key Methods:**
-- `loadUserTasks()` - Manual refresh
-- `createTask()` - Create task
-- `updateTask()` - Update task
-- `deleteTask()` - Delete task
-
----
-
-### TasksFragment
-**Purpose:** Displays tasks and handles user interactions
-
-**Key Features:**
-- Real-time task updates
-- Category filtering (all, personal, group, assignment)
-- Task statistics display
-- Error handling with retry
-- Empty state handling
-- Swipe to refresh
-
----
-
-## Task Statistics
-
-### Calculated Statistics
-1. **Overdue**: Tasks past due date and not completed
-2. **Due Today**: Tasks with due date = today
-3. **Completed**: Tasks with status = "completed"
-
-### Calculation Logic
-```kotlin
-tasks.forEach { task ->
-    when {
-        task.status == "completed" -> completed++
-        task.dueDate != null && task.dueDate!! < now -> overdue++
-        task.dueDate != null && isSameDay(task.dueDate!!, now) -> dueToday++
+    
+    init {
+        // Start observing network connectivity
+        retryManager.startObserving()
+    }
+    
+    override fun onCleared() {
+        // Stop observing when ViewModel is cleared
+        retryManager.stopObserving()
+        super.onCleared()
+    }
+    
+    // Optional: Manual retry trigger
+    fun retryFailedMessages() {
+        viewModelScope.launch {
+            val result = retryManager.manualRetry()
+            if (result.isSuccess) {
+                val count = result.getOrNull() ?: 0
+                // Show success message: "$count messages retried"
+            }
+        }
     }
 }
 ```
 
----
+### Handling Retry in UI (Already Implemented)
 
-## Error Handling
+The MessageAdapter automatically handles retry clicks:
 
-### Error Types Handled
-
-1. **FAILED_PRECONDITION**
-   - Cause: Missing Firestore index
-   - Message: "Database is being configured. This may take a few minutes. Please try again shortly."
-   - Action: Retry button available
-
-2. **PERMISSION_DENIED**
-   - Cause: Firestore security rules deny access
-   - Message: "You don't have permission to access this data."
-   - Action: Retry button available
-
-3. **UNAVAILABLE**
-   - Cause: Firestore service temporarily unavailable
-   - Message: "Service temporarily unavailable. Please try again."
-   - Action: Retry button available
-
-4. **Network Errors**
-   - Cause: No internet connection
-   - Message: "Network error: [details]"
-   - Action: Retry button available
-
----
-
-## Query Requirements
-
-### Firestore Index Required
-```json
-{
-  "collectionGroup": "tasks",
-  "queryScope": "COLLECTION",
-  "fields": [
-    {
-      "fieldPath": "userId",
-      "order": "ASCENDING"
-    },
-    {
-      "fieldPath": "dueDate",
-      "order": "ASCENDING"
-    }
-  ]
-}
-```
-
-### Security Rules Required
-```javascript
-match /tasks/{taskId} {
-  allow read, write: if request.auth != null && 
-                       request.auth.uid == resource.data.userId;
-}
-```
-
----
-
-## Common Operations
-
-### Create a Task
 ```kotlin
-val task = FirebaseTask(
-    title = "Task Title",
-    description = "Description",
-    subject = "Subject",
-    category = "personal", // or "group", "assignment"
-    status = "pending",
-    priority = "medium", // or "low", "high"
-    dueDate = Timestamp(date)
+// In your Fragment/Activity
+val adapter = MessageAdapter(
+    currentUserId = currentUserId,
+    onRetryMessage = { message ->
+        // Retry the message
+        viewModel.retryMessage(message)
+    }
 )
-
-viewModel.createTask(task)
 ```
 
-### Filter Tasks by Category
+### Checking Queue Status
+
 ```kotlin
-// In TasksFragment
-val filteredTasks = when (currentFilter) {
-    "personal" -> tasks.filter { it.category == "personal" }
-    "group" -> tasks.filter { it.category == "group" }
-    "assignment" -> tasks.filter { it.category == "assignment" }
-    else -> tasks
+// Get count of pending messages
+val pendingCount = offlineQueue.getPendingMessageCount()
+
+// Get count of retryable failures
+val retryableCount = offlineQueue.getFailedRetryableCount()
+
+// Get count of permanent failures
+val permanentCount = offlineQueue.getFailedPermanentCount()
+
+// Get all messages that need retry
+val retryableMessages = offlineQueue.getAllRetryableMessages()
+```
+
+### Manual Message Retry
+
+```kotlin
+// In your ViewModel
+fun retryMessage(message: Message) {
+    viewModelScope.launch {
+        val result = chatRepository.retryMessage(message)
+        if (result.isSuccess) {
+            // Message sent successfully
+        } else {
+            // Handle failure
+        }
+    }
 }
 ```
 
-### Refresh Tasks
+### Clearing Failed Messages
+
 ```kotlin
-// Manual refresh
-viewModel.loadUserTasks()
+// Clear all permanently failed messages
+offlineQueue.clearPermanentlyFailedMessages()
 
-// Or use swipe to refresh
-swipeRefreshLayout.setOnRefreshListener {
-    viewModel.loadUserTasks()
-}
+// Clear all failed messages (retryable and permanent)
+offlineQueue.clearFailedMessages()
+
+// Clear entire queue
+offlineQueue.clearQueue()
 ```
 
----
+## Visual Indicators
 
-## UI Components
+### Message Status Icons
 
-### Statistics Card
-```xml
-<TextView android:id="@+id/tv_overdue_count" />
-<TextView android:id="@+id/tv_due_today_count" />
-<TextView android:id="@+id/tv_completed_count" />
-```
+| Status | Icon | Color | User Action |
+|--------|------|-------|-------------|
+| SENDING | 🕐 Clock | White (dim) | Wait |
+| SENT | ✓ Check | White (dim) | None |
+| DELIVERED | ✓✓ Double Check | White (dim) | None |
+| READ | ✓✓ Double Check | Blue | None |
+| FAILED_RETRYABLE | ⚠️ Error | Orange | Tap to retry |
+| FAILED_PERMANENT | ❌ Error | Dark Red | Cannot retry |
 
-### Category Buttons
-```xml
-<MaterialButton android:id="@+id/btn_all_tasks" />
-<MaterialButton android:id="@+id/btn_personal" />
-<MaterialButton android:id="@+id/btn_group" />
-<MaterialButton android:id="@+id/btn_assignments" />
-```
+### Color Meanings
+- **White (dim)**: Normal status, no action needed
+- **Blue**: Message has been read
+- **Orange**: Temporary failure, will retry automatically or tap to retry now
+- **Dark Red**: Permanent failure (permission error), cannot retry
 
-### Task List
-```xml
-<RecyclerView android:id="@+id/recycler_tasks" />
-```
+## Automatic Retry Behavior
 
-### Empty State
-```xml
-<LinearLayout android:id="@+id/empty_state_layout" />
-<TextView android:id="@+id/empty_state_text" />
-```
+### When Retry Happens
+1. **Network Restored**: Automatically retries when internet connection is restored
+2. **App Foreground**: Retries pending messages when app comes to foreground
+3. **Manual Trigger**: User taps retry button on failed message
 
----
+### Retry Limits
+- **Max Attempts**: 5 attempts per message
+- **Retry Interval**: Minimum 30 seconds between automatic retry attempts
+- **Delay Between Messages**: 500ms delay between individual message retries
 
-## Testing Quick Checks
+### What Gets Retried
+- Messages with `SENDING` status (stuck in queue)
+- Messages with `FAILED_RETRYABLE` status (network errors)
+- Messages that haven't exceeded max retry attempts
 
-### ✅ Basic Functionality
-1. Open Tasks screen → Tasks load
-2. Check statistics → Counts are accurate
-3. Create task → Appears immediately
-4. Filter by category → Shows correct tasks
+### What Doesn't Get Retried
+- Messages with `FAILED_PERMANENT` status (permission errors)
+- Messages that exceeded 5 retry attempts
+- Messages successfully sent (`SENT`, `DELIVERED`, `READ`)
 
-### ✅ Error Handling
-1. Disable network → Shows network error
-2. Click retry → Attempts to reload
-3. Error message is clear and helpful
+## Error Categorization
 
-### ✅ Real-time Updates
-1. Create task → Appears without refresh
-2. Update task → Changes reflect immediately
-3. Statistics update automatically
+### Retryable Errors (FAILED_RETRYABLE)
+- `UNAVAILABLE`: Firestore service temporarily unavailable
+- `DEADLINE_EXCEEDED`: Request timeout
+- `ABORTED`: Transaction aborted
+- Network errors (no internet connection)
+- Unknown Firestore errors (safe default)
 
----
+### Permanent Errors (FAILED_PERMANENT)
+- `PERMISSION_DENIED`: User doesn't have permission to send message
+- Messages that exceeded max retry attempts (5)
+
+## Testing Scenarios
+
+### Test Automatic Retry
+1. Turn off WiFi/mobile data
+2. Send a message → should show SENDING status
+3. Turn on WiFi/mobile data
+4. Message should automatically retry and change to SENT
+
+### Test Manual Retry
+1. Send message while offline → shows orange error icon
+2. Tap the error icon
+3. If online, message should send immediately
+
+### Test Permanent Failure
+1. Remove user from chat participants (simulate permission error)
+2. Try to send message
+3. Should show dark red error icon (not clickable)
+
+### Test Max Retry Attempts
+1. Keep device offline
+2. Send message (attempt 1)
+3. Manually retry 4 more times
+4. After 5th attempt, should convert to FAILED_PERMANENT
 
 ## Troubleshooting
 
-### Tasks Not Loading
-**Check:**
-1. User is authenticated
-2. Firestore rules allow read access
-3. Composite index exists
-4. Network connection is available
+### Messages Not Retrying Automatically
+- Check if MessageRetryManager is started in ViewModel
+- Verify network connectivity observer is working
+- Check if messages are marked as FAILED_RETRYABLE (not PERMANENT)
+- Ensure retry interval (30s) has passed since last attempt
 
-**Solution:**
-- Check Firebase Console for index status
-- Verify security rules are deployed
-- Check logcat for specific errors
+### Retry Button Not Working
+- Verify onRetryMessage callback is set in MessageAdapter
+- Check if message status is FAILED_RETRYABLE (not PERMANENT)
+- Ensure ChatRepository.retryMessage() is called in ViewModel
 
----
-
-### Statistics Incorrect
-**Check:**
-1. Task due dates are set correctly
-2. Task statuses are correct
-3. Calculation logic is working
-
-**Solution:**
-- Verify task data in Firestore Console
-- Check TaskRepository.getTaskStatsFlow() logic
-- Ensure real-time listener is active
-
----
-
-### FAILED_PRECONDITION Error
-**Cause:** Firestore index is missing or building
-
-**Solution:**
-1. Check Firebase Console → Firestore → Indexes
-2. Create index if missing
-3. Wait for index to build (can take several minutes)
-4. Click retry button in app
-
----
-
-### Tasks Not Sorted Correctly
-**Check:**
-1. Query uses orderBy("dueDate")
-2. Due dates are Timestamp objects
-3. Index supports sorting
-
-**Solution:**
-- Verify TaskRepository query
-- Check that composite index includes dueDate
-- Ensure tasks have valid due dates
-
----
+### Messages Stuck in SENDING
+- Check if offline queue is properly initialized
+- Verify ChatRepository has context for OfflineMessageQueue
+- Check for exceptions in sendMessage() method
 
 ## Performance Tips
 
-### Optimize Query Performance
-- ✅ Use composite indexes for complex queries
-- ✅ Limit query results if needed (pagination)
-- ✅ Use real-time listeners efficiently
-
-### Optimize UI Performance
-- ✅ Use RecyclerView for lists
-- ✅ Implement DiffUtil for efficient updates
-- ✅ Use lifecycle-aware Flow collection
-
-### Optimize Memory Usage
-- ✅ Remove listeners in awaitClose
-- ✅ Use ViewModel for data persistence
-- ✅ Avoid memory leaks from listeners
-
----
-
-## Related Tasks
-
-- **Task 5:** Dashboard real data integration (uses same repository)
-- **Task 6:** Groups display (similar implementation pattern)
-- **Task 8:** Calendar integration (will use TaskRepository)
-- **Task 9:** Error handling (already integrated)
-
----
-
-## Requirements Met
-
-✅ **6.1** - Query tasks by userId
-✅ **6.2** - Order tasks by dueDate
-✅ **6.3** - Handle FAILED_PRECONDITION errors
-✅ **6.4** - Display tasks with details
-✅ **6.5** - Real-time updates
-✅ **6.6** - Accurate statistics
-✅ **6.7** - Empty state handling
-
----
-
-## Quick Commands
-
-### Deploy Firestore Index
-```bash
-firebase deploy --only firestore:indexes
+### Optimize Queue Size
+```kotlin
+// Periodically clean up old permanent failures
+viewModelScope.launch {
+    delay(3600000) // Every hour
+    offlineQueue.clearPermanentlyFailedMessages()
+}
 ```
 
-### Check Index Status
-```bash
-firebase firestore:indexes
+### Batch Operations
+```kotlin
+// Process all queued messages at once
+chatRepository.processQueuedMessages()
+
+// Or retry only failed messages
+chatRepository.retryFailedMessages()
 ```
 
-### View Firestore Rules
-```bash
-firebase firestore:rules
+### Monitor Queue Health
+```kotlin
+// Check queue status periodically
+val queueHealth = QueueHealth(
+    pending = offlineQueue.getPendingMessageCount(),
+    retryable = offlineQueue.getFailedRetryableCount(),
+    permanent = offlineQueue.getFailedPermanentCount()
+)
+
+// Alert if too many permanent failures
+if (queueHealth.permanent > 10) {
+    // Show user notification or clear old failures
+}
 ```
 
-### Deploy Firestore Rules
-```bash
-firebase deploy --only firestore:rules
+## API Reference
+
+### OfflineMessageQueue
+```kotlin
+// Queue management
+fun queueMessage(message: Message)
+fun removeMessage(messageId: String)
+
+// Status updates
+fun markMessageAsFailedRetryable(messageId: String)
+fun markMessageAsFailedPermanent(messageId: String)
+fun updateMessageStatus(messageId: String, status: MessageStatus)
+fun incrementAttempts(messageId: String)
+
+// Queries
+fun getQueuedMessages(): List<Message>
+fun getQueuedMessagesForChat(chatId: String): List<Message>
+fun getAllRetryableMessages(): List<Message>
+fun getPendingMessageCount(): Int
+fun getFailedRetryableCount(): Int
+fun getFailedPermanentCount(): Int
+
+// Cleanup
+fun clearQueue()
+fun clearFailedMessages()
+fun clearPermanentlyFailedMessages()
 ```
 
----
+### ChatRepository
+```kotlin
+// Retry operations
+suspend fun retryMessage(message: Message): Result<Message>
+suspend fun retryFailedMessages(): Result<Int>
+suspend fun processQueuedMessages(): Result<Int>
 
-## Contact & Support
+// Queue access
+fun getQueuedMessagesForChat(chatId: String): List<Message>
+fun getAllQueuedMessages(): List<Message>
+fun clearOfflineQueue()
+```
 
-For issues or questions:
-1. Check logcat for error details
-2. Verify Firebase Console configuration
-3. Review implementation summary document
-4. Consult testing guide for specific scenarios
+### MessageRetryManager
+```kotlin
+// Lifecycle
+fun startObserving()
+fun stopObserving()
 
----
+// Operations
+suspend fun manualRetry(): Result<Int>
+fun isNetworkAvailable(): Boolean
+```
 
-**Last Updated:** 2025-10-18
-**Status:** ✅ Complete
-**Version:** 1.0
+### NetworkConnectivityObserver
+```kotlin
+// Observe network state
+fun observe(): Flow<Boolean>
+
+// Check current state
+fun isNetworkAvailable(): Boolean
+fun isNetworkConnected(): Boolean
+```
+
+## Best Practices
+
+1. **Always start MessageRetryManager in ViewModel init**
+2. **Always stop MessageRetryManager in onCleared()**
+3. **Use viewModelScope for retry operations**
+4. **Periodically clean up permanent failures**
+5. **Show user feedback for manual retry results**
+6. **Don't retry on FAILED_PERMANENT status**
+7. **Respect retry limits (max 5 attempts)**
+8. **Add delay between retries to avoid server overload**
+
+## Common Patterns
+
+### Show Retry Status to User
+```kotlin
+// In your ViewModel
+val retryStatus = MutableLiveData<String>()
+
+fun retryFailedMessages() {
+    viewModelScope.launch {
+        retryStatus.value = "Retrying messages..."
+        val result = retryManager.manualRetry()
+        retryStatus.value = if (result.isSuccess) {
+            val count = result.getOrNull() ?: 0
+            "Successfully retried $count messages"
+        } else {
+            "Failed to retry messages"
+        }
+    }
+}
+```
+
+### Monitor Network State
+```kotlin
+// In your ViewModel
+val isOnline = MutableLiveData<Boolean>()
+
+init {
+    viewModelScope.launch {
+        networkObserver.observe().collect { connected ->
+            isOnline.value = connected
+            if (connected) {
+                // Optionally trigger manual retry
+                retryFailedMessages()
+            }
+        }
+    }
+}
+```
+
+### Show Queue Status
+```kotlin
+// In your ViewModel
+val queueStatus = MutableLiveData<QueueStatus>()
+
+fun updateQueueStatus() {
+    queueStatus.value = QueueStatus(
+        pending = offlineQueue.getPendingMessageCount(),
+        retryable = offlineQueue.getFailedRetryableCount(),
+        permanent = offlineQueue.getFailedPermanentCount()
+    )
+}
+
+data class QueueStatus(
+    val pending: Int,
+    val retryable: Int,
+    val permanent: Int
+) {
+    val total = pending + retryable + permanent
+    val hasFailures = retryable > 0 || permanent > 0
+}
+```
