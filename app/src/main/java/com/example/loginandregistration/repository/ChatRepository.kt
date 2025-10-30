@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.loginandregistration.models.*
+import com.example.loginandregistration.utils.MessageValidator
 import com.example.loginandregistration.utils.OfflineMessageQueue
 import com.example.loginandregistration.utils.safeFirestoreCall
 import com.example.loginandregistration.validation.FirestoreDataValidator
@@ -65,7 +66,11 @@ class ChatRepository(
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Error validating participant access", e)
+            Log.e(
+                    TAG,
+                    "Error validating participant access - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -148,7 +153,7 @@ class ChatRepository(
                                                 } catch (e: Exception) {
                                                     Log.e(
                                                             TAG,
-                                                            "Error parsing chat document ${doc.id}",
+                                                            "Error parsing chat document - chatId: ${doc.id}, userId: ${getCurrentUserId()}, error: ${e.message}",
                                                             e
                                                     )
                                                     null
@@ -195,7 +200,11 @@ class ChatRepository(
             )
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "createUserDocument: Error creating user document", e)
+            Log.e(
+                    TAG,
+                    "createUserDocument: Error creating user document - userId: ${userInfo.userId}, displayName: ${userInfo.displayName}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -359,7 +368,11 @@ class ChatRepository(
 
                     Result.success(chat)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error creating direct chat", e)
+                    Log.e(
+                            TAG,
+                            "Error creating direct chat - currentUserId: ${getCurrentUserId()}, otherUserId: $otherUserId, error: ${e.message}",
+                            e
+                    )
                     Result.failure(e)
                 }
             }
@@ -550,7 +563,11 @@ class ChatRepository(
 
                     Result.success(chat)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error creating group chat", e)
+                    Log.e(
+                            TAG,
+                            "Error creating group chat - groupId: $groupId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                            e
+                    )
 
                     // Handle permission errors gracefully
                     if (e is FirebaseFirestoreException &&
@@ -676,13 +693,20 @@ class ChatRepository(
                     Log.d(TAG, "ensureGroupChatsExist: Created $createdCount new group chats")
                     Result.success(createdCount)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error ensuring group chats exist", e)
+                    Log.e(
+                            TAG,
+                            "Error ensuring group chats exist - userId: ${getCurrentUserId()}, error: ${e.message}",
+                            e
+                    )
 
                     // Handle permission errors gracefully
                     if (e is FirebaseFirestoreException &&
                                     e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
                     ) {
-                        Log.e(TAG, "ensureGroupChatsExist: Permission denied error caught")
+                        Log.e(
+                                TAG,
+                                "ensureGroupChatsExist: Permission denied error caught - userId: ${getCurrentUserId()}"
+                        )
                         return@withContext Result.failure(
                                 Exception(
                                         "You don't have permission to access chat data. Please try logging out and back in."
@@ -694,7 +718,18 @@ class ChatRepository(
                 }
             }
 
-    suspend fun sendMessage(chatId: String, text: String, retryCount: Int = 0): Result<Message> =
+    suspend fun sendMessage(
+            chatId: String,
+            content: String,
+            type: MessageType = MessageType.TEXT,
+            imageUrl: String? = null,
+            videoUrl: String? = null,
+            audioUrl: String? = null,
+            fileUrl: String? = null,
+            fileName: String? = null,
+            fileSize: Long? = null,
+            retryCount: Int = 0
+    ): Result<Message> =
             withContext(Dispatchers.IO) {
                 return@withContext try {
                     if (getCurrentUserId().isEmpty()) {
@@ -712,14 +747,16 @@ class ChatRepository(
                     // Validate and sanitize message text
                     val (validation, sanitizedText) =
                             com.example.loginandregistration.utils.InputValidator
-                                    .validateAndSanitizeMessage(text)
+                                    .validateAndSanitizeMessage(content)
                     if (!validation.isValid) {
                         return@withContext Result.failure(
                                 Exception(validation.errorMessage ?: "Invalid message")
                         )
                     }
 
-                    if (sanitizedText.isNullOrBlank()) {
+                    // For text messages, content cannot be empty
+                    // For media messages, content can be empty but must have media URL
+                    if (type == MessageType.TEXT && sanitizedText.isNullOrBlank()) {
                         return@withContext Result.failure(Exception("Message cannot be empty"))
                     }
 
@@ -737,6 +774,8 @@ class ChatRepository(
                                     .document()
                                     .id
 
+                    // Task 5.1: Create Message object with all required fields
+                    // Task 5.2: Safely handle null optional parameters
                     val message =
                             Message(
                                     id = messageId,
@@ -744,13 +783,44 @@ class ChatRepository(
                                     senderId = getCurrentUserId(),
                                     senderName = currentUser.displayName,
                                     senderImageUrl = currentUser.profileImageUrl,
-                                    text = sanitizedText,
+                                    text = sanitizedText ?: "",
+                                    imageUrl = imageUrl,
+                                    videoUrl = videoUrl,
+                                    audioUrl = audioUrl,
+                                    documentUrl = fileUrl,
+                                    documentName = fileName,
+                                    documentSize = fileSize,
+                                    attachmentUrl = null,
+                                    attachmentFileName = null,
+                                    attachmentFileSize = null,
+                                    attachmentMimeType = null,
+                                    attachmentType = null,
                                     timestamp = Date(),
                                     readBy = listOf(getCurrentUserId()),
-                                    status = MessageStatus.SENDING
+                                    status = MessageStatus.SENDING,
+                                    type = type
                             )
 
-                    // Validate message data before Firestore operation
+                    // Task 5.1: Validate using MessageValidator before sending
+                    val messageValidation = MessageValidator.validate(message)
+                    when (messageValidation) {
+                        is MessageValidator.ValidationResult.Invalid -> {
+                            Log.e(
+                                    TAG,
+                                    "sendMessage: Message validation failed: ${messageValidation.errors.joinToString(", ")}"
+                            )
+                            return@withContext Result.failure(
+                                    Exception(
+                                            "Message validation failed: ${messageValidation.errors.joinToString(", ")}"
+                                    )
+                            )
+                        }
+                        is MessageValidator.ValidationResult.Valid -> {
+                            Log.d(TAG, "sendMessage: Message validation passed")
+                        }
+                    }
+
+                    // Validate message data before Firestore operation (additional validation)
                     val validationResult = validator.validateMessage(message)
                     if (!validationResult.isValid) {
                         return@withContext Result.failure(ValidationException(validationResult))
@@ -802,7 +872,7 @@ class ChatRepository(
                                     transaction.update(
                                             chatRef,
                                             mapOf(
-                                                    "lastMessage" to sanitizedText,
+                                                    "lastMessage" to (sanitizedText ?: ""),
                                                     "lastMessageTime" to Date(),
                                                     "lastMessageSenderId" to getCurrentUserId(),
                                                     "unreadCount" to newUnreadCount
@@ -874,16 +944,33 @@ class ChatRepository(
                     // Remove from queue on success
                     offlineQueue?.removeMessage(messageId)
 
+                    // Task 5.3: Handle notification permission errors gracefully
                     // Trigger notifications for recipients (don't fail if this fails)
                     try {
                         triggerNotifications(chatId, message)
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to trigger notifications, but message was sent", e)
+                        // Log permission errors but don't fail the message send
+                        if (e is FirebaseFirestoreException &&
+                                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                        ) {
+                            Log.w(
+                                    TAG,
+                                    "Permission denied when triggering notifications, but message was sent successfully",
+                                    e
+                            )
+                        } else {
+                            Log.w(TAG, "Failed to trigger notifications, but message was sent", e)
+                        }
+                        // Continue with message send even if notification fails
                     }
 
                     Result.success(message.copy(status = MessageStatus.SENT))
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error sending message", e)
+                    Log.e(
+                            TAG,
+                            "Error sending message - chatId: $chatId, userId: ${getCurrentUserId()}, messageType: $type, error: ${e.message}",
+                            e
+                    )
                     Result.failure(e)
                 }
             }
@@ -1037,12 +1124,20 @@ class ChatRepository(
                 Log.d(TAG, "sendImageMessage: Image message sent successfully")
                 Result.success(message)
             } catch (sendError: Exception) {
-                Log.e(TAG, "sendImageMessage: Error sending image message", sendError)
+                Log.e(
+                        TAG,
+                        "sendImageMessage: Error sending image message - chatId: $chatId, messageId: $messageId, userId: ${getCurrentUserId()}, error: ${sendError.message}",
+                        sendError
+                )
                 offlineQueue?.markMessageAsFailed(messageId)
                 Result.failure(sendError)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "sendImageMessage: Unexpected error", e)
+            Log.e(
+                    TAG,
+                    "sendImageMessage: Unexpected error - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1206,12 +1301,20 @@ class ChatRepository(
                 Log.d(TAG, "sendDocumentMessage: Document message sent successfully")
                 Result.success(message)
             } catch (sendError: Exception) {
-                Log.e(TAG, "sendDocumentMessage: Error sending document message", sendError)
+                Log.e(
+                        TAG,
+                        "sendDocumentMessage: Error sending document message - chatId: $chatId, messageId: $messageId, userId: ${getCurrentUserId()}, fileName: $fileName, error: ${sendError.message}",
+                        sendError
+                )
                 offlineQueue?.markMessageAsFailed(messageId)
                 Result.failure(sendError)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "sendDocumentMessage: Unexpected error", e)
+            Log.e(
+                    TAG,
+                    "sendDocumentMessage: Unexpected error - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1229,7 +1332,11 @@ class ChatRepository(
                 return@callbackFlow
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error validating participant access", e)
+            Log.e(
+                    TAG,
+                    "Error validating participant access - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             trySend(emptyList())
             close(e)
             return@callbackFlow
@@ -1291,7 +1398,11 @@ class ChatRepository(
                                                 try {
                                                     doc.toObject(Message::class.java)
                                                 } catch (e: Exception) {
-                                                    Log.e(TAG, "Error parsing message ${doc.id}", e)
+                                                    Log.e(
+                                                            TAG,
+                                                            "Error parsing message - messageId: ${doc.id}, chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                                                            e
+                                                    )
                                                     null
                                                 }
                                             }
@@ -1330,7 +1441,11 @@ class ChatRepository(
                                 try {
                                     doc.toObject(Message::class.java)
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Error parsing message", e)
+                                    Log.e(
+                                            TAG,
+                                            "Error parsing message - messageId: ${doc.id}, chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                                            e
+                                    )
                                     null
                                 }
                             }
@@ -1338,7 +1453,11 @@ class ChatRepository(
 
             Result.success(messages)
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading more messages", e)
+            Log.e(
+                    TAG,
+                    "Error loading more messages - chatId: $chatId, userId: ${getCurrentUserId()}, oldestMessageId: ${oldestMessage.id}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1426,7 +1545,11 @@ class ChatRepository(
             Log.d(TAG, "markMessagesAsRead: Successfully marked messages as read")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Error marking messages as read", e)
+            Log.e(
+                    TAG,
+                    "Error marking messages as read - chatId: $chatId, userId: ${getCurrentUserId()}, messageCount: ${messageIds.size}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1498,7 +1621,11 @@ class ChatRepository(
                             "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
                     )
                 } catch (e: Exception) {
-                    Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
+                    Log.e(
+                            TAG,
+                            "searchUsers: Error parsing user document (name search) - userId: ${doc.id}, query: '$query', error: ${e.message}",
+                            e
+                    )
                 }
             }
 
@@ -1534,7 +1661,11 @@ class ChatRepository(
                             "searchUsers: Added user ${userInfo.displayName} (${userInfo.userId})"
                     )
                 } catch (e: Exception) {
-                    Log.e(TAG, "searchUsers: Error parsing user document ${doc.id}", e)
+                    Log.e(
+                            TAG,
+                            "searchUsers: Error parsing user document (email search) - userId: ${doc.id}, query: '$query', error: ${e.message}",
+                            e
+                    )
                 }
             }
 
@@ -1546,7 +1677,11 @@ class ChatRepository(
 
             Result.success(filteredUsers.toList())
         } catch (e: Exception) {
-            Log.e(TAG, "Error searching users", e)
+            Log.e(
+                    TAG,
+                    "Error searching users - query: '$query', userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1618,7 +1753,11 @@ class ChatRepository(
             Log.d(TAG, "getUserInfo: Successfully created UserInfo for ${userInfo.displayName}")
             Result.success(userInfo)
         } catch (e: Exception) {
-            Log.e(TAG, "getUserInfo: Error getting user info for $userId", e)
+            Log.e(
+                    TAG,
+                    "getUserInfo: Error getting user info - targetUserId: $userId, currentUserId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1673,7 +1812,11 @@ class ChatRepository(
                     )
                     .await()
         } catch (e: Exception) {
-            Log.e(TAG, "Error updating last message", e)
+            Log.e(
+                    TAG,
+                    "Error updating last message - chatId: $chatId, senderId: $senderId, message: '$message', error: ${e.message}",
+                    e
+            )
         }
     }
 
@@ -1711,7 +1854,11 @@ class ChatRepository(
 
             result
         } catch (e: Exception) {
-            Log.e(TAG, "Error retrying message", e)
+            Log.e(
+                    TAG,
+                    "Error retrying message - messageId: ${message.id}, chatId: ${message.chatId}, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             offlineQueue?.markMessageAsFailed(message.id)
             Result.failure(e)
         }
@@ -1720,53 +1867,129 @@ class ChatRepository(
     /** Process all queued messages (called when connection is restored) */
     suspend fun processQueuedMessages(): Result<Int> {
         return try {
+            // Task 4.1: Add null safety checks at function entry
             val queuedMessages = offlineQueue?.getQueuedMessages() ?: emptyList()
+
+            // Filter out any null messages before processing
+            val nonNullMessages = queuedMessages.filterNotNull()
+
+            // Log warning if null messages are found - include where they came from and queue state
+            if (nonNullMessages.size < queuedMessages.size) {
+                val nullCount = queuedMessages.size - nonNullMessages.size
+                Log.w(
+                        TAG,
+                        "processQueuedMessages: Found $nullCount null messages in queue - source: OfflineMessageQueue, queueSize: ${queuedMessages.size}, operation: PROCESS, userId: ${getCurrentUserId()}"
+                )
+            }
+
+            // Task 4.3: Add safe null check before accessing message.status
+            // Only process messages with SENDING or FAILED status
             val pendingMessages =
-                    queuedMessages.filter {
-                        it.status == MessageStatus.SENDING ||
-                                it.status == MessageStatus.FAILED_RETRYABLE
+                    nonNullMessages.filter { message ->
+                        message.status == MessageStatus.SENDING ||
+                                message.status == MessageStatus.FAILED_RETRYABLE
                     }
 
             if (pendingMessages.isEmpty()) {
-                Log.d(TAG, "No pending messages to process")
+                Log.d(TAG, "processQueuedMessages: No pending messages to process")
                 return Result.success(0)
             }
 
-            Log.d(TAG, "Processing ${pendingMessages.size} queued messages")
+            Log.d(TAG, "processQueuedMessages: Processing ${pendingMessages.size} queued messages")
             var successCount = 0
             var failureCount = 0
 
             for (message in pendingMessages) {
+                // Task 4.4: Add try-catch around individual message processing
                 try {
+                    // Task 4.2: Validate each message before processing
+                    val validationResult = MessageValidator.validate(message)
+
+                    when (validationResult) {
+                        is MessageValidator.ValidationResult.Invalid -> {
+                            // Skip invalid messages and log errors
+                            Log.e(
+                                    TAG,
+                                    "processQueuedMessages: Skipping invalid message ${message.id} in chat ${message.chatId}. " +
+                                            "Errors: ${validationResult.errors.joinToString(", ")}"
+                            )
+
+                            // Remove invalid messages from queue
+                            offlineQueue?.removeMessage(message.id)
+                            failureCount++
+                            continue
+                        }
+                        is MessageValidator.ValidationResult.Valid -> {
+                            // Message is valid, proceed with processing
+                            Log.d(
+                                    TAG,
+                                    "processQueuedMessages: Processing valid message ${message.id} for user ${getCurrentUserId()} in chat ${message.chatId}"
+                            )
+                        }
+                    }
+
                     // Add small delay between retries to avoid overwhelming the server
                     kotlinx.coroutines.delay(500)
 
                     // Increment attempt counter
                     offlineQueue?.incrementAttempts(message.id)
 
-                    val result = sendMessage(message.chatId, message.text, retryCount = 0)
+                    val result =
+                            sendMessage(
+                                    chatId = message.chatId,
+                                    content = message.text,
+                                    type = message.getMessageType(),
+                                    imageUrl = message.imageUrl,
+                                    videoUrl = message.videoUrl,
+                                    audioUrl = message.audioUrl,
+                                    fileUrl = message.documentUrl,
+                                    fileName = message.documentName,
+                                    fileSize = message.documentSize,
+                                    retryCount = 0
+                            )
                     if (result.isSuccess) {
                         successCount++
-                        Log.d(TAG, "Successfully sent queued message ${message.id}")
+                        Log.d(
+                                TAG,
+                                "processQueuedMessages: Successfully sent queued message ${message.id} in chat ${message.chatId}"
+                        )
                     } else {
                         failureCount++
+                        // Task 4.4: Log detailed context when errors occur
                         Log.w(
                                 TAG,
-                                "Failed to send queued message ${message.id}",
+                                "processQueuedMessages: Failed to send queued message ${message.id}. " +
+                                        "User: ${getCurrentUserId()}, Chat: ${message.chatId}, " +
+                                        "Error: ${result.exceptionOrNull()?.message}",
                                 result.exceptionOrNull()
                         )
                         // Failure categorization is already handled in sendMessage
                     }
                 } catch (e: Exception) {
+                    // Task 4.4: Continue processing remaining messages if one fails
                     failureCount++
-                    Log.e(TAG, "Error processing queued message ${message.id}", e)
+                    // Log detailed context when errors occur
+                    Log.e(
+                            TAG,
+                            "processQueuedMessages: Error processing queued message ${message.id}. " +
+                                    "User: ${getCurrentUserId()}, Chat: ${message.chatId}, Sender: ${message.senderId}",
+                            e
+                    )
+                    // Continue to next message instead of failing completely
                 }
             }
 
-            Log.d(TAG, "Processed queued messages: $successCount succeeded, $failureCount failed")
+            Log.d(
+                    TAG,
+                    "processQueuedMessages: Completed processing. $successCount succeeded, $failureCount failed"
+            )
             Result.success(successCount)
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing queued messages", e)
+            Log.e(
+                    TAG,
+                    "processQueuedMessages: Unexpected error processing queued messages - userId: ${getCurrentUserId()}, queueSize: ${offlineQueue?.getQueuedMessages()?.size ?: 0}, error: ${e.message}",
+                    e
+            )
             Result.failure(e)
         }
     }
@@ -1795,7 +2018,19 @@ class ChatRepository(
                     // Increment attempt counter
                     offlineQueue?.incrementAttempts(message.id)
 
-                    val result = sendMessage(message.chatId, message.text, retryCount = 0)
+                    val result =
+                            sendMessage(
+                                    chatId = message.chatId,
+                                    content = message.text,
+                                    type = message.getMessageType(),
+                                    imageUrl = message.imageUrl,
+                                    videoUrl = message.videoUrl,
+                                    audioUrl = message.audioUrl,
+                                    fileUrl = message.documentUrl,
+                                    fileName = message.documentName,
+                                    fileSize = message.documentSize,
+                                    retryCount = 0
+                            )
                     if (result.isSuccess) {
                         successCount++
                         Log.d(TAG, "Successfully retried message ${message.id}")
@@ -2034,12 +2269,13 @@ class ChatRepository(
 
             Log.d(TAG, "setTypingStatus: Setting typing status to $isTyping for chat $chatId")
 
-            // Fix: Use Date() which Firestore automatically converts to Timestamp
+            // Task 6.3: Ensure timestamp is stored as Firestore Timestamp object, not Long
+            // Use Timestamp.now() when setting typing status
             val typingData =
                     mapOf(
                             "userId" to getCurrentUserId(),
                             "isTyping" to isTyping,
-                            "timestamp" to Date()
+                            "timestamp" to com.google.firebase.Timestamp.now()
                     )
 
             // Use safeFirestoreCall for proper error handling
@@ -2139,10 +2375,39 @@ class ChatRepository(
                                             try {
                                                 val userId = doc.getString("userId")
                                                 val isTyping = doc.getBoolean("isTyping") ?: false
-                                                // Fix: Use getTimestamp instead of getDate for
-                                                // proper Firestore Timestamp parsing
+
+                                                // Task 6.1: Handle multiple timestamp types
+                                                // Check if timestamp field is Firestore Timestamp
+                                                // type
+                                                // Handle Long type for backward compatibility
+                                                // (convert to Timestamp)
                                                 val timestamp =
-                                                        doc.getTimestamp("timestamp")?.toDate()
+                                                        when (val timestampField =
+                                                                        doc.get("timestamp")
+                                                        ) {
+                                                            is com.google.firebase.Timestamp -> {
+                                                                // Firestore Timestamp type
+                                                                timestampField.toDate()
+                                                            }
+                                                            is Long -> {
+                                                                // Long type for backward
+                                                                // compatibility
+                                                                Date(timestampField)
+                                                            }
+                                                            is Date -> {
+                                                                // Date type (already converted)
+                                                                timestampField
+                                                            }
+                                                            else -> {
+                                                                // Task 6.1: Log warning and skip if
+                                                                // timestamp is invalid type
+                                                                Log.w(
+                                                                        TAG,
+                                                                        "getTypingUsers: Invalid timestamp type for user ${doc.id}: ${timestampField?.javaClass?.simpleName}"
+                                                                )
+                                                                null
+                                                            }
+                                                        }
 
                                                 // Only include users who are typing and updated
                                                 // within last 10 seconds (increased from 5 for
@@ -2160,11 +2425,15 @@ class ChatRepository(
                                                     null
                                                 }
                                             } catch (e: Exception) {
+                                                // Task 6.2: Log detailed error with document ID
+                                                // when parsing fails
                                                 Log.e(
                                                         TAG,
                                                         "getTypingUsers: Error parsing typing status document ${doc.id}",
                                                         e
                                                 )
+                                                // Task 6.2: Continue processing other users if one
+                                                // fails
                                                 // Return null to filter out this document without
                                                 // crashing
                                                 null

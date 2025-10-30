@@ -18,6 +18,7 @@ class UserRepository {
 
     suspend fun createOrUpdateUser(): Boolean =
             withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
                 val user = auth.currentUser ?: return@withContext false
                 return@withContext try {
                     val displayName = user.displayName ?: user.email?.substringBefore("@") ?: "User"
@@ -34,8 +35,16 @@ class UserRepository {
                             )
 
                     usersCollection.document(user.uid).set(firebaseUser).await()
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.d("UserRepository", "createOrUpdateUser took ${duration}ms")
                     true
                 } catch (e: Exception) {
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.w(
+                            "UserRepository",
+                            "createOrUpdateUser failed after ${duration}ms",
+                            e
+                    )
                     false
                 }
             }
@@ -65,6 +74,7 @@ class UserRepository {
             withContext(Dispatchers.IO) {
                 if (query.length < 2) return@withContext emptyList()
 
+                val startTime = System.currentTimeMillis()
                 return@withContext try {
                     val emailResults =
                             usersCollection
@@ -84,8 +94,20 @@ class UserRepository {
                                     .await()
                                     .toObjects(FirebaseUser::class.java)
 
-                    (emailResults + nameResults).distinctBy { it.uid }
+                    val results = (emailResults + nameResults).distinctBy { it.uid }
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.d(
+                            "UserRepository",
+                            "searchUsers('$query') took ${duration}ms, found ${results.size} users"
+                    )
+                    results
                 } catch (e: Exception) {
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.w(
+                            "UserRepository",
+                            "searchUsers('$query') failed after ${duration}ms",
+                            e
+                    )
                     emptyList()
                 }
             }

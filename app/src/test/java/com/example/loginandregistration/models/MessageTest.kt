@@ -210,4 +210,200 @@ class MessageTest {
         assertTrue(types.contains(MessageType.IMAGE))
         assertTrue(types.contains(MessageType.DOCUMENT))
     }
+
+    // Null safety and validation tests
+
+    @Test
+    fun `message creation with valid data succeeds`() {
+        val message =
+                Message(
+                        id = "msg123",
+                        chatId = "chat123",
+                        senderId = "user123",
+                        text = "Hello, world!",
+                        timestamp = Date()
+                )
+
+        assertEquals("msg123", message.id)
+        assertEquals("chat123", message.chatId)
+        assertEquals("user123", message.senderId)
+        assertEquals("Hello, world!", message.text)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `message creation with blank id throws exception`() {
+        Message(id = "", chatId = "chat123", senderId = "user123", text = "Hello")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `message creation with blank chatId throws exception`() {
+        Message(id = "msg123", chatId = "", senderId = "user123", text = "Hello")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `message creation with blank senderId throws exception`() {
+        Message(id = "msg123", chatId = "chat123", senderId = "", text = "Hello")
+    }
+
+    @Test
+    fun `fromFirestore with valid document returns message`() {
+        // Create a mock DocumentSnapshot
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderName")).thenReturn("John Doe")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderImageUrl")).thenReturn("")
+        org.mockito.Mockito.`when`(mockDoc.getString("text")).thenReturn("Hello")
+        org.mockito.Mockito.`when`(mockDoc.getDate("timestamp")).thenReturn(Date())
+        org.mockito.Mockito.`when`(mockDoc.get("readBy")).thenReturn(emptyList<String>())
+        org.mockito.Mockito.`when`(mockDoc.getString("status")).thenReturn("SENT")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNotNull(message)
+        assertEquals("msg123", message?.id)
+        assertEquals("chat123", message?.chatId)
+        assertEquals("user123", message?.senderId)
+        assertEquals("Hello", message?.text)
+    }
+
+    @Test
+    fun `fromFirestore with missing chatId returns null`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn(null)
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNull(message)
+    }
+
+    @Test
+    fun `fromFirestore with missing senderId returns null`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn(null)
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNull(message)
+    }
+
+    @Test
+    fun `fromFirestore with blank chatId returns null`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNull(message)
+    }
+
+    @Test
+    fun `fromFirestore with blank senderId returns null`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNull(message)
+    }
+
+    @Test
+    fun `fromFirestore with invalid data types returns null`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+        // Simulate an exception during parsing
+        org.mockito.Mockito.`when`(mockDoc.getString("text"))
+                .thenThrow(RuntimeException("Parse error"))
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNull(message)
+    }
+
+    @Test
+    fun `fromFirestore uses default values for optional fields`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderName")).thenReturn(null)
+        org.mockito.Mockito.`when`(mockDoc.getString("text")).thenReturn(null)
+        org.mockito.Mockito.`when`(mockDoc.getDate("timestamp")).thenReturn(null)
+        org.mockito.Mockito.`when`(mockDoc.get("readBy")).thenReturn(null)
+        org.mockito.Mockito.`when`(mockDoc.getString("status")).thenReturn(null)
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNotNull(message)
+        assertEquals("", message?.senderName)
+        assertEquals("", message?.text)
+        assertNotNull(message?.timestamp)
+        assertTrue(message?.readBy?.isEmpty() == true)
+        assertEquals(MessageStatus.SENT, message?.status)
+    }
+
+    @Test
+    fun `fromFirestore handles invalid status enum gracefully`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+        org.mockito.Mockito.`when`(mockDoc.getString("text")).thenReturn("Hello")
+        org.mockito.Mockito.`when`(mockDoc.getDate("timestamp")).thenReturn(Date())
+        org.mockito.Mockito.`when`(mockDoc.get("readBy")).thenReturn(emptyList<String>())
+        org.mockito.Mockito.`when`(mockDoc.getString("status")).thenReturn("INVALID_STATUS")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNotNull(message)
+        // Should default to SENT when status is invalid
+        assertEquals(MessageStatus.SENT, message?.status)
+    }
+
+    @Test
+    fun `fromFirestore handles invalid type enum gracefully`() {
+        val mockDoc =
+                org.mockito.Mockito.mock(com.google.firebase.firestore.DocumentSnapshot::class.java)
+
+        org.mockito.Mockito.`when`(mockDoc.id).thenReturn("msg123")
+        org.mockito.Mockito.`when`(mockDoc.getString("chatId")).thenReturn("chat123")
+        org.mockito.Mockito.`when`(mockDoc.getString("senderId")).thenReturn("user123")
+        org.mockito.Mockito.`when`(mockDoc.getString("text")).thenReturn("Hello")
+        org.mockito.Mockito.`when`(mockDoc.getDate("timestamp")).thenReturn(Date())
+        org.mockito.Mockito.`when`(mockDoc.get("readBy")).thenReturn(emptyList<String>())
+        org.mockito.Mockito.`when`(mockDoc.getString("type")).thenReturn("INVALID_TYPE")
+
+        val message = Message.fromFirestore(mockDoc)
+
+        assertNotNull(message)
+        // Should default to TEXT when type is invalid
+        assertEquals(MessageType.TEXT, message?.type)
+    }
 }

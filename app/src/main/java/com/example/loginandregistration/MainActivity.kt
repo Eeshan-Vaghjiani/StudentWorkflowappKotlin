@@ -8,7 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.loginandregistration.databinding.ActivityMainBinding
 import com.example.loginandregistration.repository.UserRepository
-import com.example.loginandregistration.utils.ConnectionMonitor
+import com.example.loginandregistration.utils.NetworkConnectivityObserver
 import com.example.loginandregistration.utils.NotificationChannels
 import com.example.loginandregistration.utils.NotificationPermissionHelper
 import com.example.loginandregistration.views.ConnectionStatusView
@@ -23,10 +23,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var auth: FirebaseAuth
     private lateinit var notificationPermissionHelper: NotificationPermissionHelper
-    private lateinit var connectionMonitor: ConnectionMonitor
+    private lateinit var networkConnectivityObserver: NetworkConnectivityObserver
     private lateinit var connectionStatusView: ConnectionStatusView
 
     private var wasOffline = false
+    private var isNetworkAvailable = true
 
     // Register permission launcher
     private val notificationPermissionLauncher =
@@ -55,11 +56,11 @@ class MainActivity : AppCompatActivity() {
         connectionStatusView = binding.connectionStatusView
         connectionStatusView.hideImmediate()
 
-        // Initialize connection monitor
-        connectionMonitor = ConnectionMonitor(this)
+        // Initialize network connectivity observer
+        networkConnectivityObserver = NetworkConnectivityObserver(this)
 
         // Monitor connection status
-        monitorConnectionStatus()
+        monitorNetworkConnectivity()
 
         // Create notification channels
         NotificationChannels.createChannels(this)
@@ -249,18 +250,21 @@ class MainActivity : AppCompatActivity() {
     /**
      * Monitor network connection status and update the connection status banner. Shows "No internet
      * connection" when offline, "Connecting..." when reconnecting, and hides the banner when
-     * online.
+     * online. Also disables network-dependent actions when offline.
      */
-    private fun monitorConnectionStatus() {
+    private fun monitorNetworkConnectivity() {
         lifecycleScope.launch {
-            connectionMonitor.isConnected.collect { isConnected ->
-                android.util.Log.d("MainActivity", "Connection status changed: $isConnected")
+            networkConnectivityObserver.observe().collect { isConnected ->
+                android.util.Log.d("MainActivity", "Network connectivity changed: $isConnected")
+
+                isNetworkAvailable = isConnected
 
                 when {
                     // Currently offline
                     !isConnected -> {
                         wasOffline = true
                         connectionStatusView.showOffline()
+                        disableNetworkDependentActions()
                     }
                     // Just came back online
                     isConnected && wasOffline -> {
@@ -270,6 +274,8 @@ class MainActivity : AppCompatActivity() {
                                 {
                                     connectionStatusView.showOnline()
                                     wasOffline = false
+                                    enableNetworkDependentActions()
+                                    retryPendingOperations()
                                 },
                                 1500
                         ) // Show for 1.5 seconds
@@ -278,9 +284,75 @@ class MainActivity : AppCompatActivity() {
                     else -> {
                         connectionStatusView.showOnline()
                         wasOffline = false
+                        enableNetworkDependentActions()
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Disable network-dependent actions when offline. This prevents users from attempting
+     * operations that require network connectivity.
+     */
+    private fun disableNetworkDependentActions() {
+        android.util.Log.d("MainActivity", "Disabling network-dependent actions")
+        // Notify fragments about network unavailability
+        supportFragmentManager.fragments.forEach { fragment ->
+            if (fragment is NetworkStateListener) {
+                fragment.onNetworkUnavailable()
+            }
+        }
+    }
+
+    /**
+     * Enable network-dependent actions when online. This re-enables operations that require network
+     * connectivity.
+     */
+    private fun enableNetworkDependentActions() {
+        android.util.Log.d("MainActivity", "Enabling network-dependent actions")
+        // Notify fragments about network availability
+        supportFragmentManager.fragments.forEach { fragment ->
+            if (fragment is NetworkStateListener) {
+                fragment.onNetworkAvailable()
+            }
+        }
+    }
+
+    /**
+     * Retry pending operations when network is restored. This triggers retry of queued messages and
+     * other pending operations.
+     */
+    private fun retryPendingOperations() {
+        android.util.Log.d("MainActivity", "Retrying pending operations")
+        // Notify fragments to retry pending operations
+        supportFragmentManager.fragments.forEach { fragment ->
+            if (fragment is NetworkStateListener) {
+                fragment.onNetworkRestored()
+            }
+        }
+    }
+
+    /**
+     * Check if network is currently available. Can be called by fragments to check network status
+     * before performing network operations.
+     */
+    fun isNetworkAvailable(): Boolean {
+        return isNetworkAvailable
+    }
+
+    /**
+     * Interface for fragments to receive network state changes. Fragments that need to respond to
+     * network changes should implement this interface.
+     */
+    interface NetworkStateListener {
+        /** Called when network becomes unavailable */
+        fun onNetworkUnavailable() {}
+
+        /** Called when network becomes available */
+        fun onNetworkAvailable() {}
+
+        /** Called when network is restored after being offline */
+        fun onNetworkRestored() {}
     }
 }

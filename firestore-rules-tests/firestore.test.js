@@ -1957,3 +1957,366 @@ describe('Users Collection - Profile Picture URL Validation', () => {
         );
     });
 });
+
+describe('Notifications Collection - Create Permissions', () => {
+    test('authenticated user can create notification with valid data', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'You have a new message',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user can create notification for any user', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        // User1 creates notification for User3
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER3_ID,
+                type: 'TASK_ASSIGNED',
+                message: 'You have been assigned a task',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification without userId', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                type: 'MESSAGE',
+                message: 'Invalid notification',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification with empty userId', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: '',
+                type: 'MESSAGE',
+                message: 'Invalid notification',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification without type', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                message: 'Invalid notification',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification with empty type', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: '',
+                message: 'Invalid notification',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification without timestamp', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Invalid notification',
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification with old timestamp', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        const oldTimestamp = new Date();
+        oldTimestamp.setMinutes(oldTimestamp.getMinutes() - 10); // 10 minutes ago
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Old notification',
+                timestamp: oldTimestamp,
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user cannot create notification with message exceeding 500 characters', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        const longMessage = 'a'.repeat(501);
+
+        await assertFails(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: longMessage,
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('authenticated user can create notification with message at 500 character limit', async () => {
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        const maxMessage = 'a'.repeat(500);
+
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: maxMessage,
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+
+    test('unauthenticated user cannot create notification', async () => {
+        const unauthContext = testEnv.unauthenticatedContext();
+
+        await assertFails(
+            unauthContext.firestore().collection('notifications').add({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Unauthorized notification',
+                timestamp: new Date(),
+                read: false
+            })
+        );
+    });
+});
+
+describe('Notifications Collection - Read Permissions', () => {
+    test('user can read their own notifications', async () => {
+        // Setup: Create a notification for user1
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'You have a new message',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 can read their notification
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').doc('notif1').get()
+        );
+    });
+
+    test('user cannot read other users notifications', async () => {
+        // Setup: Create a notification for user2
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Private notification',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 cannot read user2's notification
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertFails(
+            user1Context.firestore().collection('notifications').doc('notif1').get()
+        );
+    });
+
+    test('unauthenticated user cannot read notifications', async () => {
+        // Setup: Create a notification
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'Test notification',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: unauthenticated user cannot read
+        const unauthContext = testEnv.unauthenticatedContext();
+        await assertFails(
+            unauthContext.firestore().collection('notifications').doc('notif1').get()
+        );
+    });
+});
+
+describe('Notifications Collection - Update Permissions', () => {
+    test('user can update read status of their own notification', async () => {
+        // Setup: Create a notification for user1
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'You have a new message',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 can mark notification as read
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').doc('notif1').update({
+                read: true
+            })
+        );
+    });
+
+    test('user cannot update other fields of their notification', async () => {
+        // Setup: Create a notification for user1
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'Original message',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 cannot update message field
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertFails(
+            user1Context.firestore().collection('notifications').doc('notif1').update({
+                message: 'Tampered message'
+            })
+        );
+    });
+
+    test('user cannot update read status and other fields together', async () => {
+        // Setup: Create a notification for user1
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'Original message',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 cannot update read and message together
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertFails(
+            user1Context.firestore().collection('notifications').doc('notif1').update({
+                read: true,
+                message: 'Tampered message'
+            })
+        );
+    });
+
+    test('user cannot update other users notifications', async () => {
+        // Setup: Create a notification for user2
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Private notification',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 cannot update user2's notification
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertFails(
+            user1Context.firestore().collection('notifications').doc('notif1').update({
+                read: true
+            })
+        );
+    });
+});
+
+describe('Notifications Collection - Delete Permissions', () => {
+    test('user can delete their own notifications', async () => {
+        // Setup: Create a notification for user1
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'You have a new message',
+                timestamp: new Date(),
+                read: true
+            });
+        });
+
+        // Test: user1 can delete their notification
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertSucceeds(
+            user1Context.firestore().collection('notifications').doc('notif1').delete()
+        );
+    });
+
+    test('user cannot delete other users notifications', async () => {
+        // Setup: Create a notification for user2
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER2_ID,
+                type: 'MESSAGE',
+                message: 'Private notification',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: user1 cannot delete user2's notification
+        const user1Context = testEnv.authenticatedContext(USER1_ID);
+        await assertFails(
+            user1Context.firestore().collection('notifications').doc('notif1').delete()
+        );
+    });
+
+    test('unauthenticated user cannot delete notifications', async () => {
+        // Setup: Create a notification
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await context.firestore().collection('notifications').doc('notif1').set({
+                userId: USER1_ID,
+                type: 'MESSAGE',
+                message: 'Test notification',
+                timestamp: new Date(),
+                read: false
+            });
+        });
+
+        // Test: unauthenticated user cannot delete
+        const unauthContext = testEnv.unauthenticatedContext();
+        await assertFails(
+            unauthContext.firestore().collection('notifications').doc('notif1').delete()
+        );
+    });
+});

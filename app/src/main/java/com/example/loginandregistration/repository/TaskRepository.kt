@@ -26,6 +26,7 @@ class TaskRepository(private val context: Context? = null) {
 
     suspend fun getUserTasks(): Result<List<FirebaseTask>> =
             withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
                 val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
                 return@withContext safeFirestoreCall {
                     val snapshot =
@@ -36,9 +37,16 @@ class TaskRepository(private val context: Context? = null) {
                                     .await()
 
                     // Map documents to FirebaseTask objects with proper ID assignment
-                    snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(FirebaseTask::class.java)?.copy(id = doc.id)
-                    }
+                    val tasks =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(FirebaseTask::class.java)?.copy(id = doc.id)
+                            }
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.d(
+                            "TaskRepository",
+                            "getUserTasks took ${duration}ms, found ${tasks.size} tasks"
+                    )
+                    tasks
                 }
             }
 
@@ -156,6 +164,7 @@ class TaskRepository(private val context: Context? = null) {
 
     suspend fun createTask(task: FirebaseTask): Result<String> =
             withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
                 val userId =
                         auth.currentUser?.uid
                                 ?: return@withContext Result.failure(
@@ -191,9 +200,10 @@ class TaskRepository(private val context: Context? = null) {
                         TaskReminderScheduler.scheduleReminder(it, taskWithId)
                     }
 
+                    val duration = System.currentTimeMillis() - startTime
                     android.util.Log.d(
                             "TaskRepository",
-                            "Task created successfully with ID: $taskId"
+                            "Task created successfully with ID: $taskId in ${duration}ms"
                     )
                     taskId
                 }

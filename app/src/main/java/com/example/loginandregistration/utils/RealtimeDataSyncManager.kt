@@ -143,7 +143,7 @@ class RealtimeDataSyncManager(private val context: Context) {
         for (message in queuedMessages) {
             try {
                 val result =
-                        chatRepository.sendMessage(chatId = message.chatId, text = message.text)
+                        chatRepository.sendMessage(chatId = message.chatId, content = message.text)
 
                 if (result.isSuccess) {
                     offlineMessageQueue.removeMessage(message.id)

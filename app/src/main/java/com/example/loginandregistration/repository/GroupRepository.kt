@@ -33,18 +33,36 @@ class GroupRepository {
 
         suspend fun getUserGroups(): Result<List<FirebaseGroup>> =
                 withContext(Dispatchers.IO) {
+                        val startTime = System.currentTimeMillis()
                         val userId =
                                 auth.currentUser?.uid
                                         ?: return@withContext Result.success(emptyList())
-                        return@withContext safeFirestoreCall("getUserGroups") {
-                                groupsCollection
-                                        .whereArrayContains("memberIds", userId)
-                                        .whereEqualTo("isActive", true)
-                                        .orderBy("updatedAt", Query.Direction.DESCENDING)
-                                        .get()
-                                        .await()
-                                        .toObjects(FirebaseGroup::class.java)
-                        }
+                        val result =
+                                safeFirestoreCall("getUserGroups") {
+                                        groupsCollection
+                                                .whereArrayContains("memberIds", userId)
+                                                .whereEqualTo("isActive", true)
+                                                .orderBy("updatedAt", Query.Direction.DESCENDING)
+                                                .get()
+                                                .await()
+                                                .toObjects(FirebaseGroup::class.java)
+                                }
+                        val duration = System.currentTimeMillis() - startTime
+                        result
+                                .onSuccess { groups ->
+                                        Log.d(
+                                                "GroupRepository",
+                                                "getUserGroups took ${duration}ms, found ${groups.size} groups"
+                                        )
+                                }
+                                .onFailure { error ->
+                                        Log.w(
+                                                "GroupRepository",
+                                                "getUserGroups failed after ${duration}ms",
+                                                error
+                                        )
+                                }
+                        return@withContext result
                 }
 
         suspend fun getPublicGroups(): Result<List<FirebaseGroup>> =
@@ -73,6 +91,7 @@ class GroupRepository {
                 privacy: String
         ): Result<String> =
                 withContext(Dispatchers.IO) {
+                        val startTime = System.currentTimeMillis()
                         val user =
                                 auth.currentUser
                                         ?: return@withContext Result.failure(
@@ -113,19 +132,36 @@ class GroupRepository {
                                 )
                         }
 
-                        return@withContext safeFirestoreCall("createGroup") {
-                                val docRef = groupsCollection.add(group).await()
+                        val result =
+                                safeFirestoreCall("createGroup") {
+                                        val docRef = groupsCollection.add(group).await()
 
-                                // Add activity for group creation
-                                addGroupActivity(
-                                        groupId = docRef.id,
-                                        type = "group_created",
-                                        title = "Group created",
-                                        description = "Group \"$name\" was created"
-                                )
+                                        // Add activity for group creation
+                                        addGroupActivity(
+                                                groupId = docRef.id,
+                                                type = "group_created",
+                                                title = "Group created",
+                                                description = "Group \"$name\" was created"
+                                        )
 
-                                docRef.id
-                        }
+                                        docRef.id
+                                }
+                        val duration = System.currentTimeMillis() - startTime
+                        result
+                                .onSuccess { groupId ->
+                                        Log.d(
+                                                "GroupRepository",
+                                                "createGroup('$name') took ${duration}ms, groupId=$groupId"
+                                        )
+                                }
+                                .onFailure { error ->
+                                        Log.w(
+                                                "GroupRepository",
+                                                "createGroup('$name') failed after ${duration}ms",
+                                                error
+                                        )
+                                }
+                        return@withContext result
                 }
 
         private fun generateJoinCode(): String {
