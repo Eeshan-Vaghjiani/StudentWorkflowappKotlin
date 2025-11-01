@@ -16,9 +16,13 @@ import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.utils.ErrorHandler
 import com.example.loginandregistration.utils.ThemeUtils
 import com.example.loginandregistration.utils.collectWithLifecycle
+import com.example.loginandregistration.validation.TaskCreationValidator
+import com.example.loginandregistration.validation.TaskValidationResult
 import com.example.loginandregistration.viewmodels.TasksViewModel
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputLayout
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 class TasksFragment : Fragment() {
@@ -36,6 +40,8 @@ class TasksFragment : Fragment() {
         private lateinit var taskRepository: TaskRepository
         private lateinit var errorStateManager:
                 com.example.loginandregistration.utils.ErrorStateManager
+        private val taskValidator = TaskCreationValidator()
+        private val auth = FirebaseAuth.getInstance()
         private var currentFilter: String = "all"
 
         override fun onCreateView(
@@ -199,6 +205,17 @@ class TasksFragment : Fragment() {
                 val exception =
                         Exception(
                                 when (error) {
+                                        // New error types
+                                        is ErrorHandler.AppError.Permission ->
+                                                "You don't have permission to ${error.operation}"
+                                        is ErrorHandler.AppError.Network ->
+                                                "Network error: ${error.cause}"
+                                        is ErrorHandler.AppError.Validation ->
+                                                "Please fix: ${error.fields.joinToString(", ")}"
+                                        is ErrorHandler.AppError.NotFound ->
+                                                "${error.resource} not found"
+                                        is ErrorHandler.AppError.Unknown -> error.message
+                                        // Legacy error types
                                         is ErrorHandler.AppError.PermissionError -> error.message
                                         is ErrorHandler.AppError.NetworkError -> error.message
                                         is ErrorHandler.AppError.FirestoreError -> error.message
@@ -458,11 +475,14 @@ class TasksFragment : Fragment() {
                                 com.google.android.material.textfield.TextInputEditText>(
                                 R.id.et_task_title
                         )
+                val tilTaskTitle = etTaskTitle.parent.parent as TextInputLayout
+
                 val etTaskDescription =
                         dialogView.findViewById<
                                 com.google.android.material.textfield.TextInputEditText>(
                                 R.id.et_task_description
                         )
+                val tilTaskDescription = etTaskDescription.parent.parent as TextInputLayout
                 val etTaskSubject =
                         dialogView.findViewById<
                                 com.google.android.material.textfield.TextInputEditText>(
@@ -501,7 +521,96 @@ class TasksFragment : Fragment() {
                 val btnCreateWithAI =
                         dialogView.findViewById<MaterialButton>(R.id.btn_create_with_ai)
 
-                // Setup group selection visibility
+                // Get current user ID and auto-add to assignees
+                val currentUserId = auth.currentUser?.uid ?: ""
+                val assignedToList = mutableListOf(currentUserId)
+
+                // Real-time validation function
+                fun validateAndUpdateUI() {
+                        val title = etTaskTitle.text.toString().trim()
+                        val description = etTaskDescription.text.toString().trim()
+                        val category =
+                                when (chipGroupCategory.checkedChipId) {
+                                        R.id.chip_personal -> "personal"
+                                        R.id.chip_group_task -> "group"
+                                        R.id.chip_assignment -> "assignment"
+                                        else -> "personal"
+                                }
+                        val priority =
+                                when (chipGroupPriority.checkedChipId) {
+                                        R.id.chip_low -> "low"
+                                        R.id.chip_medium -> "medium"
+                                        R.id.chip_high -> "high"
+                                        else -> "medium"
+                                }
+
+                        // Validate individual fields for inline error messages
+                        val titleError = taskValidator.validateTitle(title)
+                        val descriptionError = taskValidator.validateDescription(description)
+                        val assigneeError =
+                                taskValidator.validateAssignees(assignedToList, currentUserId)
+
+                        // Show inline errors
+                        tilTaskTitle.error = titleError
+                        tilTaskDescription.error = descriptionError
+
+                        // Validate all fields to determine if Create button should be enabled
+                        val validation =
+                                taskValidator.validateTaskCreation(
+                                        title = title,
+                                        description = description,
+                                        assignedTo = assignedToList,
+                                        creatorId = currentUserId,
+                                        dueDate = null, // Due date is optional
+                                        priority = priority,
+                                        category = category
+                                )
+
+                        // Enable/disable Create button based on validation
+                        btnCreate.isEnabled = validation is TaskValidationResult.Valid
+                }
+
+                // Add real-time validation listeners
+                etTaskTitle.addTextChangedListener(
+                        object : android.text.TextWatcher {
+                                override fun beforeTextChanged(
+                                        s: CharSequence?,
+                                        start: Int,
+                                        count: Int,
+                                        after: Int
+                                ) {}
+                                override fun onTextChanged(
+                                        s: CharSequence?,
+                                        start: Int,
+                                        before: Int,
+                                        count: Int
+                                ) {}
+                                override fun afterTextChanged(s: android.text.Editable?) {
+                                        validateAndUpdateUI()
+                                }
+                        }
+                )
+
+                etTaskDescription.addTextChangedListener(
+                        object : android.text.TextWatcher {
+                                override fun beforeTextChanged(
+                                        s: CharSequence?,
+                                        start: Int,
+                                        count: Int,
+                                        after: Int
+                                ) {}
+                                override fun onTextChanged(
+                                        s: CharSequence?,
+                                        start: Int,
+                                        before: Int,
+                                        count: Int
+                                ) {}
+                                override fun afterTextChanged(s: android.text.Editable?) {
+                                        validateAndUpdateUI()
+                                }
+                        }
+                )
+
                 chipGroupCategory.setOnCheckedStateChangeListener { _, checkedIds ->
                         layoutGroupSelection.visibility =
                                 if (checkedIds.contains(R.id.chip_group_task)) {
@@ -509,7 +618,13 @@ class TasksFragment : Fragment() {
                                 } else {
                                         android.view.View.GONE
                                 }
+                        validateAndUpdateUI()
                 }
+
+                chipGroupPriority.setOnCheckedStateChangeListener { _, _ -> validateAndUpdateUI() }
+
+                // Initial validation (will disable button if empty)
+                validateAndUpdateUI()
 
                 // Load user's groups for selection
                 lifecycleScope.launch {
@@ -581,16 +696,6 @@ class TasksFragment : Fragment() {
                         val subject = etTaskSubject.text.toString().trim()
                         val dueDateText = etDueDate.text.toString().trim()
 
-                        if (title.isEmpty()) {
-                                Toast.makeText(
-                                                context,
-                                                getString(R.string.fill_required_fields),
-                                                Toast.LENGTH_SHORT
-                                        )
-                                        .show()
-                                return@setOnClickListener
-                        }
-
                         // Get selected category
                         val category =
                                 when (chipGroupCategory.checkedChipId) {
@@ -627,21 +732,47 @@ class TasksFragment : Fragment() {
                                 }
                         }
 
-                        // Create task using ViewModel
-                        val task =
-                                com.example.loginandregistration.models.FirebaseTask(
+                        // Final validation before creating task
+                        val validation =
+                                taskValidator.validateTaskCreation(
                                         title = title,
                                         description = description,
-                                        subject = subject,
-                                        category = category,
-                                        status = "pending",
+                                        assignedTo = assignedToList,
+                                        creatorId = currentUserId,
+                                        dueDate = dueDate,
                                         priority = priority,
-                                        dueDate = dueDate
+                                        category = category
                                 )
 
-                        viewModel.createTask(task)
-                        dialog.dismiss()
-                        // Success/error messages will be shown via ViewModel observers
+                        when (validation) {
+                                is TaskValidationResult.Valid -> {
+                                        // Create task using ViewModel
+                                        val task =
+                                                com.example.loginandregistration.models
+                                                        .FirebaseTask(
+                                                                title = title,
+                                                                description = description,
+                                                                subject = subject,
+                                                                category = category,
+                                                                status = "pending",
+                                                                priority = priority,
+                                                                dueDate = dueDate,
+                                                                userId = currentUserId,
+                                                                assignedTo = assignedToList
+                                                        )
+
+                                        viewModel.createTask(task)
+                                        dialog.dismiss()
+                                        // Success/error messages will be shown via ViewModel
+                                        // observers
+                                }
+                                is TaskValidationResult.Invalid -> {
+                                        // Show validation errors
+                                        val errorMessage = validation.errors.joinToString("\n")
+                                        Toast.makeText(context, errorMessage, Toast.LENGTH_LONG)
+                                                .show()
+                                }
+                        }
                 }
 
                 dialog.show()

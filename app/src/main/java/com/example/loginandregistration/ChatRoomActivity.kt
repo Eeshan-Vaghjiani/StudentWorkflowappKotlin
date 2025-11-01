@@ -18,6 +18,8 @@ import com.example.loginandregistration.models.Message
 import com.example.loginandregistration.repository.StorageRepository
 import com.example.loginandregistration.utils.AnimationUtils
 import com.example.loginandregistration.utils.ConnectionMonitor
+import com.example.loginandregistration.utils.ErrorHandler
+import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.viewmodels.ChatRoomViewModel
 import com.example.loginandregistration.viewmodels.ChatRoomViewModelFactory
 import com.google.android.material.snackbar.Snackbar
@@ -495,12 +497,18 @@ class ChatRoomActivity : AppCompatActivity() {
                 }
                 progressDialog.dismiss()
             } catch (e: Exception) {
-                Toast.makeText(
-                                this@ChatRoomActivity,
-                                "Failed to send image: ${e.message}",
-                                Toast.LENGTH_SHORT
-                        )
-                        .show()
+                val errorMessage = ErrorMessages.getErrorMessage(e)
+                val shouldRetry = ErrorMessages.shouldShowRetry(e)
+
+                if (shouldRetry) {
+                    ErrorHandler.showErrorSnackbar(
+                            this@ChatRoomActivity,
+                            binding.root,
+                            errorMessage
+                    ) { handleImageSelected(uri) }
+                } else {
+                    ErrorHandler.showErrorToast(this@ChatRoomActivity, errorMessage)
+                }
             }
         }
     }
@@ -561,12 +569,18 @@ class ChatRoomActivity : AppCompatActivity() {
                         )
                         .show()
             } catch (e: Exception) {
-                Toast.makeText(
-                                this@ChatRoomActivity,
-                                "Failed to send document: ${e.message}",
-                                Toast.LENGTH_SHORT
-                        )
-                        .show()
+                val errorMessage = ErrorMessages.getErrorMessage(e)
+                val shouldRetry = ErrorMessages.shouldShowRetry(e)
+
+                if (shouldRetry) {
+                    ErrorHandler.showErrorSnackbar(
+                            this@ChatRoomActivity,
+                            binding.root,
+                            errorMessage
+                    ) { handleDocumentSelected(uri) }
+                } else {
+                    ErrorHandler.showErrorToast(this@ChatRoomActivity, errorMessage)
+                }
             }
         }
     }
@@ -636,7 +650,18 @@ class ChatRoomActivity : AppCompatActivity() {
                         }
                 )
             } catch (e: Exception) {
-                Snackbar.make(binding.root, "Error: ${e.message}", Snackbar.LENGTH_LONG).show()
+                val errorMessage = ErrorMessages.getErrorMessage(e)
+                val shouldRetry = ErrorMessages.shouldShowRetry(e)
+
+                if (shouldRetry) {
+                    ErrorHandler.showErrorSnackbar(
+                            this@ChatRoomActivity,
+                            binding.root,
+                            errorMessage
+                    ) { handleDocumentClick(message) }
+                } else {
+                    ErrorHandler.showErrorToast(this@ChatRoomActivity, errorMessage)
+                }
             }
         }
     }
@@ -670,12 +695,12 @@ class ChatRoomActivity : AppCompatActivity() {
                         .show()
             }
         } catch (e: Exception) {
-            Snackbar.make(
-                            binding.root,
-                            "Cannot open document: ${e.message}. File saved to Downloads.",
-                            Snackbar.LENGTH_LONG
-                    )
-                    .show()
+            val errorMessage = ErrorMessages.getErrorMessage(e)
+            ErrorHandler.showErrorSnackbar(
+                    this@ChatRoomActivity,
+                    binding.root,
+                    "$errorMessage. File saved to Downloads."
+            )
         }
     }
 

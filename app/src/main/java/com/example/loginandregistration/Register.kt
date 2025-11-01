@@ -13,6 +13,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.loginandregistration.repository.RegistrationManager
+import com.example.loginandregistration.repository.RegistrationResult
+import com.example.loginandregistration.utils.ErrorHandler
+import com.example.loginandregistration.utils.ErrorMessages
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -20,12 +25,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
-import java.util.Date
+import kotlinx.coroutines.launch
 
 class Register : AppCompatActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var firestore: FirebaseFirestore
+    private lateinit var registrationManager: RegistrationManager
 
     // UI Components
     private lateinit var firstNameInputLayout: TextInputLayout
@@ -54,6 +60,7 @@ class Register : AppCompatActivity() {
 
         auth = Firebase.auth
         firestore = FirebaseFirestore.getInstance()
+        registrationManager = RegistrationManager(auth, firestore)
 
         // Initialize UI components
         firstNameInputLayout = findViewById(R.id.firstNameInputLayout)
@@ -432,86 +439,77 @@ class Register : AppCompatActivity() {
 
         showLoading(true)
 
-        auth.createUserWithEmailAndPassword(email, password).addOnCompleteListener(this) { task ->
-            if (task.isSuccessful) {
-                Log.d(TAG, "createUserWithEmail:success")
-                val user = auth.currentUser
-                if (user != null) {
-                    createUserInFirestore(user.uid, email, firstName, lastName)
-                } else {
-                    showLoading(false)
-                    Toast.makeText(
-                                    this,
-                                    getString(R.string.registration_successful),
-                                    Toast.LENGTH_SHORT
-                            )
-                            .show()
-                    navigateToDashboard()
-                }
-            } else {
+        // Use coroutines to call RegistrationManager
+        lifecycleScope.launch {
+            try {
+                val result = registrationManager.registerUser(email, password, firstName, lastName)
+
                 showLoading(false)
-                Log.w(TAG, "createUserWithEmail:failure", task.exception)
-                val errorMessage =
-                        when (task.exception?.message) {
-                            "The email address is already in use by another account." ->
-                                    "This email is already registered"
-                            "The email address is badly formatted." -> "Invalid email format"
-                            else -> task.exception?.message ?: getString(R.string.unknown_error)
+
+                when (result) {
+                    is RegistrationResult.Success -> {
+                        Log.d(TAG, "Registration successful for user: ${result.userId}")
+                        Toast.makeText(
+                                        this@Register,
+                                        getString(R.string.registration_successful),
+                                        Toast.LENGTH_SHORT
+                                )
+                                .show()
+                        navigateToDashboard()
+                    }
+                    is RegistrationResult.Failure -> {
+                        Log.w(TAG, "Registration failed", result.error)
+                        val errorMessage = ErrorMessages.getErrorMessage(result.error)
+                        val shouldRetry = ErrorMessages.shouldShowRetry(result.error)
+
+                        if (shouldRetry) {
+                            ErrorHandler.showErrorSnackbar(
+                                    this@Register,
+                                    findViewById(android.R.id.content),
+                                    errorMessage
+                            ) { performRegistration() }
+                        } else {
+                            ErrorHandler.showErrorToast(this@Register, errorMessage)
                         }
-                Toast.makeText(this, "Registration Failed: $errorMessage", Toast.LENGTH_LONG).show()
+                    }
+                    is RegistrationResult.CriticalError -> {
+                        Log.e(TAG, "Critical registration error: ${result.message}")
+                        ErrorHandler.showErrorToast(this@Register, result.message)
+                        // Show additional dialog or contact support option
+                        showCriticalErrorDialog(result.message)
+                    }
+                }
+            } catch (e: Exception) {
+                showLoading(false)
+                Log.e(TAG, "Unexpected error during registration", e)
+                val errorMessage = ErrorMessages.getErrorMessage(e)
+                val shouldRetry = ErrorMessages.shouldShowRetry(e)
+
+                if (shouldRetry) {
+                    ErrorHandler.showErrorSnackbar(
+                            this@Register,
+                            findViewById(android.R.id.content),
+                            errorMessage
+                    ) { performRegistration() }
+                } else {
+                    ErrorHandler.showErrorToast(this@Register, errorMessage)
+                }
             }
         }
     }
 
-    private fun createUserInFirestore(
-            userId: String,
-            email: String,
-            firstName: String,
-            lastName: String
-    ) {
-        val displayName = "$firstName $lastName"
-        val userMap =
-                hashMapOf(
-                        "userId" to userId,
-                        "email" to email,
-                        "displayName" to displayName,
-                        "firstName" to firstName,
-                        "lastName" to lastName,
-                        "photoUrl" to "",
-                        "profileImageUrl" to "",
-                        "online" to true,
-                        "lastSeen" to Date(),
-                        "lastActive" to Date(),
-                        "aiPromptsUsed" to 0,
-                        "aiPromptsLimit" to 10
-                )
-
-        firestore
-                .collection("users")
-                .document(userId)
-                .set(userMap)
-                .addOnSuccessListener {
-                    showLoading(false)
-                    Log.d(TAG, "User document created successfully")
-                    Toast.makeText(
-                                    this,
-                                    getString(R.string.registration_successful),
-                                    Toast.LENGTH_SHORT
-                            )
-                            .show()
-                    navigateToDashboard()
+    /** Shows a dialog for critical errors that require support intervention. */
+    private fun showCriticalErrorDialog(message: String) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Registration Error")
+                .setMessage(message)
+                .setPositiveButton("Contact Support") { dialog, _ ->
+                    // TODO: Implement support contact mechanism
+                    dialog.dismiss()
                 }
-                .addOnFailureListener { e ->
-                    showLoading(false)
-                    Log.e(TAG, "Error creating user document", e)
-                    Toast.makeText(
-                                    this,
-                                    "Registration successful but profile creation failed",
-                                    Toast.LENGTH_SHORT
-                            )
-                            .show()
-                    navigateToDashboard()
-                }
+                .setNegativeButton("Close") { dialog, _ -> dialog.dismiss() }
+                .setCancelable(false)
+                .show()
     }
 
     private fun navigateToDashboard() { // Assuming MainActivity is DashboardActivity

@@ -59,6 +59,12 @@ object LinkifyHelper {
      * @param linkColor Optional custom color for links (defaults to blue)
      */
     fun makeLinksClickable(textView: TextView, text: String, linkColor: Int? = null) {
+        // Check if text is empty before processing
+        if (text.isEmpty()) {
+            textView.text = text
+            return
+        }
+
         val links = detectLinks(text)
 
         if (links.isEmpty()) {
@@ -84,7 +90,8 @@ object LinkifyHelper {
                         }
                     }
 
-            spannableString.setSpan(
+            // Use safe span application to prevent zero-length span errors
+            spannableString.safeSetSpan(
                     clickableSpan,
                     link.start,
                     link.end,

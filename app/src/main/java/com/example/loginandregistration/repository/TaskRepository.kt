@@ -4,6 +4,8 @@ import android.content.Context
 import com.example.loginandregistration.models.FirebaseTask
 import com.example.loginandregistration.utils.TaskReminderScheduler
 import com.example.loginandregistration.utils.safeFirestoreCall
+import com.example.loginandregistration.validation.FirestoreDataValidator
+import com.example.loginandregistration.validation.ValidationException
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -20,9 +22,11 @@ class TaskRepository(private val context: Context? = null) {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private val tasksCollection = db.collection("tasks")
+    private val validator = FirestoreDataValidator()
 
     suspend fun getUserTasks(): Result<List<FirebaseTask>> =
             withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
                 val userId = auth.currentUser?.uid ?: return@withContext Result.success(emptyList())
                 return@withContext safeFirestoreCall {
                     val snapshot =
@@ -33,9 +37,16 @@ class TaskRepository(private val context: Context? = null) {
                                     .await()
 
                     // Map documents to FirebaseTask objects with proper ID assignment
-                    snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(FirebaseTask::class.java)?.copy(id = doc.id)
-                    }
+                    val tasks =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(FirebaseTask::class.java)?.copy(id = doc.id)
+                            }
+                    val duration = System.currentTimeMillis() - startTime
+                    android.util.Log.d(
+                            "TaskRepository",
+                            "getUserTasks took ${duration}ms, found ${tasks.size} tasks"
+                    )
+                    tasks
                 }
             }
 
@@ -153,45 +164,32 @@ class TaskRepository(private val context: Context? = null) {
 
     suspend fun createTask(task: FirebaseTask): Result<String> =
             withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
                 val userId =
                         auth.currentUser?.uid
                                 ?: return@withContext Result.failure(
                                         Exception("User not authenticated")
                                 )
 
-                // Validate task assignments if assignedTo is not empty
-                if (task.assignedTo.isNotEmpty()) {
-                    val assignmentCount = task.assignedTo.size
-                    if (assignmentCount <
-                                    com.example.loginandregistration.utils.FirebaseRulesValidator
-                                            .MIN_TASK_ASSIGNMENTS ||
-                                    assignmentCount >
-                                            com.example.loginandregistration.utils
-                                                    .FirebaseRulesValidator.MAX_TASK_ASSIGNMENTS
-                    ) {
-                        return@withContext Result.failure(
-                                Exception(
-                                        "Task assignments must be between ${com.example.loginandregistration.utils.FirebaseRulesValidator.MIN_TASK_ASSIGNMENTS} and ${com.example.loginandregistration.utils.FirebaseRulesValidator.MAX_TASK_ASSIGNMENTS}"
-                                )
+                // Ensure all required fields are properly initialized
+                val taskWithUser =
+                        task.copy(
+                                userId = userId,
+                                createdAt = Timestamp.now(),
+                                updatedAt = Timestamp.now(),
+                                status = if (task.status.isEmpty()) "pending" else task.status,
+                                category =
+                                        if (task.category.isEmpty()) "personal" else task.category,
+                                priority = if (task.priority.isEmpty()) "medium" else task.priority
                         )
-                    }
+
+                // Validate task data before Firestore operation
+                val validationResult = validator.validateTask(taskWithUser)
+                if (!validationResult.isValid) {
+                    return@withContext Result.failure(ValidationException(validationResult))
                 }
 
                 return@withContext safeFirestoreCall {
-                    // Ensure all required fields are properly initialized
-                    val taskWithUser =
-                            task.copy(
-                                    userId = userId,
-                                    createdAt = Timestamp.now(),
-                                    updatedAt = Timestamp.now(),
-                                    status = if (task.status.isEmpty()) "pending" else task.status,
-                                    category =
-                                            if (task.category.isEmpty()) "personal"
-                                            else task.category,
-                                    priority =
-                                            if (task.priority.isEmpty()) "medium" else task.priority
-                            )
-
                     // Add task to Firestore
                     val docRef = tasksCollection.add(taskWithUser).await()
                     val taskId = docRef.id
@@ -202,51 +200,104 @@ class TaskRepository(private val context: Context? = null) {
                         TaskReminderScheduler.scheduleReminder(it, taskWithId)
                     }
 
+                    val duration = System.currentTimeMillis() - startTime
                     android.util.Log.d(
                             "TaskRepository",
-                            "Task created successfully with ID: $taskId"
+                            "Task created successfully with ID: $taskId in ${duration}ms"
                     )
                     taskId
                 }
             }
 
     suspend fun updateTask(taskId: String, updates: Map<String, Any>): Result<Unit> =
-            safeFirestoreCall {
-                withContext(Dispatchers.IO) {
-                    val updatesWithTimestamp = updates.toMutableMap()
-                    updatesWithTimestamp["updatedAt"] = Timestamp.now()
-                    tasksCollection.document(taskId).update(updatesWithTimestamp).await()
+            withContext(Dispatchers.IO) {
+                try {
+                    // Fetch current task to validate the updated version
+                    val currentTask =
+                            tasksCollection
+                                    .document(taskId)
+                                    .get()
+                                    .await()
+                                    .toObject(FirebaseTask::class.java)
+                                    ?: return@withContext Result.failure(
+                                            Exception("Task not found")
+                                    )
+
+                    // Apply updates to create a complete task object for validation
+                    val updatedTaskData =
+                            currentTask.copy(
+                                    title = updates["title"] as? String ?: currentTask.title,
+                                    description = updates["description"] as? String
+                                                    ?: currentTask.description,
+                                    status = updates["status"] as? String ?: currentTask.status,
+                                    priority = updates["priority"] as? String
+                                                    ?: currentTask.priority,
+                                    category = updates["category"] as? String
+                                                    ?: currentTask.category,
+                                    dueDate = updates["dueDate"] as? Timestamp
+                                                    ?: currentTask.dueDate,
+                                    assignedTo = updates["assignedTo"] as? List<String>
+                                                    ?: currentTask.assignedTo,
+                                    updatedAt = Timestamp.now()
+                            )
+
+                    // Validate the updated task
+                    val validationResult = validator.validateTask(updatedTaskData)
+                    if (!validationResult.isValid) {
+                        return@withContext Result.failure(ValidationException(validationResult))
+                    }
+
+                    // Perform the update using safeFirestoreCall
+                    @Suppress("UNCHECKED_CAST")
+                    val result: Result<Unit> =
+                            safeFirestoreCall("updateTask") {
+                                val updatesWithTimestamp = updates.toMutableMap()
+                                updatesWithTimestamp["updatedAt"] = Timestamp.now()
+                                tasksCollection
+                                        .document(taskId)
+                                        .update(updatesWithTimestamp)
+                                        .await() as
+                                        Unit
+                            }
 
                     // If due date or status changed, reschedule reminder
-                    context?.let {
-                        if (updates.containsKey("dueDate") || updates.containsKey("status")) {
-                            // Fetch updated task to reschedule
-                            val updatedTask =
-                                    tasksCollection
-                                            .document(taskId)
-                                            .get()
-                                            .await()
-                                            .toObject(FirebaseTask::class.java)
-                            updatedTask?.let { task ->
-                                if (task.status == "completed") {
-                                    TaskReminderScheduler.cancelReminder(it, taskId)
-                                } else {
-                                    TaskReminderScheduler.rescheduleReminder(it, task)
+                    if (result.isSuccess) {
+                        context?.let {
+                            if (updates.containsKey("dueDate") || updates.containsKey("status")) {
+                                // Fetch updated task to reschedule
+                                val updatedTask =
+                                        tasksCollection
+                                                .document(taskId)
+                                                .get()
+                                                .await()
+                                                .toObject(FirebaseTask::class.java)
+                                updatedTask?.let { task ->
+                                    if (task.status == "completed") {
+                                        TaskReminderScheduler.cancelReminder(it, taskId)
+                                    } else {
+                                        TaskReminderScheduler.rescheduleReminder(it, task)
+                                    }
                                 }
                             }
                         }
                     }
+
+                    return@withContext result
+                } catch (e: Exception) {
+                    Result.failure(e)
                 }
             }
 
-    suspend fun deleteTask(taskId: String): Result<Unit> {
-        return safeFirestoreCall {
-            // Cancel reminder before deleting task
-            context?.let { TaskReminderScheduler.cancelReminder(it, taskId) }
+    suspend fun deleteTask(taskId: String): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                return@withContext safeFirestoreCall {
+                    // Cancel reminder before deleting task
+                    context?.let { TaskReminderScheduler.cancelReminder(it, taskId) }
 
-            tasksCollection.document(taskId).delete().await()
-        }
-    }
+                    tasksCollection.document(taskId).delete().await()
+                }
+                        .map { Unit }
+            }
 
     suspend fun getTaskStats(): TaskStats =
             withContext(Dispatchers.IO) {

@@ -1,6 +1,8 @@
 package com.example.loginandregistration.models
 
+import android.util.Log
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
@@ -12,24 +14,31 @@ data class Message(
         val senderName: String = "",
         val senderImageUrl: String = "",
         val text: String = "",
-        
+
         // Legacy attachment fields (kept for backward compatibility)
         val imageUrl: String? = null,
+        val videoUrl: String? = null,
+        val audioUrl: String? = null,
         val documentUrl: String? = null,
         val documentName: String? = null,
         val documentSize: Long? = null,
-        
+
         // Enhanced attachment fields
         val attachmentUrl: String? = null,
         val attachmentFileName: String? = null,
         val attachmentFileSize: Long? = null,
         val attachmentMimeType: String? = null,
         val attachmentType: String? = null, // "image", "document", "audio", "video"
-        
-        @ServerTimestamp val timestamp: Date? = null,
+        @ServerTimestamp val timestamp: Date = Date(),
         val readBy: List<String> = emptyList(),
-        val status: MessageStatus = MessageStatus.SENDING
+        val status: MessageStatus = MessageStatus.SENDING,
+        val type: MessageType? = null
 ) {
+    init {
+        require(id.isNotBlank()) { "Message ID cannot be blank" }
+        require(chatId.isNotBlank()) { "Chat ID cannot be blank" }
+        require(senderId.isNotBlank()) { "Sender ID cannot be blank" }
+    }
     /** Check if message has been read by user */
     fun isReadBy(userId: String): Boolean {
         return readBy.contains(userId)
@@ -42,24 +51,26 @@ data class Message(
 
     /** Check if message has image attachment */
     fun hasImage(): Boolean {
-        return !imageUrl.isNullOrEmpty() || 
-               (attachmentType == "image" && !attachmentUrl.isNullOrEmpty())
+        return !imageUrl.isNullOrEmpty() ||
+                (attachmentType == "image" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has document attachment */
     fun hasDocument(): Boolean {
-        return !documentUrl.isNullOrEmpty() || 
-               (attachmentType == "document" && !attachmentUrl.isNullOrEmpty())
+        return !documentUrl.isNullOrEmpty() ||
+                (attachmentType == "document" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has audio attachment */
     fun hasAudio(): Boolean {
-        return attachmentType == "audio" && !attachmentUrl.isNullOrEmpty()
+        return !audioUrl.isNullOrEmpty() ||
+                (attachmentType == "audio" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has video attachment */
     fun hasVideo(): Boolean {
-        return attachmentType == "video" && !attachmentUrl.isNullOrEmpty()
+        return !videoUrl.isNullOrEmpty() ||
+                (attachmentType == "video" && !attachmentUrl.isNullOrEmpty())
     }
 
     /** Check if message has any attachment */
@@ -69,7 +80,7 @@ data class Message(
 
     /** Get the attachment URL (supports both legacy and new fields) */
     fun resolveAttachmentUrl(): String? {
-        return attachmentUrl ?: imageUrl ?: documentUrl
+        return attachmentUrl ?: imageUrl ?: videoUrl ?: audioUrl ?: documentUrl
     }
 
     /** Get the attachment file name (supports both legacy and new fields) */
@@ -123,6 +134,120 @@ data class Message(
     fun isAudioMimeType(): Boolean {
         return attachmentMimeType?.startsWith("audio/") == true
     }
+
+    companion object {
+        private const val TAG = "Message"
+
+        /**
+         * Safely creates a Message from a Firestore DocumentSnapshot. Returns null if required
+         * fields are missing or parsing fails.
+         */
+        fun fromFirestore(doc: DocumentSnapshot): Message? {
+            return try {
+                // Extract required fields - return null if any are missing
+                val id = doc.id
+                val chatId = doc.getString("chatId")
+                val senderId = doc.getString("senderId")
+
+                // Validate required fields
+                if (chatId.isNullOrBlank() || senderId.isNullOrBlank()) {
+                    Log.w(
+                            TAG,
+                            "Missing required fields in document ${doc.id}: chatId=$chatId, senderId=$senderId"
+                    )
+                    return null
+                }
+
+                // Extract optional fields with safe defaults
+                val senderName = doc.getString("senderName") ?: ""
+                val senderImageUrl = doc.getString("senderImageUrl") ?: ""
+                val text = doc.getString("text") ?: ""
+
+                // Legacy attachment fields
+                val imageUrl = doc.getString("imageUrl")
+                val videoUrl = doc.getString("videoUrl")
+                val audioUrl = doc.getString("audioUrl")
+                val documentUrl = doc.getString("documentUrl")
+                val documentName = doc.getString("documentName")
+                val documentSize = doc.getLong("documentSize")
+
+                // Enhanced attachment fields
+                val attachmentUrl = doc.getString("attachmentUrl")
+                val attachmentFileName = doc.getString("attachmentFileName")
+                val attachmentFileSize = doc.getLong("attachmentFileSize")
+                val attachmentMimeType = doc.getString("attachmentMimeType")
+                val attachmentType = doc.getString("attachmentType")
+
+                // Timestamp - use current time if not available
+                val timestamp = doc.getDate("timestamp") ?: Date()
+
+                // Read by list
+                @Suppress("UNCHECKED_CAST")
+                val readBy = (doc.get("readBy") as? List<String>) ?: emptyList()
+
+                // Status - parse from string or use default
+                val status =
+                        doc.getString("status")?.let { statusStr ->
+                            try {
+                                MessageStatus.valueOf(statusStr)
+                            } catch (e: IllegalArgumentException) {
+                                Log.w(
+                                        TAG,
+                                        "Invalid status value: $statusStr, using SENT as default"
+                                )
+                                MessageStatus.SENT
+                            }
+                        }
+                                ?: MessageStatus.SENT
+
+                // Type - parse from string or use default
+                val type =
+                        doc.getString("type")?.let { typeStr ->
+                            try {
+                                MessageType.valueOf(typeStr)
+                            } catch (e: IllegalArgumentException) {
+                                Log.w(TAG, "Invalid type value: $typeStr, using TEXT as default")
+                                MessageType.TEXT
+                            }
+                        }
+
+                Message(
+                        id = id,
+                        chatId = chatId,
+                        senderId = senderId,
+                        senderName = senderName,
+                        senderImageUrl = senderImageUrl,
+                        text = text,
+                        imageUrl = imageUrl,
+                        videoUrl = videoUrl,
+                        audioUrl = audioUrl,
+                        documentUrl = documentUrl,
+                        documentName = documentName,
+                        documentSize = documentSize,
+                        attachmentUrl = attachmentUrl,
+                        attachmentFileName = attachmentFileName,
+                        attachmentFileSize = attachmentFileSize,
+                        attachmentMimeType = attachmentMimeType,
+                        attachmentType = attachmentType,
+                        timestamp = timestamp,
+                        readBy = readBy,
+                        status = status,
+                        type = type
+                )
+            } catch (e: IllegalArgumentException) {
+                // This catches validation errors from the init block
+                Log.e(
+                        TAG,
+                        "Validation error parsing message from Firestore document ${doc.id}: ${e.message}",
+                        e
+                )
+                null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing message from Firestore document ${doc.id}", e)
+                null
+            }
+        }
+    }
 }
 
 /** Status of a message */
@@ -131,7 +256,9 @@ enum class MessageStatus {
     SENT, // Message sent to server
     DELIVERED, // Message delivered to recipient
     READ, // Message read by recipient
-    FAILED // Message failed to send
+    FAILED, // Message failed to send (generic)
+    FAILED_RETRYABLE, // Message failed but can be retried (network issues)
+    FAILED_PERMANENT // Message failed permanently (permission errors)
 }
 
 /** Type of message content */
@@ -147,5 +274,5 @@ enum class MessageType {
 data class TypingStatus(
         val userId: String = "",
         val isTyping: Boolean = false,
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Date = Date()
 )

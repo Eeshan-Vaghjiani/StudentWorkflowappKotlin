@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.loginandregistration.models.Message
 import com.example.loginandregistration.repository.ChatRepository
 import com.example.loginandregistration.utils.ConnectionMonitor
+import com.example.loginandregistration.utils.MessageValidator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,6 +66,19 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         return chatRepository.getCurrentUserId()
     }
 
+    /** Retry loading the current chat after an error */
+    fun retryLoadChat() {
+        val chatId = currentChatId
+        if (chatId != null) {
+            Log.d(TAG, "Retrying to load chat $chatId")
+            _error.value = null // Clear previous error
+            loadChat(chatId)
+        } else {
+            Log.w(TAG, "Cannot retry loading chat - no chat ID available")
+            _error.value = "Unable to retry. Please select a chat again."
+        }
+    }
+
     fun loadChat(chatId: String) {
         currentChatId = chatId
         _isLoading.value = true
@@ -72,30 +86,83 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 chatRepository.getChatMessages(chatId).collect { messageList ->
-                    // Merge Firestore messages with queued messages
-                    val queuedMessages = chatRepository.getQueuedMessagesForChat(chatId)
-                    val allMessages =
-                            (messageList + queuedMessages).distinctBy { it.id }.sortedBy {
-                                it.timestamp
-                            }
+                    try {
+                        // Filter out null messages from Firestore
+                        val validFirestoreMessages = messageList.filterNotNull()
 
-                    _messages.value = allMessages
-                    _isLoading.value = false
+                        // Log if null messages were found from Firestore
+                        if (validFirestoreMessages.size < messageList.size) {
+                            val nullCount = messageList.size - validFirestoreMessages.size
+                            Log.w(
+                                    TAG,
+                                    "Found $nullCount null messages from Firestore - source: Firestore, chatId: $chatId, userId: ${getCurrentUserId()}, operation: LOAD"
+                            )
+                        }
 
-                    // Mark messages as read
-                    val unreadMessages =
-                            messageList.filter { message ->
-                                !message.isReadBy(getCurrentUserId()) &&
-                                        !message.isFromUser(getCurrentUserId())
-                            }
+                        // Merge Firestore messages with queued messages
+                        val queuedMessages = chatRepository.getQueuedMessagesForChat(chatId)
 
-                    if (unreadMessages.isNotEmpty()) {
-                        markMessagesAsRead(chatId, unreadMessages.map { it.id })
+                        // Combine and filter null messages
+                        val combinedMessages =
+                                (validFirestoreMessages + queuedMessages)
+                                        .filterNotNull()
+                                        .filter { message ->
+                                            // Validate each message before adding to UI state
+                                            val validationResult =
+                                                    MessageValidator.validate(message)
+                                            if (validationResult is
+                                                            MessageValidator.ValidationResult.Invalid
+                                            ) {
+                                                Log.w(
+                                                        TAG,
+                                                        "Skipping invalid message ${message.id}: ${validationResult.errors.joinToString()}"
+                                                )
+                                                false
+                                            } else {
+                                                true
+                                            }
+                                        }
+                                        .distinctBy { it.id }
+                                        .sortedBy { it.timestamp }
+
+                        _messages.value = combinedMessages
+                        _isLoading.value = false
+
+                        // Mark messages as read
+                        val unreadMessages =
+                                validFirestoreMessages.filter { message ->
+                                    !message.isReadBy(getCurrentUserId()) &&
+                                            !message.isFromUser(getCurrentUserId())
+                                }
+
+                        if (unreadMessages.isNotEmpty()) {
+                            markMessagesAsRead(chatId, unreadMessages.map { it.id })
+                        }
+                    } catch (e: NullPointerException) {
+                        Log.e(
+                                TAG,
+                                "NullPointerException while processing messages - chatId: $chatId, userId: ${getCurrentUserId()}, messageCount: ${messageList.size}, error: ${e.message}",
+                                e
+                        )
+                        _error.value = "Unable to load some messages. Please try again."
+                        _isLoading.value = false
                     }
                 }
+            } catch (e: NullPointerException) {
+                Log.e(
+                        TAG,
+                        "NullPointerException while loading chat - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
+                _error.value = "Unable to load messages. Please try again."
+                _isLoading.value = false
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading messages", e)
-                _error.value = "Failed to load messages: ${e.message}"
+                Log.e(
+                        TAG,
+                        "Error loading messages - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
+                _error.value = "Failed to load messages. Please try again."
                 _isLoading.value = false
             }
         }
@@ -107,7 +174,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                     _typingUsers.value = typingUserIds
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error listening to typing users", e)
+                Log.e(
+                        TAG,
+                        "Error listening to typing users - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
             }
         }
     }
@@ -129,7 +200,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 _error.value = "Failed to send message: ${result.exceptionOrNull()?.message}"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending message", e)
+            Log.e(
+                    TAG,
+                    "Error sending message - chatId: $chatId, userId: ${getCurrentUserId()}, textLength: ${text.length}, error: ${e.message}",
+                    e
+            )
             _error.value = "Failed to send message: ${e.message}"
         } finally {
             _isSending.value = false
@@ -154,7 +229,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 _error.value = "Failed to send image: ${result.exceptionOrNull()?.message}"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending image message", e)
+            Log.e(
+                    TAG,
+                    "Error sending image message - chatId: $chatId, userId: ${getCurrentUserId()}, imageUri: $imageUri, error: ${e.message}",
+                    e
+            )
             _error.value = "Failed to send image: ${e.message}"
         } finally {
             _isSending.value = false
@@ -179,7 +258,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 _error.value = "Failed to send document: ${result.exceptionOrNull()?.message}"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending document message", e)
+            Log.e(
+                    TAG,
+                    "Error sending document message - chatId: $chatId, userId: ${getCurrentUserId()}, documentUri: $documentUri, error: ${e.message}",
+                    e
+            )
             _error.value = "Failed to send document: ${e.message}"
         } finally {
             _isSending.value = false
@@ -191,7 +274,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
             try {
                 chatRepository.markMessagesAsRead(chatId, messageIds)
             } catch (e: Exception) {
-                Log.e(TAG, "Error marking messages as read", e)
+                Log.e(
+                        TAG,
+                        "Error marking messages as read - chatId: $chatId, userId: ${getCurrentUserId()}, messageCount: ${messageIds.size}, error: ${e.message}",
+                        e
+                )
             }
         }
     }
@@ -211,7 +298,19 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 markMessagesAsRead(chatId, unreadMessages.map { it.id })
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error marking all messages as read", e)
+            val unreadCount =
+                    try {
+                        _messages.value.count {
+                            !it.isReadBy(getCurrentUserId()) && !it.isFromUser(getCurrentUserId())
+                        }
+                    } catch (ex: Exception) {
+                        0
+                    }
+            Log.e(
+                    TAG,
+                    "Error marking all messages as read - chatId: $chatId, userId: ${getCurrentUserId()}, unreadCount: $unreadCount, error: ${e.message}",
+                    e
+            )
         }
     }
 
@@ -223,7 +322,10 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                 val result = chatRepository.setTypingStatus(chatId, isTyping)
                 if (result.isFailure) {
                     // Log but don't show error to user - typing indicators are not critical
-                    Log.w(TAG, "Failed to update typing status: ${result.exceptionOrNull()?.message}")
+                    Log.w(
+                            TAG,
+                            "Failed to update typing status: ${result.exceptionOrNull()?.message}"
+                    )
                 }
             } catch (e: Exception) {
                 // Log but don't show error to user - typing indicators are not critical
@@ -268,7 +370,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                             "Failed to load more messages: ${result.exceptionOrNull()?.message}"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading more messages", e)
+                Log.e(
+                        TAG,
+                        "Error loading more messages - chatId: $chatId, userId: ${getCurrentUserId()}, oldestMessageId: ${oldestMessage.id}, error: ${e.message}",
+                        e
+                )
                 _error.value = "Failed to load more messages: ${e.message}"
             } finally {
                 isLoadingMoreMessages = false
@@ -288,7 +394,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                     _error.value = "Failed to retry message: ${result.exceptionOrNull()?.message}"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error retrying message", e)
+                Log.e(
+                        TAG,
+                        "Error retrying message - messageId: ${message.id}, chatId: ${message.chatId}, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
                 _error.value = "Failed to retry message: ${e.message}"
             } finally {
                 _isSending.value = false
@@ -300,15 +410,40 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
     private fun processQueuedMessages() {
         viewModelScope.launch {
             try {
+                val chatId = currentChatId
+                if (chatId == null) {
+                    Log.d(TAG, "No chat loaded, skipping queued message processing")
+                    return@launch
+                }
+
                 val result = chatRepository.processQueuedMessages()
                 if (result.isSuccess) {
                     val count = result.getOrNull() ?: 0
                     if (count > 0) {
-                        Log.d(TAG, "Successfully sent $count queued messages")
+                        Log.d(TAG, "Successfully processed $count queued messages")
                     }
+                } else {
+                    Log.e(
+                            TAG,
+                            "Failed to process queued messages: ${result.exceptionOrNull()?.message}"
+                    )
                 }
+            } catch (e: NullPointerException) {
+                val chatId = currentChatId
+                Log.e(
+                        TAG,
+                        "NullPointerException while processing queued messages - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
+                // Don't crash - just log the error
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing queued messages", e)
+                val chatId = currentChatId
+                Log.e(
+                        TAG,
+                        "Error processing queued messages - chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                        e
+                )
+                // Don't crash - just log the error
             }
         }
     }
@@ -341,7 +476,11 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
 
             result
         } catch (e: Exception) {
-            Log.e(TAG, "Error deleting message", e)
+            Log.e(
+                    TAG,
+                    "Error deleting message - messageId: ${message.id}, chatId: $chatId, userId: ${getCurrentUserId()}, error: ${e.message}",
+                    e
+            )
             _error.value = "Failed to delete message: ${e.message}"
             Result.failure(e)
         }

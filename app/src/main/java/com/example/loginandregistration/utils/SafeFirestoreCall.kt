@@ -9,6 +9,8 @@ import com.google.firebase.firestore.FirebaseFirestoreException
  * This function wraps Firestore calls and catches FirebaseFirestoreException errors, specifically
  * handling PERMISSION_DENIED errors by returning empty results instead of crashing the app.
  *
+ * Uses ErrorHandler for categorization and user-friendly error messages.
+ *
  * @param operationName Name of the operation for logging/monitoring
  * @param operation The Firestore operation to execute
  * @return Result containing the operation result or an error
@@ -27,24 +29,25 @@ suspend fun <T> safeFirestoreCall(
         ProductionMetricsMonitor.recordQuerySuccess(operationName)
 
         Result.success(result)
-    } catch (e: FirebaseFirestoreException) {
+    } catch (e: Exception) {
         // Record failure
         ProductionMetricsMonitor.recordQueryFailure(operationName, e)
 
-        when (e.code) {
-            FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
-                Log.e("SafeFirestoreCall", "Permission denied in $operationName: ${e.message}", e)
-                ProductionMetricsMonitor.recordPermissionError(operationName, e)
-                Result.failure(e)
-            }
-            else -> {
-                Log.e("SafeFirestoreCall", "Firestore error in $operationName: ${e.message}", e)
-                Result.failure(e)
-            }
+        // Categorize error using ErrorHandler
+        val appError = ErrorHandler.categorizeError(e)
+        val userFriendlyError = ErrorHandler.getUserFriendlyError(appError)
+
+        // Log detailed error for debugging
+        Log.e("SafeFirestoreCall", "Error in $operationName: ${userFriendlyError.message}", e)
+
+        // Record specific error types
+        if (e is FirebaseFirestoreException &&
+                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+        ) {
+            ProductionMetricsMonitor.recordPermissionError(operationName, e)
         }
-    } catch (e: Exception) {
-        Log.e("SafeFirestoreCall", "Unexpected error in $operationName: ${e.message}", e)
-        ProductionMetricsMonitor.recordQueryFailure(operationName, e)
-        Result.failure(e)
+
+        // Return failure with user-friendly message wrapped in exception
+        Result.failure(Exception(userFriendlyError.message, e))
     }
 }

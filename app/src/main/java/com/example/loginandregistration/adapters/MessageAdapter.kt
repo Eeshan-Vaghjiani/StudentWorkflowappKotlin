@@ -14,7 +14,6 @@ import coil.transform.CircleCropTransformation
 import com.example.loginandregistration.ImageViewerActivity
 import com.example.loginandregistration.R
 import com.example.loginandregistration.models.Message
-import com.example.loginandregistration.utils.AnimationUtils
 import com.example.loginandregistration.utils.DefaultAvatarGenerator
 import com.example.loginandregistration.utils.LinkifyHelper
 import com.example.loginandregistration.utils.MessageGrouper
@@ -32,7 +31,7 @@ class MessageAdapter(
         private const val VIEW_TYPE_SENT = 1
         private const val VIEW_TYPE_RECEIVED = 2
         private const val VIEW_TYPE_TIMESTAMP_HEADER = 3
-        
+
         fun getDocumentIcon(fileName: String, mimeType: String? = null): Int {
             // Check MIME type first if available
             mimeType?.let {
@@ -41,14 +40,18 @@ class MessageAdapter(
                     it.startsWith("video/") -> return android.R.drawable.ic_menu_slideshow
                     it.startsWith("image/") -> return android.R.drawable.ic_menu_gallery
                     it == "application/pdf" -> return android.R.drawable.ic_menu_save
-                    it.contains("word") || it.contains("document") -> return android.R.drawable.ic_menu_edit
-                    it.contains("sheet") || it.contains("excel") -> return android.R.drawable.ic_menu_sort_by_size
-                    it.contains("presentation") || it.contains("powerpoint") -> return android.R.drawable.ic_menu_slideshow
-                    it.contains("zip") || it.contains("compressed") -> return android.R.drawable.ic_menu_upload
+                    it.contains("word") || it.contains("document") ->
+                            return android.R.drawable.ic_menu_edit
+                    it.contains("sheet") || it.contains("excel") ->
+                            return android.R.drawable.ic_menu_sort_by_size
+                    it.contains("presentation") || it.contains("powerpoint") ->
+                            return android.R.drawable.ic_menu_slideshow
+                    it.contains("zip") || it.contains("compressed") ->
+                            return android.R.drawable.ic_menu_upload
                     it == "text/plain" -> return android.R.drawable.ic_menu_edit
                 }
             }
-            
+
             // Fall back to file extension
             return when (fileName.substringAfterLast('.', "").lowercase()) {
                 "pdf" -> android.R.drawable.ic_menu_save
@@ -123,11 +126,36 @@ class MessageAdapter(
         }
     }
 
+    override fun onBindViewHolder(
+            holder: RecyclerView.ViewHolder,
+            position: Int,
+            payloads: MutableList<Any>
+    ) {
+        if (payloads.isEmpty()) {
+            super.onBindViewHolder(holder, position, payloads)
+        } else {
+            // Handle partial updates for better performance
+            when (val item = getItem(position)) {
+                is MessageGrouper.MessageItem.MessageData -> {
+                    if (holder is SentMessageViewHolder && payloads.contains("STATUS_CHANGED")) {
+                        // Only update status view without rebinding entire message
+                        holder.updateStatus(item.message)
+                    } else {
+                        super.onBindViewHolder(holder, position, payloads)
+                    }
+                }
+                is MessageGrouper.MessageItem.TimestampHeader -> {
+                    super.onBindViewHolder(holder, position, payloads)
+                }
+            }
+        }
+    }
+
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
         // Clear any pending animations to prevent attachment issues
         holder.itemView.clearAnimation()
-        
+
         // Clean up resources and listeners to prevent memory leaks and crashes
         when (holder) {
             is SentMessageViewHolder -> holder.cleanup()
@@ -177,7 +205,10 @@ class MessageAdapter(
 
                 // Set icon based on file type or MIME type
                 documentIconImageView.setImageResource(
-                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                        getDocumentIcon(
+                                message.resolveAttachmentFileName() ?: "",
+                                message.getMimeType()
+                        )
                 )
 
                 // Click to download/open document
@@ -235,13 +266,18 @@ class MessageAdapter(
             return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
         }
 
+        fun updateStatus(message: Message) {
+            // Partial update for status changes only
+            messageStatusView.setMessage(message, message.senderId)
+        }
+
         fun cleanup() {
             // Clear click listeners to prevent memory leaks
             messageImageView.setOnClickListener(null)
             documentContainer.setOnClickListener(null)
             itemView.setOnLongClickListener(null)
-            messageStatusView.setOnRetryClickListener { }
-            
+            messageStatusView.setOnRetryClickListener {}
+
             // Clear image to free memory
             messageImageView.setImageDrawable(null)
         }
@@ -282,7 +318,10 @@ class MessageAdapter(
 
                 // Set icon based on file type or MIME type
                 documentIconImageView.setImageResource(
-                    getDocumentIcon(message.resolveAttachmentFileName() ?: "", message.getMimeType())
+                        getDocumentIcon(
+                                message.resolveAttachmentFileName() ?: "",
+                                message.getMimeType()
+                        )
                 )
 
                 // Click to download/open document
@@ -382,7 +421,7 @@ class MessageAdapter(
             messageImageView.setOnClickListener(null)
             documentContainer.setOnClickListener(null)
             itemView.setOnLongClickListener(null)
-            
+
             // Clear images to free memory
             messageImageView.setImageDrawable(null)
             senderProfileImageView.setImageDrawable(null)
@@ -424,6 +463,27 @@ class MessageAdapter(
         ): Boolean {
             return oldItem == newItem
         }
+
+        override fun getChangePayload(
+                oldItem: MessageGrouper.MessageItem,
+                newItem: MessageGrouper.MessageItem
+        ): Any? {
+            // Return payload for partial updates to avoid full rebind
+            if (oldItem is MessageGrouper.MessageItem.MessageData &&
+                            newItem is MessageGrouper.MessageItem.MessageData
+            ) {
+                val oldMsg = oldItem.message
+                val newMsg = newItem.message
+
+                // Only status changed - partial update
+                if (oldMsg.id == newMsg.id &&
+                                oldMsg.text == newMsg.text &&
+                                oldMsg.status != newMsg.status
+                ) {
+                    return "STATUS_CHANGED"
+                }
+            }
+            return super.getChangePayload(oldItem, newItem)
+        }
     }
 }
-

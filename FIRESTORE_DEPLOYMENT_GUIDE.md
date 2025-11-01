@@ -1,248 +1,305 @@
-# Firestore Deployment Guide
+# Firestore Rules Deployment Guide
 
 ## Overview
-This guide provides step-by-step instructions to deploy Firestore security rules and indexes to fix PERMISSION_DENIED and FAILED_PRECONDITION errors in the TeamSync Collaboration app.
+
+This guide provides step-by-step instructions for deploying Firestore security rules to production safely.
 
 ## Prerequisites
 
-### 1. Install Firebase CLI
-If you haven't installed Firebase CLI yet, run:
-
-```bash
-npm install -g firebase-tools
-```
-
-Or on Windows with PowerShell:
-```powershell
-npm install -g firebase-tools
-```
-
-### 2. Login to Firebase
-```bash
-firebase login
-```
-
-This will open a browser window for you to authenticate with your Google account.
-
-### 3. Verify Project Configuration
-Check that you're connected to the correct project:
-```bash
-firebase projects:list
-```
-
-You should see `android-logreg` in the list.
+- Firebase CLI installed (`npm install -g firebase-tools`)
+- Authenticated with Firebase (`firebase login`)
+- Project configured (`.firebaserc` exists)
+- Firestore rules file (`firestore.rules`) ready for deployment
 
 ## Deployment Steps
 
-### Step 1: Deploy Firestore Security Rules
+### Option 1: Automated Deployment (Recommended)
 
-Deploy the security rules to fix PERMISSION_DENIED errors:
+Use the provided deployment scripts:
+
+**Windows:**
+```cmd
+deploy-firestore-rules.bat
+```
+
+**Unix/Linux/Mac:**
+```bash
+chmod +x deploy-firestore-rules.sh
+./deploy-firestore-rules.sh
+```
+
+### Option 2: Manual Deployment
+
+#### Step 1: Backup Current Rules
+
+```bash
+firebase firestore:rules:get > firestore.rules.backup-$(date +%Y%m%d-%H%M%S)
+```
+
+**Windows:**
+```cmd
+firebase firestore:rules:get > firestore.rules.backup-%date:~-4%%date:~-10,2%%date:~-7,2%
+```
+
+#### Step 2: Test Rules Locally
+
+Start the Firebase Emulator:
+
+```bash
+firebase emulators:start --only firestore
+```
+
+The emulator will:
+- Start Firestore emulator on port 8080
+- Start Emulator UI on port 4000
+- Load your local `firestore.rules` file
+
+**Test your rules:**
+1. Open http://localhost:4000 in your browser
+2. Navigate to Firestore tab
+3. Manually test operations or run automated tests
+4. Check for rule violations in the console
+
+**Run automated tests (if available):**
+```bash
+cd firestore-rules-tests
+npm test
+```
+
+#### Step 3: Deploy to Production
 
 ```bash
 firebase deploy --only firestore:rules
 ```
 
-**Expected Output:**
-```
-✔  Deploy complete!
+This command:
+- Uploads `firestore.rules` to Firebase
+- Validates rule syntax
+- Applies rules to production database
+- Takes effect immediately
 
-Project Console: https://console.firebase.google.com/project/android-logreg/overview
-```
+#### Step 4: Monitor Deployment
 
-### Step 2: Deploy Firestore Indexes
+**Check Firebase Console:**
+1. Go to https://console.firebase.google.com
+2. Select your project
+3. Navigate to Firestore Database → Rules
+4. Verify the rules were updated (check timestamp)
 
-Deploy the composite indexes to fix FAILED_PRECONDITION errors:
+**Monitor for violations:**
+1. Go to Firestore Database → Usage tab
+2. Check for permission denied errors
+3. Review error patterns in the first 15-30 minutes
 
-```bash
-firebase deploy --only firestore:indexes
-```
+#### Step 5: Verify Application Behavior
 
-**Expected Output:**
-```
-✔  Deploy complete!
-```
+**Test critical operations:**
+- [ ] Create a task
+- [ ] Create a group
+- [ ] Send a chat message
+- [ ] View group activities
+- [ ] Query public groups
 
-**Note:** Index creation can take several minutes. You'll see a message like:
-```
-Index creation in progress. Check status at:
-https://console.firebase.google.com/project/android-logreg/firestore/indexes
-```
+**Check application logs:**
+- Monitor for PERMISSION_DENIED errors
+- Verify operations complete successfully
+- Check error rates in Firebase Crashlytics
 
-### Step 3: Deploy Both Together (Alternative)
+## Rollback Procedure
 
-You can deploy both rules and indexes in one command:
+If issues occur after deployment:
 
-```bash
-firebase deploy --only firestore
-```
+### Quick Rollback
 
-## Verification Steps
+1. **Restore backup file:**
+   ```bash
+   cp firestore.rules.backup-YYYYMMDD-HHMMSS firestore.rules
+   ```
 
-### 1. Verify Rules Deployment
+2. **Redeploy:**
+   ```bash
+   firebase deploy --only firestore:rules
+   ```
 
-1. Open Firebase Console: https://console.firebase.google.com/project/android-logreg/firestore/rules
-2. Check that the rules match the content in `firestore.rules`
-3. Verify the "Last deployed" timestamp is recent
+### Emergency Rollback via Console
 
-### 2. Verify Indexes Creation
-
-1. Open Firebase Console: https://console.firebase.google.com/project/android-logreg/firestore/indexes
-2. You should see three composite indexes:
-
-   **Index 1: tasks**
-   - Collection: `tasks`
-   - Fields: `userId` (Ascending), `dueDate` (Ascending)
-   - Status: Building → Enabled (wait for completion)
-
-   **Index 2: groups**
-   - Collection: `groups`
-   - Fields: `memberIds` (Array-contains), `isActive` (Ascending), `updatedAt` (Descending)
-   - Status: Building → Enabled (wait for completion)
-
-   **Index 3: chats**
-   - Collection: `chats`
-   - Fields: `participants` (Array-contains), `lastMessageTime` (Descending)
-   - Status: Building → Enabled (wait for completion)
-
-3. Wait for all indexes to show "Enabled" status (this can take 5-15 minutes)
-
-### 3. Test in the App
-
-After deployment and index creation:
-
-1. **Clear app data** (Settings → Apps → TeamSync → Storage → Clear Data)
-2. **Restart the app**
-3. **Login** with your test account
-4. **Test each feature:**
-   - ✅ Dashboard loads without errors
-   - ✅ Groups screen displays groups
-   - ✅ Tasks screen displays tasks sorted by due date
-   - ✅ Calendar shows assignments
-   - ✅ Chat messages load and send successfully
-   - ✅ No PERMISSION_DENIED errors in logcat
-   - ✅ No FAILED_PRECONDITION errors in logcat
-
-### 4. Monitor Logcat
-
-Run logcat to verify no errors:
-
-```bash
-adb logcat | findstr /i "firestore permission denied failed_precondition"
-```
-
-You should see **no** error messages related to permissions or missing indexes.
-
-## What Was Fixed
-
-### Security Rules Deployed
-The `firestore.rules` file includes comprehensive security rules for:
-- ✅ Users collection (read/write permissions)
-- ✅ Groups collection (member-based access)
-- ✅ Tasks collection (owner and assignee access)
-- ✅ Chats collection (participant-based access)
-- ✅ Messages subcollection (participant access)
-- ✅ Notifications collection (user-specific access)
-- ✅ Group activities collection (member access)
-
-### Indexes Created
-Three composite indexes were created to support complex queries:
-
-1. **Tasks Index** (`userId` + `dueDate`)
-   - Fixes: `FAILED_PRECONDITION` error when querying user tasks sorted by due date
-   - Used by: TaskRepository, HomeFragment, CalendarFragment
-
-2. **Groups Index** (`memberIds` + `isActive` + `updatedAt`)
-   - Fixes: Query performance for active groups sorted by last update
-   - Used by: GroupRepository, GroupsFragment, HomeFragment
-
-3. **Chats Index** (`participants` + `lastMessageTime`)
-   - Fixes: Query performance for user chats sorted by recent activity
-   - Used by: ChatRepository, ChatsFragment
-
-## Troubleshooting
-
-### Issue: "Permission denied" when deploying
-**Solution:** Make sure you're logged in and have owner/editor permissions:
-```bash
-firebase login --reauth
-```
-
-### Issue: "Project not found"
-**Solution:** Verify the project ID in `.firebaserc` matches your Firebase project:
-```bash
-firebase use android-logreg
-```
-
-### Issue: Indexes still showing "Building" after 30 minutes
-**Solution:** 
-1. Check Firebase Console for any errors
-2. Try deleting and recreating the index
-3. Contact Firebase support if the issue persists
-
-### Issue: App still shows PERMISSION_DENIED errors
-**Solution:**
-1. Verify rules were deployed successfully in Firebase Console
-2. Clear app data and restart
-3. Check that the user is properly authenticated
-4. Verify the query field names match the security rules
-
-### Issue: FAILED_PRECONDITION still occurs
-**Solution:**
-1. Wait for indexes to finish building (check Firebase Console)
-2. Verify the index fields match the query exactly
-3. Check that the index status is "Enabled" not "Building"
-
-## Rollback Instructions
-
-If you need to rollback the deployment:
-
-### Rollback Rules
 1. Go to Firebase Console → Firestore → Rules
-2. Click "View History"
-3. Select the previous version
+2. Click "Rules History" tab
+3. Select previous working version
 4. Click "Restore"
 
-### Rollback Indexes
-**Note:** Indexes cannot be rolled back, but you can delete them:
-1. Go to Firebase Console → Firestore → Indexes
-2. Click the three dots next to the index
-3. Select "Delete"
+## Monitoring After Deployment
 
-## Next Steps
+### Firebase Console Monitoring
 
-After successful deployment:
-1. ✅ Mark Task 1 as complete in the implementation plan
-2. ➡️ Proceed to Task 2: Fix Gemini AI Model Configuration
-3. 📊 Monitor Firebase Console for any query performance issues
-4. 🔍 Review Firebase Usage & Billing to ensure you're within quota
+**Check these metrics for 24-48 hours:**
 
-## Support Resources
+1. **Permission Denied Errors**
+   - Location: Firestore → Usage → Errors
+   - Expected: Should decrease significantly
+   - Alert if: Errors increase or new patterns emerge
 
-- Firebase Documentation: https://firebase.google.com/docs/firestore
-- Security Rules Reference: https://firebase.google.com/docs/firestore/security/get-started
-- Indexes Documentation: https://firebase.google.com/docs/firestore/query-data/indexing
-- Firebase CLI Reference: https://firebase.google.com/docs/cli
+2. **Read/Write Operations**
+   - Location: Firestore → Usage → Operations
+   - Expected: Normal operation patterns
+   - Alert if: Sudden drop in operations (may indicate blocking rules)
 
-## Summary
+3. **Rule Evaluation Time**
+   - Location: Firestore → Usage → Performance
+   - Expected: < 100ms per operation
+   - Alert if: > 500ms (complex rules may need optimization)
 
-✅ **Files Updated:**
-- `firestore.indexes.json` - Added 3 composite indexes
-- `firebase.json` - Created Firebase configuration
-- `.firebaserc` - Set default project to android-logreg
+### Application Monitoring
 
-✅ **Deployment Commands:**
-```bash
-firebase deploy --only firestore:rules
-firebase deploy --only firestore:indexes
+**Monitor these in your app:**
+
+1. **Error Rates**
+   - Check Firebase Crashlytics
+   - Look for FirebaseFirestoreException
+   - Filter by error code: PERMISSION_DENIED
+
+2. **User Reports**
+   - Monitor support channels
+   - Look for "can't create task/group/message" reports
+   - Check for "permission denied" user feedback
+
+3. **Analytics Events**
+   - Track successful operations
+   - Monitor completion rates
+   - Compare pre/post deployment metrics
+
+## Common Issues and Solutions
+
+### Issue 1: Permission Denied on Task Creation
+
+**Symptom:** Users can't create tasks
+
+**Check:**
+- User is authenticated
+- `userId` matches `request.auth.uid`
+- User is in `assignedTo` array
+- `assignedTo` array size is 1-50
+
+**Solution:**
+```javascript
+// Ensure validation in app code
+if (!task.assignedTo.contains(currentUserId)) {
+    task.assignedTo.add(currentUserId)
+}
 ```
 
-✅ **Verification:**
-- Check Firebase Console for rules and indexes
-- Test app functionality
-- Monitor logcat for errors
+### Issue 2: Can't Read Group Activities
 
-🎯 **Expected Result:**
-- No PERMISSION_DENIED errors
-- No FAILED_PRECONDITION errors
-- All Firestore queries execute successfully
-- Real-time updates work correctly
+**Symptom:** Group activities don't load
+
+**Check:**
+- User is member of the group
+- `groupId` field exists in activity document
+- Group document exists and has `memberIds` array
+
+**Solution:**
+- Verify group membership before querying activities
+- Ensure `groupId` is set correctly when creating activities
+
+### Issue 3: Chat Messages Fail to Send
+
+**Symptom:** Messages stuck in "sending" state
+
+**Check:**
+- User is in chat `participants` array
+- `senderId` matches authenticated user
+- Message has content (text, imageUrl, or documentUrl)
+- Timestamp is recent (within 5 minutes)
+
+**Solution:**
+```kotlin
+// Ensure timestamp is set correctly
+message.timestamp = Timestamp.now()
+
+// Validate before sending
+if (message.text.isEmpty() && message.imageUrl == null && message.documentUrl == null) {
+    throw ValidationException("Message must have content")
+}
+```
+
+## Testing Checklist
+
+Before deploying to production, verify:
+
+- [ ] Rules backup created
+- [ ] Rules tested in emulator
+- [ ] Automated tests pass (if available)
+- [ ] Manual testing completed for all operations
+- [ ] Rollback procedure documented and tested
+- [ ] Monitoring alerts configured
+- [ ] Team notified of deployment
+- [ ] Deployment window scheduled (low traffic time)
+
+## Deployment Best Practices
+
+1. **Deploy during low-traffic periods**
+   - Minimize impact on active users
+   - Easier to monitor and rollback if needed
+
+2. **Staged rollout (if possible)**
+   - Deploy to staging environment first
+   - Test with internal users
+   - Monitor for 24 hours before production
+
+3. **Communication**
+   - Notify team before deployment
+   - Have support team ready for user reports
+   - Document deployment in change log
+
+4. **Monitoring**
+   - Watch metrics for first 30 minutes actively
+   - Check periodically for 24 hours
+   - Set up automated alerts for anomalies
+
+5. **Documentation**
+   - Keep deployment log
+   - Document any issues encountered
+   - Update runbook with lessons learned
+
+## Emergency Contacts
+
+**If critical issues occur:**
+
+1. **Immediate rollback** using backup rules
+2. **Notify team lead** about the issue
+3. **Check Firebase Status** (https://status.firebase.google.com)
+4. **Review logs** for error patterns
+5. **Document incident** for post-mortem
+
+## Post-Deployment Verification
+
+**24 Hours After Deployment:**
+
+- [ ] No increase in permission errors
+- [ ] All features working normally
+- [ ] No user complaints about access issues
+- [ ] Performance metrics stable
+- [ ] Error rates within normal range
+
+**1 Week After Deployment:**
+
+- [ ] Long-term stability confirmed
+- [ ] No unexpected rule violations
+- [ ] User satisfaction maintained
+- [ ] Document lessons learned
+- [ ] Update deployment procedures if needed
+
+## Additional Resources
+
+- [Firebase Security Rules Documentation](https://firebase.google.com/docs/firestore/security/get-started)
+- [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite)
+- [Firestore Security Rules Testing](https://firebase.google.com/docs/rules/unit-tests)
+- [Firebase CLI Reference](https://firebase.google.com/docs/cli)
+
+## Support
+
+For issues or questions:
+- Check Firebase Console for error details
+- Review application logs
+- Consult team documentation
+- Contact Firebase Support (if needed)

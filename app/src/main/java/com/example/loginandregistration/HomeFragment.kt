@@ -14,6 +14,8 @@ import com.example.loginandregistration.models.DashboardStats
 import com.example.loginandregistration.repository.GroupRepository
 import com.example.loginandregistration.repository.TaskRepository
 import com.example.loginandregistration.repository.UserRepository
+import com.example.loginandregistration.utils.ErrorHandler
+import com.example.loginandregistration.utils.ErrorMessages
 import com.example.loginandregistration.utils.ErrorStateManager
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -100,14 +102,7 @@ class HomeFragment : Fragment() {
                             override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
                                 return when (menuItem.itemId) {
                                     R.id.action_notifications -> {
-                                        Toast.makeText(
-                                                        context,
-                                                        R.string.navigating_to_notifications,
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                        // TODO: Implement navigation to Notifications
-                                        // screen/fragment
+                                        (activity as? MainActivity)?.navigateToNotifications()
                                         true
                                     }
                                     R.id.action_profile -> {
@@ -204,9 +199,12 @@ class HomeFragment : Fragment() {
             return
         }
 
-        val errorState = errorStateManager.categorizeError(exception)
-        Log.e(TAG, "Showing error state: ${errorState.category} - ${errorState.userMessage}")
-        currentStats = currentStats.copy(isLoading = false, error = errorState.userMessage)
+        // Use enhanced ErrorMessages utility for consistent error handling
+        val errorMessage = ErrorMessages.getErrorMessage(exception)
+        val shouldRetry = ErrorMessages.shouldShowRetry(exception)
+
+        Log.e(TAG, "Showing error state: $errorMessage (retryable: $shouldRetry)")
+        currentStats = currentStats.copy(isLoading = false, error = errorMessage)
 
         // Don't update UI if already showing data - let partial data remain visible
         // Only show empty state if no data has been loaded yet
@@ -226,8 +224,16 @@ class HomeFragment : Fragment() {
                     getString(R.string.home_ai_prompts_usage_template, 0, 10)
         }
 
-        // Show error with retry option using ErrorStateManager
-        errorStateManager.showError(errorState, _binding?.root) { retryLoadDashboardData() }
+        // Show error with retry option if appropriate
+        if (shouldRetry) {
+            ErrorHandler.showErrorSnackbar(
+                    requireContext(),
+                    _binding?.root ?: return,
+                    errorMessage
+            ) { retryLoadDashboardData() }
+        } else {
+            ErrorHandler.showErrorToast(requireContext(), errorMessage)
+        }
     }
 
     /** Retry loading dashboard data Called when user wants to retry after an error */
