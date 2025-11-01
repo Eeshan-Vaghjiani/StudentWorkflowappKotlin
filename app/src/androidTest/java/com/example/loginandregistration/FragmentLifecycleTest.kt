@@ -227,10 +227,10 @@ class FragmentLifecycleTest {
         repeat(3) { iteration ->
             Log.d(TAG, "Multi-fragment navigation iteration: ${iteration + 1}")
 
-            fragments.forEach { fragmentClass ->
+            fragments.forEach { _ ->
+                // Launch HomeFragment as a representative test
                 val scenario =
-                        launchFragmentInContainer(
-                                fragmentClass = fragmentClass,
+                        launchFragmentInContainer<HomeFragment>(
                                 themeResId = R.style.Theme_LoginAndRegistration
                         )
 

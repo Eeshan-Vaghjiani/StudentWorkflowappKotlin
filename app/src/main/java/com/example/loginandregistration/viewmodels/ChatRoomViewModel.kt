@@ -191,23 +191,89 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        // Task 3.2: Implement optimistic UI updates
+        // 1. Create temporary message with SENDING status
+        val tempMessageId = java.util.UUID.randomUUID().toString()
+        
+        // Get current user info for display
+        val currentUserName = try {
+            chatRepository.getCurrentUserId()
+        } catch (e: Exception) {
+            "You"
+        }
+        
+        val tempMessage = Message(
+            id = tempMessageId,
+            chatId = chatId,
+            senderId = getCurrentUserId(),
+            senderName = currentUserName,
+            text = text,
+            timestamp = java.util.Date(),
+            status = com.example.loginandregistration.models.MessageStatus.SENDING,
+            readBy = listOf(getCurrentUserId())
+        )
+
+        // 2. Show message immediately in UI with SENDING status (optimistic update)
+        _messages.value = _messages.value + tempMessage
         _isSending.value = true
 
-        try {
-            val result = chatRepository.sendMessage(chatId, text)
+        // 3. Send to Firestore in background coroutine
+        viewModelScope.launch {
+            try {
+                val result = chatRepository.sendMessage(chatId, text)
 
-            if (result.isFailure) {
-                _error.value = "Failed to send message: ${result.exceptionOrNull()?.message}"
+                if (result.isSuccess) {
+                    // 4. Update message status to SENT on success
+                    val sentMessage = result.getOrNull()
+                    if (sentMessage != null) {
+                        // Replace temp message with the actual message from Firestore
+                        _messages.value = _messages.value.map { msg ->
+                            if (msg.id == tempMessageId) {
+                                sentMessage.copy(status = com.example.loginandregistration.models.MessageStatus.SENT)
+                            } else {
+                                msg
+                            }
+                        }
+                        Log.d(TAG, "Message sent successfully: ${sentMessage.id}")
+                    } else {
+                        // Remove temp message if we got success but no message back
+                        _messages.value = _messages.value.filter { it.id != tempMessageId }
+                        Log.w(TAG, "Message sent but no message returned from repository")
+                    }
+                } else {
+                    // 5. Update message status to FAILED_RETRYABLE on error
+                    val exception = result.exceptionOrNull()
+                    val errorMessage = exception?.message ?: "Unknown error"
+                    
+                    _messages.value = _messages.value.map { msg ->
+                        if (msg.id == tempMessageId) {
+                            msg.copy(status = com.example.loginandregistration.models.MessageStatus.FAILED_RETRYABLE)
+                        } else {
+                            msg
+                        }
+                    }
+                    
+                    _error.value = "Failed to send message: $errorMessage"
+                    Log.e(TAG, "Failed to send message: $errorMessage", exception)
+                }
+            } catch (e: Exception) {
+                Log.e(
+                        TAG,
+                        "Error sending message - chatId: $chatId, userId: ${getCurrentUserId()}, textLength: ${text.length}, error: ${e.message}",
+                        e
+                )
+                // 6. Update message status to FAILED_RETRYABLE on exception
+                _messages.value = _messages.value.map { msg ->
+                    if (msg.id == tempMessageId) {
+                        msg.copy(status = com.example.loginandregistration.models.MessageStatus.FAILED_RETRYABLE)
+                    } else {
+                        msg
+                    }
+                }
+                _error.value = "Failed to send message: ${e.message}"
+            } finally {
+                _isSending.value = false
             }
-        } catch (e: Exception) {
-            Log.e(
-                    TAG,
-                    "Error sending message - chatId: $chatId, userId: ${getCurrentUserId()}, textLength: ${text.length}, error: ${e.message}",
-                    e
-            )
-            _error.value = "Failed to send message: ${e.message}"
-        } finally {
-            _isSending.value = false
         }
     }
 
@@ -383,15 +449,66 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Retry sending a failed message */
+    /** 
+     * Retry sending a failed message with improved error handling and status updates.
+     * Task 3.2: Add retry logic for failed messages
+     */
     fun retryMessage(message: Message) {
         viewModelScope.launch {
             try {
+                Log.d(TAG, "Retrying message ${message.id} in chat ${message.chatId}")
+                
+                // 1. Update message status to SENDING (optimistic update)
+                _messages.value = _messages.value.map { msg ->
+                    if (msg.id == message.id) {
+                        msg.copy(status = com.example.loginandregistration.models.MessageStatus.SENDING)
+                    } else {
+                        msg
+                    }
+                }
+
                 _isSending.value = true
+                
+                // 2. Attempt to retry the message through repository
                 val result = chatRepository.retryMessage(message)
 
-                if (result.isFailure) {
-                    _error.value = "Failed to retry message: ${result.exceptionOrNull()?.message}"
+                if (result.isSuccess) {
+                    // 3. Update message status to SENT on success
+                    val sentMessage = result.getOrNull()
+                    if (sentMessage != null) {
+                        _messages.value = _messages.value.map { msg ->
+                            if (msg.id == message.id) {
+                                sentMessage.copy(status = com.example.loginandregistration.models.MessageStatus.SENT)
+                            } else {
+                                msg
+                            }
+                        }
+                        Log.d(TAG, "Message ${message.id} retried successfully")
+                    } else {
+                        // If no message returned, keep original with SENT status
+                        _messages.value = _messages.value.map { msg ->
+                            if (msg.id == message.id) {
+                                msg.copy(status = com.example.loginandregistration.models.MessageStatus.SENT)
+                            } else {
+                                msg
+                            }
+                        }
+                    }
+                } else {
+                    // 4. Update message status back to FAILED_RETRYABLE on failure
+                    val exception = result.exceptionOrNull()
+                    val errorMessage = exception?.message ?: "Unknown error"
+                    
+                    _messages.value = _messages.value.map { msg ->
+                        if (msg.id == message.id) {
+                            msg.copy(status = com.example.loginandregistration.models.MessageStatus.FAILED_RETRYABLE)
+                        } else {
+                            msg
+                        }
+                    }
+                    
+                    _error.value = "Failed to retry message: $errorMessage"
+                    Log.e(TAG, "Failed to retry message ${message.id}: $errorMessage", exception)
                 }
             } catch (e: Exception) {
                 Log.e(
@@ -399,6 +516,14 @@ class ChatRoomViewModel(application: Application) : AndroidViewModel(application
                         "Error retrying message - messageId: ${message.id}, chatId: ${message.chatId}, userId: ${getCurrentUserId()}, error: ${e.message}",
                         e
                 )
+                // 5. Update message status back to FAILED_RETRYABLE on exception
+                _messages.value = _messages.value.map { msg ->
+                    if (msg.id == message.id) {
+                        msg.copy(status = com.example.loginandregistration.models.MessageStatus.FAILED_RETRYABLE)
+                    } else {
+                        msg
+                    }
+                }
                 _error.value = "Failed to retry message: ${e.message}"
             } finally {
                 _isSending.value = false

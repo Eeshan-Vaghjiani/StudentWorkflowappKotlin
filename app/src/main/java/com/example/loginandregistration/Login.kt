@@ -13,7 +13,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.example.loginandregistration.monitoring.ProductionMonitor
 import com.example.loginandregistration.repository.NotificationRepository
+import com.example.loginandregistration.repository.UserProfileRepository
 import com.example.loginandregistration.utils.ErrorHandler
 import com.example.loginandregistration.utils.GoogleSignInHelper
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -37,6 +39,7 @@ class Login : AppCompatActivity() {
     private lateinit var firestore: FirebaseFirestore
     private lateinit var googleSignInHelper: GoogleSignInHelper
     private val notificationRepository by lazy { NotificationRepository() }
+    private val userProfileRepository by lazy { UserProfileRepository() }
     private val loginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     // UI Components
@@ -83,10 +86,7 @@ class Login : AppCompatActivity() {
                         // Unexpected result code
                         showLoading(false)
                         Log.w(TAG, "Google sign-in failed with result code: ${result.resultCode}")
-                        ErrorHandler.handleAuthError(
-                                this,
-                                "Sign-in failed. Please try again."
-                        )
+                        ErrorHandler.handleAuthError(this, "Sign-in failed. Please try again.")
                     }
                 }
             }
@@ -94,6 +94,9 @@ class Login : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
+
+        // Initialize ErrorLogger for comprehensive error tracking
+        com.example.loginandregistration.utils.ErrorLogger.initialize(this)
 
         auth = Firebase.auth
         firestore = FirebaseFirestore.getInstance()
@@ -248,77 +251,104 @@ class Login : AppCompatActivity() {
         val password = etPassword.text.toString().trim()
 
         showLoading(true)
+        ProductionMonitor.logSignInAttempt("email")
 
         auth.signInWithEmailAndPassword(email, password).addOnCompleteListener(this) { task ->
             if (task.isSuccessful) {
                 val user = auth.currentUser
                 if (user != null) {
-                    createOrUpdateUserInFirestore(
-                            userId = user.uid,
-                            email = user.email ?: email,
-                            displayName = user.displayName ?: email.substringBefore("@"),
-                            profileImageUrl = user.photoUrl?.toString() ?: ""
-                    )
-                    // Save FCM token after successful login
-                    saveFcmTokenAfterLogin { success ->
-                        showLoading(false)
-                        if (success) {
-                            Log.d(TAG, "FCM token saved successfully after email login")
+                    ProductionMonitor.logSignInSuccess(user.uid, "email")
+
+                    // Ensure user profile exists in Firestore
+                    loginScope.launch {
+                        val profileResult = userProfileRepository.ensureUserProfileExists()
+
+                        if (profileResult.isSuccess) {
+                            Log.d(TAG, "User profile created/updated successfully")
+
+                            // Save FCM token after successful login
+                            saveFcmTokenAfterLogin { success ->
+                                showLoading(false)
+                                if (success) {
+                                    Log.d(TAG, "FCM token saved successfully after email login")
+                                } else {
+                                    Log.w(
+                                            TAG,
+                                            "Failed to save FCM token, but continuing with login"
+                                    )
+                                }
+                                ErrorHandler.showSuccessMessage(
+                                        this@Login,
+                                        findViewById(android.R.id.content),
+                                        "Welcome back!"
+                                )
+                                navigateToDashboard()
+                            }
                         } else {
-                            Log.w(TAG, "Failed to save FCM token, but continuing with login")
+                            // Profile creation failed
+                            showLoading(false)
+                            val exception = profileResult.exceptionOrNull()
+                            val errorMessage =
+                                    exception?.message
+                                            ?: getString(R.string.error_profile_creation_failed)
+                            Log.e(TAG, "Profile creation failed: $errorMessage", exception)
+                            showProfileCreationErrorDialog(errorMessage)
                         }
-                        ErrorHandler.showSuccessMessage(
-                                this,
-                                findViewById(android.R.id.content),
-                                "Welcome back!"
-                        )
-                        navigateToDashboard()
                     }
                 } else {
                     showLoading(false)
+                    ProductionMonitor.logSignInFailure(
+                            "email",
+                            "NULL_USER",
+                            "User is null after successful auth"
+                    )
                     ErrorHandler.handleAuthError(this, "Login failed. Please try again.")
                 }
             } else {
                 showLoading(false)
                 Log.w(TAG, "signInWithEmail:failure", task.exception)
-                
+
+                val exception = task.exception
+                val errorType = exception?.javaClass?.simpleName ?: "UNKNOWN"
+                val errorMessage = exception?.message ?: "Unknown error"
+                ProductionMonitor.logSignInFailure("email", errorType, errorMessage)
+
                 // Use ErrorHandler for better error messages
-                task.exception?.let { exception ->
-                    ErrorHandler.handleError(
-                            this,
-                            exception,
-                            findViewById(android.R.id.content)
-                    )
-                } ?: run {
-                    ErrorHandler.handleAuthError(this, "Login failed. Please try again.")
+                exception?.let {
+                    ErrorHandler.handleError(this, it, findViewById(android.R.id.content))
                 }
+                        ?: run {
+                            ErrorHandler.handleAuthError(this, "Login failed. Please try again.")
+                        }
             }
         }
     }
 
     private fun signInWithGoogle() {
         showLoading(true)
+        ProductionMonitor.logSignInAttempt("google")
         val signInIntent = googleSignInHelper.getSignInIntent()
         googleSignInLauncher.launch(signInIntent)
     }
 
     private fun handleGoogleSignInError(exception: Exception) {
-        val errorMessage = if (exception is ApiException) {
-            when (exception.statusCode) {
-                12501 -> {
-                    // User cancelled - don't show error
-                    Log.d(TAG, "User cancelled Google sign-in")
-                    return
+        val errorMessage =
+                if (exception is ApiException) {
+                    when (exception.statusCode) {
+                        12501 -> {
+                            // User cancelled - don't show error
+                            Log.d(TAG, "User cancelled Google sign-in")
+                            return
+                        }
+                        12500 -> "Sign-in configuration error. Please contact support."
+                        7 -> "Network error. Please check your connection and try again."
+                        10 -> "Developer error. Please contact support."
+                        else -> "Sign-in failed (Error ${exception.statusCode}). Please try again."
+                    }
+                } else {
+                    "Sign-in failed: ${exception.message ?: "Unknown error"}"
                 }
-                12500 -> "Sign-in configuration error. Please contact support."
-                7 -> "Network error. Please check your connection and try again."
-                10 -> "Developer error. Please contact support."
-                else -> "Sign-in failed (Error ${exception.statusCode}). Please try again."
-            }
-        } else {
-            "Sign-in failed: ${exception.message ?: "Unknown error"}"
-        }
-        
+
         ErrorHandler.handleAuthError(this, errorMessage)
     }
 
@@ -329,29 +359,50 @@ class Login : AppCompatActivity() {
                 account = account,
                 onSuccess = { userId: String ->
                     Log.d(TAG, "Firebase authentication successful for user: $userId")
-                    // Save FCM token after successful Google login
-                    saveFcmTokenAfterLogin { success ->
-                        showLoading(false)
-                        if (success) {
-                            Log.d(TAG, "FCM token saved successfully after Google sign-in")
+                    ProductionMonitor.logSignInSuccess(userId, "google")
+
+                    // Ensure user profile exists in Firestore
+                    loginScope.launch {
+                        val profileResult = userProfileRepository.ensureUserProfileExists()
+
+                        if (profileResult.isSuccess) {
+                            Log.d(TAG, "User profile created/updated successfully")
+
+                            // Save FCM token after successful Google login
+                            saveFcmTokenAfterLogin { success ->
+                                showLoading(false)
+                                if (success) {
+                                    Log.d(TAG, "FCM token saved successfully after Google sign-in")
+                                } else {
+                                    Log.w(
+                                            TAG,
+                                            "Failed to save FCM token, but continuing with login"
+                                    )
+                                }
+                                ErrorHandler.showSuccessMessage(
+                                        this@Login,
+                                        findViewById(android.R.id.content),
+                                        "Welcome back!"
+                                )
+                                navigateToDashboard()
+                            }
                         } else {
-                            Log.w(TAG, "Failed to save FCM token, but continuing with login")
+                            // Profile creation failed
+                            showLoading(false)
+                            val exception = profileResult.exceptionOrNull()
+                            val errorMessage =
+                                    exception?.message
+                                            ?: getString(R.string.error_profile_creation_failed)
+                            Log.e(TAG, "Profile creation failed: $errorMessage", exception)
+                            showProfileCreationErrorDialog(errorMessage)
                         }
-                        ErrorHandler.showSuccessMessage(
-                                this,
-                                findViewById(android.R.id.content),
-                                "Welcome back!"
-                        )
-                        navigateToDashboard()
                     }
                 },
                 onFailure = { errorMessage: String ->
                     showLoading(false)
                     Log.e(TAG, "Firebase authentication failed: $errorMessage")
-                    ErrorHandler.handleAuthError(
-                            this,
-                            "Google sign-in failed: $errorMessage"
-                    )
+                    ProductionMonitor.logSignInFailure("google", "AUTH_FAILED", errorMessage)
+                    ErrorHandler.handleAuthError(this, "Google sign-in failed: $errorMessage")
                 }
         )
     }
@@ -381,7 +432,10 @@ class Login : AppCompatActivity() {
 
                         userRef.update(updates)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document updated successfully for user: $userId")
+                                    Log.d(
+                                            TAG,
+                                            "User document updated successfully for user: $userId"
+                                    )
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error updating user document", e)
@@ -398,27 +452,27 @@ class Login : AppCompatActivity() {
                                         "photoUrl" to profileImageUrl,
                                         "profileImageUrl" to profileImageUrl,
                                         "authProvider" to "email",
-                                        
+
                                         // Timestamps
                                         "createdAt" to com.google.firebase.Timestamp.now(),
                                         "lastActive" to com.google.firebase.Timestamp.now(),
-                                        
+
                                         // Status fields
                                         "isOnline" to true,
                                         "fcmToken" to "",
-                                        
+
                                         // AI features
                                         "aiPromptsUsed" to 0,
                                         "aiPromptsLimit" to 10,
-                                        
+
                                         // Additional profile fields
                                         "bio" to "",
                                         "phoneNumber" to "",
-                                        
+
                                         // Preferences
                                         "notificationsEnabled" to true,
                                         "emailNotifications" to true,
-                                        
+
                                         // Statistics
                                         "tasksCompleted" to 0,
                                         "groupsJoined" to 0
@@ -426,7 +480,10 @@ class Login : AppCompatActivity() {
 
                         userRef.set(userData)
                                 .addOnSuccessListener {
-                                    Log.d(TAG, "User document created successfully with all required fields for user: $userId")
+                                    Log.d(
+                                            TAG,
+                                            "User document created successfully with all required fields for user: $userId"
+                                    )
                                 }
                                 .addOnFailureListener { e ->
                                     Log.e(TAG, "Error creating user document", e)
@@ -468,6 +525,100 @@ class Login : AppCompatActivity() {
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
+    }
+
+    /**
+     * Shows an error dialog when profile creation fails. Provides options to retry or sign out
+     * based on the error type.
+     */
+    private fun showProfileCreationErrorDialog(errorMessage: String) {
+        // Determine if this is a permission error or network error
+        val isPermissionError =
+                errorMessage.contains("Permission denied", ignoreCase = true) ||
+                        errorMessage.contains("PERMISSION_DENIED", ignoreCase = true)
+        val isNetworkError =
+                errorMessage.contains("Network error", ignoreCase = true) ||
+                        errorMessage.contains("UNAVAILABLE", ignoreCase = true) ||
+                        errorMessage.contains("connection", ignoreCase = true)
+
+        // Use appropriate error message from resources
+        val displayMessage =
+                when {
+                    isPermissionError -> getString(R.string.error_profile_creation_permission)
+                    isNetworkError -> getString(R.string.error_profile_creation_network)
+                    else -> errorMessage
+                }
+
+        val builder =
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(getString(R.string.profile_error_title))
+                        .setMessage(displayMessage)
+                        .setCancelable(false)
+
+        if (isPermissionError) {
+            // For permission errors, offer sign out option
+            builder.setPositiveButton(getString(R.string.profile_error_sign_out)) { _, _ ->
+                auth.signOut()
+                googleSignInHelper.signOut()
+                // Stay on login screen
+            }
+            builder.setNegativeButton(getString(R.string.profile_error_retry)) { _, _ ->
+                // Retry by attempting to sign in again
+                retryProfileCreation()
+            }
+        } else {
+            // For network or other errors, offer retry option
+            builder.setPositiveButton(getString(R.string.profile_error_retry)) { _, _ ->
+                retryProfileCreation()
+            }
+            builder.setNegativeButton(getString(R.string.profile_error_sign_out)) { _, _ ->
+                auth.signOut()
+                googleSignInHelper.signOut()
+                // Stay on login screen
+            }
+        }
+
+        builder.show()
+    }
+
+    /** Retries profile creation for the currently authenticated user. */
+    private fun retryProfileCreation() {
+        if (auth.currentUser == null) {
+            ErrorHandler.handleAuthError(this, getString(R.string.error_auth_required))
+            return
+        }
+
+        showLoading(true)
+        loginScope.launch {
+            val profileResult = userProfileRepository.ensureUserProfileExists()
+
+            if (profileResult.isSuccess) {
+                Log.d(TAG, "Profile created successfully on retry")
+
+                // Save FCM token after successful profile creation
+                saveFcmTokenAfterLogin { success ->
+                    showLoading(false)
+                    if (success) {
+                        Log.d(TAG, "FCM token saved successfully after retry")
+                    } else {
+                        Log.w(TAG, "Failed to save FCM token, but continuing with login")
+                    }
+                    ErrorHandler.showSuccessMessage(
+                            this@Login,
+                            findViewById(android.R.id.content),
+                            "Welcome back!"
+                    )
+                    navigateToDashboard()
+                }
+            } else {
+                showLoading(false)
+                val exception = profileResult.exceptionOrNull()
+                val errorMessage =
+                        exception?.message ?: getString(R.string.error_profile_creation_failed)
+                Log.e(TAG, "Profile creation retry failed: $errorMessage", exception)
+                showProfileCreationErrorDialog(errorMessage)
+            }
+        }
     }
 
     override fun onDestroy() {

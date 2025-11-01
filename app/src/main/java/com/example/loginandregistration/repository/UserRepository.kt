@@ -31,7 +31,7 @@ class UserRepository {
                                     photoUrl = user.photoUrl?.toString() ?: "",
                                     initials = generateInitials(displayName, user.email ?: ""),
                                     lastActive = Timestamp.now(),
-                                    isOnline = true
+                                    online = true
                             )
 
                     usersCollection.document(user.uid).set(firebaseUser).await()

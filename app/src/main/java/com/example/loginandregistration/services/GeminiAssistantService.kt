@@ -30,9 +30,9 @@ class GeminiAssistantService(
 
     companion object {
         private const val TAG = "GeminiAssistantService"
-        // Updated to use v1 API and correct model name
-        private const val API_VERSION = "v1"
-        private const val MODEL_NAME = "gemini-1.5-flash-latest"
+        // Using v1beta API with gemini-2.5-flash model (verified available via list_models)
+        private const val API_VERSION = "v1beta"
+        private const val MODEL_NAME = "gemini-2.5-flash"
         private const val BASE_URL =
                 "https://generativelanguage.googleapis.com/$API_VERSION/models/$MODEL_NAME:generateContent"
         private const val TIMEOUT_SECONDS = 30L

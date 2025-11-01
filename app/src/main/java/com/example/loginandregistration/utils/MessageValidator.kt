@@ -22,7 +22,7 @@ object MessageValidator {
      *
      * Checks:
      * - Message is not null
-     * - Required fields (id, chatId, senderId) are not blank
+     * - Required fields (id, chatId, senderId) are not blank using Message.isValid()
      * - At least one content type is present (text or attachment)
      *
      * @param message The message to validate (can be null)
@@ -37,17 +37,17 @@ object MessageValidator {
 
         val errors = mutableListOf<String>()
 
-        // Validate required fields are not blank
-        if (message.id.isBlank()) {
-            errors.add("Message ID is blank")
-        }
-
-        if (message.chatId.isBlank()) {
-            errors.add("Chat ID is blank")
-        }
-
-        if (message.senderId.isBlank()) {
-            errors.add("Sender ID is blank")
+        // Use Message.isValid() to validate required fields
+        if (!message.isValid()) {
+            if (message.id.isBlank()) {
+                errors.add("Message ID is blank")
+            }
+            if (message.chatId.isBlank()) {
+                errors.add("Chat ID is blank")
+            }
+            if (message.senderId.isBlank()) {
+                errors.add("Sender ID is blank")
+            }
         }
 
         // Validate that at least one content type is present

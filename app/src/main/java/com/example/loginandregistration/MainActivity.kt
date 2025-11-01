@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.loginandregistration.databinding.ActivityMainBinding
+import com.example.loginandregistration.repository.UserProfileRepository
 import com.example.loginandregistration.repository.UserRepository
 import com.example.loginandregistration.utils.NetworkConnectivityObserver
 import com.example.loginandregistration.utils.NotificationChannels
@@ -25,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var notificationPermissionHelper: NotificationPermissionHelper
     private lateinit var networkConnectivityObserver: NetworkConnectivityObserver
     private lateinit var connectionStatusView: ConnectionStatusView
+    private val userProfileRepository by lazy { UserProfileRepository() }
 
     private var wasOffline = false
     private var isNetworkAvailable = true
@@ -44,12 +46,40 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize ErrorLogger for comprehensive error tracking
+        com.example.loginandregistration.utils.ErrorLogger.initialize(this)
+
         auth = Firebase.auth
 
         if (auth.currentUser == null) {
             startActivity(Intent(this, Login::class.java))
             finish()
             return
+        }
+
+        // Validate user profile exists
+        lifecycleScope.launch {
+            val profileExists = userProfileRepository.profileExists(auth.currentUser!!.uid)
+
+            if (!profileExists) {
+                // Profile missing, try to create it
+                android.util.Log.w("MainActivity", "User profile not found, attempting to create")
+                val result = userProfileRepository.ensureUserProfileExists()
+
+                if (result.isFailure) {
+                    // Show error and prompt re-login
+                    val errorMessage =
+                            result.exceptionOrNull()?.message
+                                    ?: "Failed to create profile. Please try again."
+                    android.util.Log.e("MainActivity", "Failed to create profile: $errorMessage")
+                    showProfileErrorDialog(errorMessage)
+                    return@launch
+                } else {
+                    android.util.Log.d("MainActivity", "Profile created successfully")
+                }
+            } else {
+                android.util.Log.d("MainActivity", "User profile exists")
+            }
         }
 
         // Initialize connection status view
@@ -339,6 +369,91 @@ class MainActivity : AppCompatActivity() {
      */
     fun isNetworkAvailable(): Boolean {
         return isNetworkAvailable
+    }
+
+    /**
+     * Shows an error dialog when user profile cannot be created or validated. Provides options to
+     * retry or sign out.
+     */
+    private fun showProfileErrorDialog(errorMessage: String) {
+        // Determine if this is a permission error or network error
+        val isPermissionError =
+                errorMessage.contains("Permission denied", ignoreCase = true) ||
+                        errorMessage.contains("PERMISSION_DENIED", ignoreCase = true)
+        val isNetworkError =
+                errorMessage.contains("Network error", ignoreCase = true) ||
+                        errorMessage.contains("UNAVAILABLE", ignoreCase = true) ||
+                        errorMessage.contains("connection", ignoreCase = true)
+
+        // Use appropriate error message from resources
+        val displayMessage =
+                when {
+                    isPermissionError -> getString(R.string.error_profile_creation_permission)
+                    isNetworkError -> getString(R.string.error_profile_creation_network)
+                    else -> errorMessage
+                }
+
+        val builder =
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(getString(R.string.profile_error_title))
+                        .setMessage(displayMessage)
+                        .setCancelable(false)
+
+        if (isPermissionError) {
+            // For permission errors, prioritize sign out
+            builder.setPositiveButton(getString(R.string.profile_error_sign_out)) { _, _ ->
+                // Sign out and return to login
+                auth.signOut()
+                startActivity(Intent(this, Login::class.java))
+                finish()
+            }
+            builder.setNegativeButton(getString(R.string.profile_error_retry)) { _, _ ->
+                // Retry profile creation
+                retryProfileCreation()
+            }
+        } else {
+            // For network or other errors, prioritize retry
+            builder.setPositiveButton(getString(R.string.profile_error_retry)) { _, _ ->
+                // Retry profile creation
+                retryProfileCreation()
+            }
+            builder.setNegativeButton(getString(R.string.profile_error_sign_out)) { _, _ ->
+                // Sign out and return to login
+                auth.signOut()
+                startActivity(Intent(this, Login::class.java))
+                finish()
+            }
+        }
+
+        builder.show()
+    }
+
+    /** Retries profile creation for the currently authenticated user. */
+    private fun retryProfileCreation() {
+        lifecycleScope.launch {
+            val result = userProfileRepository.ensureUserProfileExists()
+            if (result.isFailure) {
+                val retryErrorMessage =
+                        result.exceptionOrNull()?.message
+                                ?: getString(R.string.error_profile_creation_failed)
+                android.util.Log.e(
+                        "MainActivity",
+                        "Profile creation retry failed: $retryErrorMessage"
+                )
+                showProfileErrorDialog(retryErrorMessage)
+            } else {
+                android.util.Log.d("MainActivity", "Profile created successfully on retry")
+                // Show success message
+                com.google.android.material.snackbar.Snackbar.make(
+                                binding.root,
+                                getString(R.string.profile_updated),
+                                com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+                        )
+                        .show()
+                // Recreate activity to reload with valid profile
+                recreate()
+            }
+        }
     }
 
     /**
