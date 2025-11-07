@@ -8,16 +8,21 @@ plugins {
 
 android {
     namespace = "com.example.loginandregistration"
-    compileSdk = 34 // use latest stable, not 36 yet
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.teamsync.collaboration"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Enable native debug symbols for crash analysis
+        ndk {
+            debugSymbolLevel = "FULL"
+        }
         
         // App metadata
         setProperty("archivesBaseName", "TeamSync-v$versionName")
@@ -61,6 +66,11 @@ android {
             
             // Enable R8 full mode for better optimization
             isDebuggable = false
+            
+            // Generate native debug symbols for Play Console
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
         debug {
             isMinifyEnabled = false

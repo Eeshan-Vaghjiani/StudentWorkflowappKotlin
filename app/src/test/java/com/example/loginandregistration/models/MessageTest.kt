@@ -230,19 +230,46 @@ class MessageTest {
         assertEquals("Hello, world!", message.text)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `message creation with blank id throws exception`() {
-        Message(id = "", chatId = "chat123", senderId = "user123", text = "Hello")
+    @Test
+    fun `message creation with blank id succeeds but isValid returns false`() {
+        val message = Message(id = "", chatId = "chat123", senderId = "user123", text = "Hello")
+        assertFalse(message.isValid())
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `message creation with blank chatId throws exception`() {
-        Message(id = "msg123", chatId = "", senderId = "user123", text = "Hello")
+    @Test
+    fun `message creation with blank chatId succeeds but isValid returns false`() {
+        val message = Message(id = "msg123", chatId = "", senderId = "user123", text = "Hello")
+        assertFalse(message.isValid())
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `message creation with blank senderId throws exception`() {
-        Message(id = "msg123", chatId = "chat123", senderId = "", text = "Hello")
+    @Test
+    fun `message creation with blank senderId succeeds but isValid returns false`() {
+        val message = Message(id = "msg123", chatId = "chat123", senderId = "", text = "Hello")
+        assertFalse(message.isValid())
+    }
+    
+    @Test
+    fun `isValid returns true for valid message`() {
+        val message = Message(id = "msg123", chatId = "chat123", senderId = "user123", text = "Hello")
+        assertTrue(message.isValid())
+    }
+    
+    @Test
+    fun `validate throws exception for invalid message`() {
+        val message = Message(id = "", chatId = "chat123", senderId = "user123", text = "Hello")
+        try {
+            message.validate()
+            fail("Expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("Invalid message") == true)
+        }
+    }
+    
+    @Test
+    fun `validate succeeds for valid message`() {
+        val message = Message(id = "msg123", chatId = "chat123", senderId = "user123", text = "Hello")
+        // Should not throw exception
+        message.validate()
     }
 
     @Test

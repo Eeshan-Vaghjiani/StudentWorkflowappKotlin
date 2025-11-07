@@ -13,8 +13,7 @@ data class FirebaseUser(
         val photoUrl: String = "",
         val profileImageUrl: String = "",
         val initials: String = "",
-        val online: Boolean = false, // Match Firestore document structure
-        val isOnline: Boolean = false, // Keep for backward compatibility
+        val online: Boolean = false,
         val createdAt: Timestamp = Timestamp.now(),
         val lastActive: Timestamp = Timestamp.now(),
         val lastSeen: Timestamp = Timestamp.now(),
@@ -34,7 +33,6 @@ data class FirebaseUser(
                     "",
                     "",
                     "",
-                    false,
                     false,
                     Timestamp.now(),
                     Timestamp.now(),

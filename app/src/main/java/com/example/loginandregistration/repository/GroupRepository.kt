@@ -98,6 +98,26 @@ class GroupRepository {
                                                 Exception("User not authenticated")
                                         )
 
+                        // Force refresh the authentication token to ensure it's valid
+                        try {
+                                user.getIdToken(true).await()
+                                Log.d(
+                                        "GroupRepository",
+                                        "Authentication token refreshed successfully"
+                                )
+                        } catch (e: Exception) {
+                                Log.e(
+                                        "GroupRepository",
+                                        "Failed to refresh authentication token",
+                                        e
+                                )
+                                return@withContext Result.failure(
+                                        Exception(
+                                                "Authentication token refresh failed. Please sign out and back in to refresh your access."
+                                        )
+                                )
+                        }
+
                         val joinCode = generateJoinCode()
                         val ownerMember =
                                 GroupMember(
@@ -454,11 +474,9 @@ class GroupRepository {
                                         "Setting up real-time listener for user groups: $userId"
                                 )
 
+                                // Simplified query - removed isActive and orderBy to test
                                 val listener =
-                                        groupsCollection
-                                                .whereArrayContains("memberIds", userId)
-                                                .whereEqualTo("isActive", true)
-                                                .orderBy("updatedAt", Query.Direction.DESCENDING)
+                                        groupsCollection.whereArrayContains("memberIds", userId)
                                                 .addSnapshotListener { snapshot, error ->
                                                         if (error != null) {
                                                                 Log.e(
@@ -648,10 +666,9 @@ class GroupRepository {
 
                 // Listen to user's groups - this is the primary listener that will update the group
                 // count
+                // Simplified query - removed isActive filter to test
                 val groupsListener =
-                        groupsCollection
-                                .whereArrayContains("memberIds", userId)
-                                .whereEqualTo("isActive", true)
+                        groupsCollection.whereArrayContains("memberIds", userId)
                                 .addSnapshotListener { groupSnapshot, error ->
                                         if (error != null) {
                                                 Log.e(

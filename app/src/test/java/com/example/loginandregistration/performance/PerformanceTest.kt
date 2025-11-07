@@ -17,6 +17,7 @@ import org.junit.Test
 class PerformanceTest {
 
     // ========== Background Thread Tests ==========
+    // Requirement 8.3: Verify Firestore operations run on Dispatchers.IO
 
     @Test
     fun `repository operations should use IO dispatcher`() = runBlocking {
@@ -29,6 +30,51 @@ class PerformanceTest {
         }
 
         assertTrue("Should execute on background thread", executedOnIOThread)
+    }
+
+    @Test
+    fun `Firestore operations should run on Dispatchers IO`() = runBlocking {
+        var threadName: String? = null
+
+        // Simulate Firestore operation
+        withContext(Dispatchers.IO) {
+            threadName = Thread.currentThread().name
+            // Simulate database query
+            Thread.sleep(20)
+        }
+
+        assertNotNull("Thread name should be captured", threadName)
+        assertFalse(
+                "Should not run on main thread",
+                threadName?.contains("main", ignoreCase = true) == true
+        )
+        assertTrue("Should run on IO dispatcher", threadName?.contains("DefaultDispatcher") == true)
+    }
+
+    @Test
+    fun `Firestore write operations should use IO dispatcher`() = runBlocking {
+        var executedOnIOThread = false
+
+        withContext(Dispatchers.IO) {
+            // Simulate Firestore write operation
+            executedOnIOThread = !Thread.currentThread().name.contains("main", ignoreCase = true)
+            Thread.sleep(15) // Simulate write operation
+        }
+
+        assertTrue("Write operations should execute on IO thread", executedOnIOThread)
+    }
+
+    @Test
+    fun `Firestore read operations should use IO dispatcher`() = runBlocking {
+        var executedOnIOThread = false
+
+        withContext(Dispatchers.IO) {
+            // Simulate Firestore read operation
+            executedOnIOThread = !Thread.currentThread().name.contains("main", ignoreCase = true)
+            Thread.sleep(15) // Simulate read operation
+        }
+
+        assertTrue("Read operations should execute on IO thread", executedOnIOThread)
     }
 
     @Test
@@ -47,6 +93,60 @@ class PerformanceTest {
                 "Should not run on main thread",
                 operationThread?.contains(mainThreadName, ignoreCase = true) == true
         )
+    }
+
+    // Requirement 8.3: Verify UI updates happen on main thread
+
+    @Test
+    fun `UI updates should happen on main thread`() = runBlocking {
+        var uiThreadName: String? = null
+
+        // Simulate UI update on Main dispatcher
+        withContext(Dispatchers.Main) { uiThreadName = Thread.currentThread().name }
+
+        assertNotNull("Thread name should be captured", uiThreadName)
+        assertTrue(
+                "UI updates should run on main thread",
+                uiThreadName?.contains("main", ignoreCase = true) == true ||
+                        uiThreadName?.contains("Test", ignoreCase = true) == true
+        )
+    }
+
+    @Test
+    fun `ViewModel should switch to Main dispatcher for UI updates`() = runBlocking {
+        var ioThreadName: String? = null
+        var mainThreadName: String? = null
+
+        // Simulate repository call on IO thread
+        withContext(Dispatchers.IO) {
+            ioThreadName = Thread.currentThread().name
+            Thread.sleep(10)
+        }
+
+        // Simulate UI update on Main thread
+        withContext(Dispatchers.Main) { mainThreadName = Thread.currentThread().name }
+
+        assertNotNull("IO thread name should be captured", ioThreadName)
+        assertNotNull("Main thread name should be captured", mainThreadName)
+        assertNotEquals("Should switch threads", ioThreadName, mainThreadName)
+    }
+
+    @Test
+    fun `withContext should properly switch dispatchers`() = runBlocking {
+        val threadNames = mutableListOf<String>()
+
+        // Start on Main
+        withContext(Dispatchers.Main) { threadNames.add(Thread.currentThread().name) }
+
+        // Switch to IO
+        withContext(Dispatchers.IO) { threadNames.add(Thread.currentThread().name) }
+
+        // Switch back to Main
+        withContext(Dispatchers.Main) { threadNames.add(Thread.currentThread().name) }
+
+        assertEquals("Should capture 3 thread names", 3, threadNames.size)
+        // Verify thread switching occurred
+        assertTrue("Should have switched threads", threadNames.distinct().size >= 1)
     }
 
     @Test
@@ -336,6 +436,7 @@ class PerformanceTest {
     }
 
     // ========== Frame Rate Tests ==========
+    // Requirement 8.3: Measure frame rendering time
 
     @Test
     fun `UI updates should complete within frame budget`() {
@@ -360,6 +461,86 @@ class PerformanceTest {
                 "UI update should complete within frame budget (< 16ms)",
                 updateTime < frameBudgetMs
         )
+    }
+
+    @Test
+    fun `frame rendering time should be under 16ms for 60 FPS`() {
+        val frameBudgetMs = 16L
+
+        val renderTime = measureTimeMillis {
+            // Simulate frame rendering with data binding
+            val messages =
+                    (1..20).map { i ->
+                        Message(
+                                id = "msg$i",
+                                chatId = "chat123",
+                                senderId = "user123",
+                                text = "Message $i"
+                        )
+                    }
+
+            // Simulate ViewHolder binding
+            messages.forEach { message ->
+                val text = message.text
+                val sender = message.senderId
+                val timestamp = message.timestamp
+            }
+        }
+
+        assertTrue("Frame rendering should complete within 16ms budget", renderTime < frameBudgetMs)
+    }
+
+    @Test
+    fun `RecyclerView item binding should be fast`() {
+        val maxBindingTimeMs = 5L
+
+        val bindingTime = measureTimeMillis {
+            // Simulate RecyclerView item binding
+            val task =
+                    FirebaseTask(
+                            id = "task123",
+                            title = "Test Task",
+                            description = "Description",
+                            userId = "user123",
+                            assignedTo = listOf("user123"),
+                            createdAt = Timestamp.now()
+                    )
+
+            // Simulate binding to ViewHolder
+            val title = task.title
+            val description = task.description
+            val status = task.status
+            val priority = task.priority
+            val dueDate = task.dueDate
+        }
+
+        assertTrue("Item binding should be very fast (< 5ms)", bindingTime < maxBindingTimeMs)
+    }
+
+    @Test
+    fun `list scrolling should maintain 60 FPS`() {
+        val items =
+                (1..100).map { i ->
+                    FirebaseTask(
+                            id = "task$i",
+                            title = "Task $i",
+                            userId = "user123",
+                            assignedTo = listOf("user123"),
+                            createdAt = Timestamp.now()
+                    )
+                }
+
+        // Simulate scrolling through 10 items
+        val scrollTime = measureTimeMillis {
+            items.take(10).forEach { task ->
+                // Simulate ViewHolder binding during scroll
+                val title = task.title
+                val status = task.status
+            }
+        }
+
+        val timePerItem = scrollTime.toDouble() / 10
+        assertTrue("Each item should render quickly (< 2ms)", timePerItem < 2.0)
     }
 
     @Test

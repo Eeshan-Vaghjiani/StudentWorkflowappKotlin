@@ -61,7 +61,7 @@
 
     <!-- Profile Fragment -->
     <string name="profile_email_label">Email:</string>
-    <string name="default_web_client_id">YOUR_DEFAULT_WEB_CLIENT_ID</string>x
+    <string name="default_web_client_id">52796977485-2ckv1qu3dbdqc1dtmptj94s243pb03ir.apps.googleusercontent.com</string>
 
     <!-- Additional Login/Register Error Messages -->
     <string name="error_google_signin_failed_no_account">Google sign in failed: No account returned</string>
@@ -308,4 +308,13 @@
     <string name="task_updated">Task updated successfully</string>
     <string name="message_sent">Message sent</string>
     <string name="profile_updated">Profile updated successfully</string>
+    
+    <!-- User Profile Error Messages -->
+    <string name="error_profile_creation_network">Network error. Please check your connection and try again.</string>
+    <string name="error_profile_creation_permission">Unable to create profile. Please try signing out and back in.</string>
+    <string name="error_profile_missing">Your profile is not set up. Please sign out and back in.</string>
+    <string name="error_profile_creation_failed">Failed to create profile. Please try again.</string>
+    <string name="profile_error_title">Profile Error</string>
+    <string name="profile_error_retry">Retry</string>
+    <string name="profile_error_sign_out">Sign Out</string>
 </resources>

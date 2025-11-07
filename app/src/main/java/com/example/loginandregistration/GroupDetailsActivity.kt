@@ -98,6 +98,14 @@ class GroupDetailsActivity : AppCompatActivity() {
                         .show()
             }
         }
+
+        binding.btnDeleteGroup?.setOnClickListener {
+            if (isUserAdmin) {
+                showDeleteGroupDialog()
+            } else {
+                Toast.makeText(this, "Only owner can delete group", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun loadGroupDetails() {
@@ -157,7 +165,7 @@ class GroupDetailsActivity : AppCompatActivity() {
                             // Fetch user profile image from users collection
                             val firebaseUser = userRepository.getUserById(member.userId)
                             val profileImageUrl = firebaseUser?.photoUrl ?: ""
-                            
+
                             Member(
                                     userId = member.userId,
                                     name = member.displayName,
@@ -418,6 +426,48 @@ class GroupDetailsActivity : AppCompatActivity() {
         }
 
         dialog.show()
+    }
+
+    private fun showDeleteGroupDialog() {
+        AlertDialog.Builder(this)
+                .setTitle("Delete Group")
+                .setMessage(
+                        "Are you sure you want to delete this group? This action cannot be undone. All members will lose access."
+                )
+                .setPositiveButton("Delete") { _, _ -> deleteGroup() }
+                .setNegativeButton("Cancel", null)
+                .show()
+    }
+
+    private fun deleteGroup() {
+        lifecycleScope.launch {
+            try {
+                val success = groupRepository.deleteGroup(groupId)
+                if (success) {
+                    Toast.makeText(
+                                    this@GroupDetailsActivity,
+                                    "Group deleted successfully",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                    finish() // Close activity and return to groups list
+                } else {
+                    Toast.makeText(
+                                    this@GroupDetailsActivity,
+                                    "Failed to delete group. Only owner can delete.",
+                                    Toast.LENGTH_SHORT
+                            )
+                            .show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                                this@GroupDetailsActivity,
+                                "Error deleting group: ${e.message}",
+                                Toast.LENGTH_SHORT
+                        )
+                        .show()
+            }
+        }
     }
 }
 

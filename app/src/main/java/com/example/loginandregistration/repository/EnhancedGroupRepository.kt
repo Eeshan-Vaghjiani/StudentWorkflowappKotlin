@@ -72,13 +72,15 @@ class EnhancedGroupRepository {
                             createdAt = Timestamp.now(),
                             updatedAt = Timestamp.now(),
                             members = listOf(owner),
+                            memberIds = listOf(user.uid),
                             tasks = emptyList(),
                             settings =
                                     GroupSettings(
                                             isPublic = isPublic,
                                             allowMemberInvites = true,
                                             maxMembers = 50
-                                    )
+                                    ),
+                            isActive = true
                     )
 
             val docRef = groupsCollection.add(group).await()

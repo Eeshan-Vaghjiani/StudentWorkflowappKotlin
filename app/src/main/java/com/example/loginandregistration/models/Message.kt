@@ -34,11 +34,20 @@ data class Message(
         val status: MessageStatus = MessageStatus.SENDING,
         val type: MessageType? = null
 ) {
-    init {
-        require(id.isNotBlank()) { "Message ID cannot be blank" }
-        require(chatId.isNotBlank()) { "Chat ID cannot be blank" }
-        require(senderId.isNotBlank()) { "Sender ID cannot be blank" }
+    // No init block validation - validate at usage points instead to support GSON deserialization
+    
+    /** Validates that all required fields are populated */
+    fun isValid(): Boolean {
+        return id.isNotBlank() && chatId.isNotBlank() && senderId.isNotBlank()
     }
+    
+    /** Throws exception if message is invalid */
+    fun validate() {
+        require(isValid()) { 
+            "Invalid message: id='$id', chatId='$chatId', senderId='$senderId'" 
+        }
+    }
+    
     /** Check if message has been read by user */
     fun isReadBy(userId: String): Boolean {
         return readBy.contains(userId)

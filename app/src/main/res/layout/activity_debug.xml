@@ -32,7 +32,23 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Memory Monitor"
-        android:layout_marginBottom="24dp" />
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnMigrateProfiles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Migrate User Profiles"
+        android:layout_marginBottom="12dp"
+        android:backgroundTint="#FF9800" />
+
+    <Button
+        android:id="@+id/btnVerifyProfiles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Verify All Profiles"
+        android:layout_marginBottom="24dp"
+        android:backgroundTint="#4CAF50" />
 
     <ScrollView
         android:layout_width="match_parent"

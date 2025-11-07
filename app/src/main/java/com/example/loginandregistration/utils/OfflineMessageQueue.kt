@@ -46,43 +46,39 @@ class OfflineMessageQueue(context: Context) {
             return
         }
 
-        // Validate message using MessageValidator before adding to queue
-        when (val validationResult = MessageValidator.validate(message)) {
-            is MessageValidator.ValidationResult.Invalid -> {
-                // Log validation errors if message is invalid
+        // Validate message using Message.isValid() before adding to queue
+        try {
+            if (!message.isValid()) {
                 Log.e(
                         TAG,
-                        "Invalid message, cannot queue: ${validationResult.errors.joinToString(", ")}"
+                        "Invalid message, cannot queue: id='${message.id}', chatId='${message.chatId}', senderId='${message.senderId}'"
                 )
                 return
             }
-            is MessageValidator.ValidationResult.Valid -> {
-                // Message is valid, proceed with queueing
-                try {
-                    val queuedMessages = getQueuedMessagesInternal().toMutableList()
 
-                    // Check if message already exists in queue
-                    val existingIndex = queuedMessages.indexOfFirst { it.message.id == message.id }
-                    if (existingIndex != -1) {
-                        // Update existing message, preserve attempt count
-                        val existing = queuedMessages[existingIndex]
-                        queuedMessages[existingIndex] = existing.copy(message = message)
-                        Log.d(TAG, "Updated message ${message.id} in queue")
-                    } else {
-                        // Add new message
-                        queuedMessages.add(QueuedMessage(message = message))
-                        Log.d(TAG, "Added message ${message.id} to queue")
-                    }
+            // Message is valid, proceed with queueing
+            val queuedMessages = getQueuedMessagesInternal().toMutableList()
 
-                    saveQueueInternal(queuedMessages)
-                } catch (e: Exception) {
-                    Log.e(
-                            TAG,
-                            "Error queueing message - messageId: ${message.id}, chatId: ${message.chatId}, senderId: ${message.senderId}, error: ${e.message}",
-                            e
-                    )
-                }
+            // Check if message already exists in queue
+            val existingIndex = queuedMessages.indexOfFirst { it.message.id == message.id }
+            if (existingIndex != -1) {
+                // Update existing message, preserve attempt count
+                val existing = queuedMessages[existingIndex]
+                queuedMessages[existingIndex] = existing.copy(message = message)
+                Log.d(TAG, "Updated message ${message.id} in queue")
+            } else {
+                // Add new message
+                queuedMessages.add(QueuedMessage(message = message))
+                Log.d(TAG, "Added message ${message.id} to queue")
             }
+
+            saveQueueInternal(queuedMessages)
+        } catch (e: Exception) {
+            Log.e(
+                    TAG,
+                    "Error queueing message - messageId: ${message.id}, chatId: ${message.chatId}, senderId: ${message.senderId}, error: ${e.message}",
+                    e
+            )
         }
     }
 
@@ -440,16 +436,63 @@ class OfflineMessageQueue(context: Context) {
                     val type = object : TypeToken<List<QueuedMessage>>() {}.type
                     val parsedMessages: List<QueuedMessage>? = gson.fromJson(json, type)
 
-                    // Filter out null messages after parsing
-                    parsedMessages?.filterNotNull() ?: emptyList()
+                    // Filter out null and invalid messages after parsing
+                    val validMessages =
+                            parsedMessages?.filterNotNull()?.mapNotNull { queuedMessage ->
+                                try {
+                                    // Validate message after deserialization
+                                    if (queuedMessage.message.isValid()) {
+                                        queuedMessage
+                                    } else {
+                                        Log.w(
+                                                TAG,
+                                                "Skipping invalid queued message during deserialization: " +
+                                                        "id='${queuedMessage.message.id}', " +
+                                                        "chatId='${queuedMessage.message.chatId}', " +
+                                                        "senderId='${queuedMessage.message.senderId}'"
+                                        )
+                                        null
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error validating queued message: ${e.message}", e)
+                                    null
+                                }
+                            }
+                                    ?: emptyList()
+
+                    // Log if we filtered out any messages
+                    val filteredCount = (parsedMessages?.size ?: 0) - validMessages.size
+                    if (filteredCount > 0) {
+                        Log.w(
+                                TAG,
+                                "Filtered out $filteredCount invalid/corrupted messages from queue"
+                        )
+                    }
+
+                    validMessages
                 } catch (parseException: Exception) {
-                    // Log detailed error information
+                    // Log detailed error information including JSON snippet for debugging
+                    val jsonSnippet =
+                            if (json.length > 200) {
+                                json.substring(0, 200) + "... (truncated)"
+                            } else {
+                                json
+                            }
                     Log.e(
                             TAG,
-                            "Error parsing queued messages JSON. JSON length: ${json.length}, Error: ${parseException.message}",
+                            "Error parsing queued messages JSON. JSON length: ${json.length}, " +
+                                    "Error: ${parseException.message}, JSON snippet: $jsonSnippet",
                             parseException
                     )
-                    // Return empty list if parsing fails
+
+                    // Log to ErrorLogger for comprehensive tracking
+                    ErrorLogger.logGsonDeserializationError(
+                            jsonString = json,
+                            targetClass = QueuedMessage::class.java,
+                            exception = parseException
+                    )
+
+                    // Return empty list if parsing fails completely
                     emptyList()
                 }
             }
@@ -464,15 +507,18 @@ class OfflineMessageQueue(context: Context) {
     /** Save queue to SharedPreferences */
     private fun saveQueueInternal(messages: List<QueuedMessage>) {
         try {
-            // Filter out null messages before saving
+            // Filter out null and invalid messages before saving
             val validMessages =
                     messages.filterNotNull().filter { queuedMessage ->
-                        // Validate messages before serialization
-                        val isValid = MessageValidator.isValid(queuedMessage.message)
+                        // Validate messages before serialization using Message.isValid()
+                        val isValid = queuedMessage.message.isValid()
                         if (!isValid) {
                             Log.w(
                                     TAG,
-                                    "Skipping invalid message ${queuedMessage.message.id} during queue save"
+                                    "Skipping invalid message during queue save: " +
+                                            "id='${queuedMessage.message.id}', " +
+                                            "chatId='${queuedMessage.message.chatId}', " +
+                                            "senderId='${queuedMessage.message.senderId}'"
                             )
                         }
                         isValid
