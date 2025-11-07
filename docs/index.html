@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Team Collaboration App - Privacy Policy and Account Deletion">
+    <meta name="keywords" content="Team Collaboration App, privacy policy, account deletion">
+    <meta name="robots" content="index, follow">
+    <meta http-equiv="refresh" content="2;url=privacy-policy.html">
+    <meta property="og:title" content="Team Collaboration App - Compliance Pages">
+    <meta property="og:description" content="Privacy Policy and Account Deletion for Team Collaboration App">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Team Collaboration App - Compliance Pages">
+    <meta name="twitter:description" content="Privacy Policy and Account Deletion for Team Collaboration App">
+    <meta name="author" content="Team Collaboration App">
+    <title>Team Collaboration App - Compliance Pages</title>
+    <link rel="stylesheet" href="assets/css/common.css">
+    <style>
+        .index-page {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .index-page h2 {
+            margin-top: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+            color: var(--color-primary);
+        }
+
+        .redirect-notice {
+            background-color: var(--color-background-alt);
+            border: 2px solid var(--color-primary);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            margin: var(--spacing-lg) 0;
+            font-size: var(--font-size-large);
+        }
+
+        .redirect-notice .countdown {
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .page-links {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            margin: var(--spacing-xl) 0;
+        }
+
+        .page-card {
+            background-color: var(--color-background);
+            border: 2px solid var(--color-border);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            text-align: left;
+            transition: all var(--transition-normal);
+            box-shadow: var(--box-shadow);
+        }
+
+        .page-card:hover {
+            border-color: var(--color-primary);
+            box-shadow: var(--box-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .page-card h3 {
+            margin-top: 0;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-primary);
+            font-size: var(--font-size-h3);
+        }
+
+        .page-card p {
+            margin-bottom: var(--spacing-md);
+            color: var(--color-text-secondary);
+        }
+
+        .page-card .button {
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+
+        .page-icon {
+            font-size: 48px;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        @media (min-width: 768px) {
+            .page-links {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <img src="assets/images/logo.png" alt="Team Collaboration App Logo" class="logo">
+                <h1>Team Collaboration App</h1>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <article class="index-page">
+            <h2>Welcome to Team Collaboration App Compliance Pages</h2>
+            
+            <div class="redirect-notice" role="status" aria-live="polite">
+                <p>You will be redirected to the Privacy Policy in <span class="countdown" id="countdown">2</span> seconds...</p>
+                <p><a href="privacy-policy.html">Click here if you are not redirected automatically</a></p>
+            </div>
+
+            <div class="page-links">
+                <div class="page-card">
+                    <div class="page-icon" aria-hidden="true">🔒</div>
+                    <h3>Privacy Policy</h3>
+                    <p>
+                        Learn how we collect, use, store, and protect your personal information. 
+                        Our privacy policy explains our data practices in detail and outlines your rights under GDPR and COPPA.
+                    </p>
+                    <a href="privacy-policy.html" class="button button-primary">View Privacy Policy</a>
+                </div>
+
+                <div class="page-card">
+                    <div class="page-icon" aria-hidden="true">🗑️</div>
+                    <h3>Delete Account</h3>
+                    <p>
+                        Request permanent deletion of your account and all associated data. 
+                        This action is irreversible and will remove your profile, messages, tasks, and group memberships.
+                    </p>
+                    <a href="delete-account.html" class="button button-secondary">Delete Account</a>
+                </div>
+            </div>
+
+            <section class="mt-lg">
+                <h3>About These Pages</h3>
+                <p>
+                    These pages are provided to meet Google Play Store compliance requirements for data transparency 
+                    and user privacy. They ensure that users understand how their data is handled and provide a mechanism 
+                    for exercising their right to data deletion under privacy regulations such as GDPR and CCPA.
+                </p>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Team Collaboration App. All rights reserved.</p>
+            <p>
+                <a href="privacy-policy.html">Privacy Policy</a> | 
+                <a href="delete-account.html">Delete Account</a> | 
+                <a href="mailto:privacy@teamcollabapp.com">Contact Support</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Countdown timer for redirect
+        let seconds = 2;
+        const countdownElement = document.getElementById('countdown');
+        
+        const countdownInterval = setInterval(() => {
+            seconds--;
+            if (countdownElement) {
+                countdownElement.textContent = seconds;
+            }
+            
+            if (seconds <= 0) {
+                clearInterval(countdownInterval);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

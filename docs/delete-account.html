@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Delete your Team Collaboration App account and all associated data">
+    <meta name="keywords" content="account deletion, delete account, Team Collaboration App, GDPR">
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';">
+    <meta property="og:title" content="Team Collaboration App - Account Deletion">
+    <meta property="og:description" content="Delete your account and all associated data">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Team Collaboration App - Account Deletion">
+    <meta name="twitter:description" content="Delete your account and all associated data">
+    <meta name="author" content="Team Collaboration App">
+    <link rel="canonical" href="https://yourusername.github.io/yourrepo/delete-account.html">
+    <title>Delete Account - Team Collaboration App</title>
+    <link rel="stylesheet" href="assets/css/common.css">
+    <link rel="stylesheet" href="assets/css/delete.css">
+</head>
+<body>
+    <a href="#deletion-form" class="skip-to-section">Skip to deletion form</a>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <img src="assets/images/logo.png" alt="Team Collaboration App Logo" class="logo">
+                <h1>Team Collaboration App</h1>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <article class="delete-account">
+            <h2>Delete Your Account</h2>
+
+            <section id="warning" class="warning-section">
+                <div class="warning-icon" aria-hidden="true">⚠️</div>
+                <h3>Warning: This Action Cannot Be Undone</h3>
+                <p class="warning-text">
+                    Deleting your account is <strong>permanent and irreversible</strong>. Once you confirm deletion, 
+                    you will immediately lose access to your account and all associated data will be permanently removed 
+                    from our systems.
+                </p>
+                <p class="warning-text">
+                    Please make sure you have backed up any important information before proceeding.
+                </p>
+            </section>
+
+            <section id="data-explanation" class="data-explanation-section">
+                <h3>What Will Be Deleted</h3>
+                <p>When you delete your account, the following data will be <strong>permanently removed</strong>:</p>
+                <ul class="data-list deleted-data">
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>User Profile:</strong> Your email, display name, profile picture, and account settings
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>Authentication:</strong> Your login credentials and authentication tokens
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>Messages:</strong> All messages you have sent in individual and group chats
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>Tasks:</strong> All tasks you have created or are assigned to
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>Group Memberships:</strong> Your membership in all groups
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">🗑️</span>
+                        <strong>FCM Tokens:</strong> Push notification tokens associated with your devices
+                    </li>
+                </ul>
+
+                <h3>What Will Be Retained</h3>
+                <p>The following data may be retained in <strong>anonymized form</strong> for legal and operational purposes:</p>
+                <ul class="data-list retained-data">
+                    <li>
+                        <span class="data-icon" aria-hidden="true">📊</span>
+                        <strong>Aggregated Analytics:</strong> Anonymized usage statistics without personal identifiers
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">📝</span>
+                        <strong>Audit Logs:</strong> Deletion request timestamp (retained for 90 days for compliance)
+                    </li>
+                    <li>
+                        <span class="data-icon" aria-hidden="true">💾</span>
+                        <strong>Backup Data:</strong> Automatically deleted after 30 days from backup systems
+                    </li>
+                </ul>
+            </section>
+
+            <section id="deletion-form" class="deletion-form-section">
+                <h3>Confirm Account Deletion</h3>
+                <p>To delete your account, please enter your credentials below:</p>
+
+                <form id="deleteAccountForm" novalidate>
+                    <div class="form-group">
+                        <label for="email">Email Address <span class="required" aria-label="required">*</span></label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required 
+                            autocomplete="email"
+                            placeholder="Enter your email address"
+                            aria-describedby="email-error"
+                        >
+                        <span id="email-error" class="error-message" role="alert"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password <span class="required" aria-label="required">*</span></label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required 
+                            autocomplete="current-password"
+                            placeholder="Enter your password"
+                            aria-describedby="password-error"
+                        >
+                        <span id="password-error" class="error-message" role="alert"></span>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input 
+                                type="checkbox" 
+                                id="confirmCheckbox" 
+                                name="confirm" 
+                                required
+                                aria-describedby="confirm-error"
+                            >
+                            <span class="checkbox-text">
+                                I understand that this action cannot be undone and all my data will be permanently deleted
+                            </span>
+                        </label>
+                        <span id="confirm-error" class="error-message" role="alert"></span>
+                    </div>
+
+                    <div class="form-group button-group">
+                        <button 
+                            type="submit" 
+                            id="deleteButton" 
+                            class="btn btn-danger" 
+                            disabled
+                            aria-describedby="button-status"
+                        >
+                            Delete My Account Permanently
+                        </button>
+                        <span id="button-status" class="sr-only" aria-live="polite"></span>
+                    </div>
+                </form>
+
+                <div id="statusMessage" class="status-message hidden" role="status" aria-live="polite"></div>
+                
+                <div id="loadingSpinner" class="loading-spinner hidden" role="status" aria-live="polite">
+                    <div class="spinner" aria-hidden="true"></div>
+                    <p class="loading-text">Deleting your account... Please wait.</p>
+                </div>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Team Collaboration App. All rights reserved.</p>
+            <p>
+                <a href="privacy-policy.html">Privacy Policy</a> | 
+                <a href="mailto:privacy@teamcollabapp.com">Contact Support</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Firebase SDK and Account Deletion Logic -->
+    <script type="module" src="assets/js/firebase-config.js"></script>
+    <script type="module" src="assets/js/delete-account.js"></script>
+</body>
+</html>
