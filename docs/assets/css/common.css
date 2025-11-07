@@ -560,6 +560,87 @@ button[type="submit"]:disabled {
   }
 }
 
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #42a5f5;
+    --color-primary-dark: #1976d2;
+    --color-primary-light: #64b5f6;
+    
+    --color-text: #e0e0e0;
+    --color-text-secondary: #b0b0b0;
+    --color-background: #121212;
+    --color-background-alt: #1e1e1e;
+    --color-border: #424242;
+    
+    --color-success: #66bb6a;
+    --color-error: #ef5350;
+    --color-warning: #ffa726;
+    --color-info: #42a5f5;
+  }
+  
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+  
+  header {
+    background-color: #1565c0;
+  }
+  
+  footer {
+    background-color: var(--color-background-alt);
+    border-top-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    background-color: #1a1a1a;
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+  
+  input[type="text"]::placeholder,
+  input[type="email"]::placeholder,
+  input[type="password"]::placeholder,
+  textarea::placeholder {
+    color: #666666;
+  }
+  
+  input[type="text"]:disabled,
+  input[type="email"]:disabled,
+  input[type="password"]:disabled,
+  textarea:disabled,
+  select:disabled {
+    background-color: #0a0a0a;
+    color: #666666;
+  }
+  
+  .message-success {
+    background-color: #1b5e20;
+    color: #a5d6a7;
+  }
+  
+  .message-error {
+    background-color: #b71c1c;
+    color: #ef9a9a;
+  }
+  
+  .message-warning {
+    background-color: #e65100;
+    color: #ffcc80;
+  }
+  
+  .message-info {
+    background-color: #0d47a1;
+    color: #90caf9;
+  }
+}
+
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   :root {
@@ -573,6 +654,14 @@ button[type="submit"]:disabled {
   select,
   textarea {
     border-width: 2px;
+  }
+}
+
+@media (prefers-color-scheme: dark) and (prefers-contrast: high) {
+  :root {
+    --color-text: #ffffff;
+    --color-background: #000000;
+    --color-border: #ffffff;
   }
 }
 

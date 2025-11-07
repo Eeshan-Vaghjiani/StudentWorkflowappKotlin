@@ -62,9 +62,9 @@ service cloud.firestore {
         && (!('email' in request.resource.data.diff(resource.data).affectedKeys()) 
             || request.resource.data.email == resource.data.email);
       
-      // Prevent deletion of user profiles
-      // Requirement 3.5: Prevent profile deletion to maintain data integrity
-      allow delete: if false;
+      // Allow users to delete their own profile (for account deletion)
+      // Requirement 7.6: Support account deletion for Play Store compliance
+      allow delete: if isOwner(userId);
     }
     
     // ============================================
@@ -121,6 +121,50 @@ service cloud.firestore {
         && validArraySize(request.resource.data.get('assignedTo', []), 0, 50);
       
       // Only task creator can delete
+      allow delete: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+    }
+    
+    // ============================================
+    // MESSAGES COLLECTION (Top-level for account deletion)
+    // ============================================
+    match /messages/{messageId} {
+      // Users can read messages they sent
+      allow read: if isAuthenticated() 
+        && request.auth.uid == resource.data.senderId;
+      
+      // Users can create messages
+      allow create: if isAuthenticated()
+        && request.resource.data.senderId == request.auth.uid;
+      
+      // Users can update their own messages
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.senderId;
+      
+      // Users can delete their own messages (for account deletion)
+      // Requirement 7.6: Support account deletion for Play Store compliance
+      allow delete: if isAuthenticated() 
+        && request.auth.uid == resource.data.senderId;
+    }
+    
+    // ============================================
+    // GROUP MEMBERS COLLECTION (for account deletion)
+    // ============================================
+    match /groupMembers/{memberId} {
+      // Users can read their own memberships
+      allow read: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+      
+      // Users can create their own memberships
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own memberships
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.userId;
+      
+      // Users can delete their own memberships (for account deletion)
+      // Requirement 7.6: Support account deletion for Play Store compliance
       allow delete: if isAuthenticated() 
         && request.auth.uid == resource.data.userId;
     }

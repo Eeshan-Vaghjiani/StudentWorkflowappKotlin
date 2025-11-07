@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Test - Delete Account</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-info {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .test-info h2 {
+            margin-top: 0;
+            color: #1565c0;
+        }
+        .test-info ul {
+            margin: 10px 0;
+        }
+        .test-info li {
+            margin: 5px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .enabled {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        .disabled {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h2>🧪 Form Button Test</h2>
+        <p><strong>To enable the "Delete My Account Permanently" button:</strong></p>
+        <ul>
+            <li>✅ Enter a valid email (e.g., test@example.com)</li>
+            <li>✅ Enter a password with at least 6 characters</li>
+            <li>✅ Check the confirmation checkbox</li>
+        </ul>
+        <p><strong>Button Status:</strong> <span id="buttonStatus" class="status disabled">DISABLED</span></p>
+    </div>
+
+    <p><a href="delete-account.html">← Back to Delete Account Page</a></p>
+
+    <script>
+        // Monitor the button state on the actual page
+        function checkButtonState() {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = 'delete-account.html';
+            document.body.appendChild(iframe);
+            
+            iframe.onload = function() {
+                try {
+                    const button = iframe.contentDocument.getElementById('deleteButton');
+                    const statusEl = document.getElementById('buttonStatus');
+                    
+                    if (button) {
+                        if (button.disabled) {
+                            statusEl.textContent = 'DISABLED';
+                            statusEl.className = 'status disabled';
+                        } else {
+                            statusEl.textContent = 'ENABLED';
+                            statusEl.className = 'status enabled';
+                        }
+                    }
+                } catch (e) {
+                    console.log('Cannot access iframe content (expected)');
+                }
+                
+                document.body.removeChild(iframe);
+            };
+        }
+        
+        // Check every 2 seconds
+        setInterval(checkButtonState, 2000);
+    </script>
+</body>
+</html>

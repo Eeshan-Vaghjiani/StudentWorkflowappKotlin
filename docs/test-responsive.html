@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Design Testing - Team Collaboration App</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: 2px solid #1976d2;
+            background: white;
+            color: #1976d2;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #1976d2;
+            color: white;
+        }
+
+        button.active {
+            background: #1976d2;
+            color: white;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .viewport-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            border-left: 4px solid #1976d2;
+        }
+
+        .viewport-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .viewport-info strong {
+            color: #1976d2;
+        }
+
+        .iframe-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .iframe-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .iframe-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .iframe-dimensions {
+            font-size: 14px;
+            color: #666;
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .iframe-wrapper {
+            border: 3px solid #1976d2;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        iframe {
+            display: block;
+            border: none;
+            width: 100%;
+            background: white;
+        }
+
+        .orientation-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .checklist {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .checklist h2 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background: #f5f5f5;
+            transition: all 0.2s;
+        }
+
+        .checklist-item:hover {
+            background: #e3f2fd;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .checklist-item label {
+            flex: 1;
+            margin: 0;
+            cursor: pointer;
+            font-weight: 400;
+        }
+
+        .test-results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .test-results h2 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f5f5f5;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-pass {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-fail {
+            background: #f44336;
+            color: white;
+        }
+
+        .status-pending {
+            background: #ff9800;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .iframe-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Responsive Design Testing Tool</h1>
+            <p class="subtitle">Test Team Collaboration App compliance pages across different screen sizes and orientations</p>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Select Page to Test:</label>
+                <select id="pageSelect">
+                    <option value="privacy-policy.html">Privacy Policy Page</option>
+                    <option value="delete-account.html">Account Deletion Page</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Device Presets:</label>
+                <div class="button-group">
+                    <button onclick="setViewport(320, 568, 'portrait')" data-size="mobile">📱 Mobile (320px)</button>
+                    <button onclick="setViewport(375, 667, 'portrait')" data-size="mobile-large">📱 iPhone (375px)</button>
+                    <button onclick="setViewport(414, 896, 'portrait')" data-size="mobile-xl">📱 Large Phone (414px)</button>
+                    <button onclick="setViewport(768, 1024, 'portrait')" data-size="tablet">📱 Tablet (768px)</button>
+                    <button onclick="setViewport(1024, 768, 'landscape')" data-size="desktop">💻 Desktop (1024px)</button>
+                    <button onclick="setViewport(1440, 900, 'landscape')" data-size="desktop-large">🖥️ Large Desktop (1440px)</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Orientation:</label>
+                <div class="button-group orientation-controls">
+                    <button onclick="toggleOrientation('portrait')" id="portraitBtn">📱 Portrait</button>
+                    <button onclick="toggleOrientation('landscape')" id="landscapeBtn">🔄 Landscape</button>
+                </div>
+            </div>
+
+            <div class="viewport-info">
+                <p><strong>Current Viewport:</strong> <span id="currentWidth">320</span>px × <span id="currentHeight">568</span>px</p>
+                <p><strong>Orientation:</strong> <span id="currentOrientation">Portrait</span></p>
+                <p><strong>Device Category:</strong> <span id="deviceCategory">Mobile</span></p>
+            </div>
+        </div>
+
+        <div class="iframe-container">
+            <div class="iframe-header">
+                <div class="iframe-title" id="iframeTitle">Privacy Policy Page</div>
+                <div class="iframe-dimensions" id="iframeDimensions">320px × 568px</div>
+            </div>
+            <div class="iframe-wrapper" id="iframeWrapper">
+                <iframe id="testFrame" src="privacy-policy.html"></iframe>
+            </div>
+        </div>
+
+        <div class="checklist">
+            <h2>✅ Responsive Design Testing Checklist</h2>
+            
+            <h3 style="margin-top: 20px; margin-bottom: 10px; color: #666;">Privacy Policy Page</h3>
+            <div class="checklist-item">
+                <input type="checkbox" id="check1" onchange="updateProgress()">
+                <label for="check1">Test on mobile (320px) - Content is readable, no horizontal scrolling</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check2" onchange="updateProgress()">
+                <label for="check2">Test on tablet (768px) - Layout adapts properly, sections are well-spaced</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check3" onchange="updateProgress()">
+                <label for="check3">Test on desktop (1024px+) - Content is centered, max-width applied</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check4" onchange="updateProgress()">
+                <label for="check4">Test portrait orientation - All content visible and accessible</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check5" onchange="updateProgress()">
+                <label for="check5">Test landscape orientation - Layout remains functional</label>
+            </div>
+
+            <h3 style="margin-top: 20px; margin-bottom: 10px; color: #666;">Account Deletion Page</h3>
+            <div class="checklist-item">
+                <input type="checkbox" id="check6" onchange="updateProgress()">
+                <label for="check6">Test on mobile (320px) - Form is usable, buttons are touch-friendly (44x44px)</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check7" onchange="updateProgress()">
+                <label for="check7">Test on tablet (768px) - Form layout is comfortable, warning section is prominent</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check8" onchange="updateProgress()">
+                <label for="check8">Test on desktop (1024px+) - Form is centered, data lists display properly</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check9" onchange="updateProgress()">
+                <label for="check9">Test portrait orientation - Form fields stack vertically, easy to fill</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check10" onchange="updateProgress()">
+                <label for="check10">Test landscape orientation - Form remains accessible, no content cut off</label>
+            </div>
+
+            <h3 style="margin-top: 20px; margin-bottom: 10px; color: #666;">General Responsive Behavior</h3>
+            <div class="checklist-item">
+                <input type="checkbox" id="check11" onchange="updateProgress()">
+                <label for="check11">Images and logos scale properly across all screen sizes</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check12" onchange="updateProgress()">
+                <label for="check12">Typography is readable (minimum 16px) on all devices</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check13" onchange="updateProgress()">
+                <label for="check13">Touch targets are minimum 44x44px on mobile devices</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check14" onchange="updateProgress()">
+                <label for="check14">No horizontal scrolling at any breakpoint</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check15" onchange="updateProgress()">
+                <label for="check15">Header and footer adapt properly to screen size</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check16" onchange="updateProgress()">
+                <label for="check16">Links and buttons are easily clickable/tappable</label>
+            </div>
+        </div>
+
+        <div class="test-results">
+            <h2>📊 Test Progress</h2>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <p id="progressText">0 of 16 tests completed</p>
+        </div>
+    </div>
+
+    <script>
+        let currentWidth = 320;
+        let currentHeight = 568;
+        let currentOrientation = 'portrait';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setViewport(320, 568, 'portrait');
+            updateProgress();
+            
+            // Page select handler
+            document.getElementById('pageSelect').addEventListener('change', function() {
+                const page = this.value;
+                document.getElementById('testFrame').src = page;
+                document.getElementById('iframeTitle').textContent = 
+                    page === 'privacy-policy.html' ? 'Privacy Policy Page' : 'Account Deletion Page';
+            });
+        });
+
+        function setViewport(width, height, orientation) {
+            currentWidth = width;
+            currentHeight = height;
+            currentOrientation = orientation;
+
+            const wrapper = document.getElementById('iframeWrapper');
+            const iframe = document.getElementById('testFrame');
+            
+            if (orientation === 'landscape') {
+                wrapper.style.width = height + 'px';
+                iframe.style.height = width + 'px';
+            } else {
+                wrapper.style.width = width + 'px';
+                iframe.style.height = height + 'px';
+            }
+
+            // Update info display
+            document.getElementById('currentWidth').textContent = orientation === 'portrait' ? width : height;
+            document.getElementById('currentHeight').textContent = orientation === 'portrait' ? height : width;
+            document.getElementById('currentOrientation').textContent = 
+                orientation.charAt(0).toUpperCase() + orientation.slice(1);
+            document.getElementById('iframeDimensions').textContent = 
+                `${orientation === 'portrait' ? width : height}px × ${orientation === 'portrait' ? height : width}px`;
+            
+            // Update device category
+            const displayWidth = orientation === 'portrait' ? width : height;
+            let category = 'Mobile';
+            if (displayWidth >= 1024) category = 'Desktop';
+            else if (displayWidth >= 768) category = 'Tablet';
+            document.getElementById('deviceCategory').textContent = category;
+
+            // Update active button
+            document.querySelectorAll('.button-group button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function toggleOrientation(orientation) {
+            currentOrientation = orientation;
+            setViewport(currentWidth, currentHeight, orientation);
+            
+            // Update orientation buttons
+            document.getElementById('portraitBtn').classList.remove('active');
+            document.getElementById('landscapeBtn').classList.remove('active');
+            if (orientation === 'portrait') {
+                document.getElementById('portraitBtn').classList.add('active');
+            } else {
+                document.getElementById('landscapeBtn').classList.add('active');
+            }
+        }
+
+        function updateProgress() {
+            const checkboxes = document.querySelectorAll('.checklist-item input[type="checkbox"]');
+            const checked = document.querySelectorAll('.checklist-item input[type="checkbox"]:checked').length;
+            const total = checkboxes.length;
+            const percentage = Math.round((checked / total) * 100);
+
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressFill').textContent = percentage + '%';
+            document.getElementById('progressText').textContent = `${checked} of ${total} tests completed`;
+
+            // Save progress to localStorage
+            const progress = {};
+            checkboxes.forEach((checkbox, index) => {
+                progress[`check${index + 1}`] = checkbox.checked;
+            });
+            localStorage.setItem('responsiveTestProgress', JSON.stringify(progress));
+        }
+
+        // Load saved progress
+        window.addEventListener('load', function() {
+            const saved = localStorage.getItem('responsiveTestProgress');
+            if (saved) {
+                const progress = JSON.parse(saved);
+                Object.keys(progress).forEach(key => {
+                    const checkbox = document.getElementById(key);
+                    if (checkbox) {
+                        checkbox.checked = progress[key];
+                    }
+                });
+                updateProgress();
+            }
+        });
+    </script>
+</body>
+</html>

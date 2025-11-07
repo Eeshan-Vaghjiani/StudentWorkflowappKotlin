@@ -841,35 +841,137 @@
   }
 }
 
-/* Dark mode support (optional enhancement) */
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
   :root {
     --color-background: #121212;
     --color-background-alt: #1e1e1e;
     --color-text: #e0e0e0;
     --color-text-secondary: #b0b0b0;
-    --color-border: #333333;
+    --color-border: #424242;
+    --color-warning-bg: #4e342e;
+    --color-warning-border: #ff9800;
+    --color-warning-text: #ffb74d;
+    --color-danger-bg: #3e2723;
+    --color-danger-border: #f44336;
+    --color-danger-text: #ef5350;
   }
   
   .warning-section {
-    background: linear-gradient(135deg, #3e2723 0%, #4e342e 100%);
+    background: linear-gradient(135deg, #4e342e 0%, #5d4037 100%);
+    border-color: var(--color-warning-border);
+  }
+  
+  .warning-section h3 {
+    color: #ff8a65;
+  }
+  
+  .warning-text {
+    color: var(--color-warning-text);
+  }
+  
+  .warning-text strong {
+    color: #ff8a65;
   }
   
   .data-explanation-section {
     background-color: var(--color-background-alt);
+    border-color: var(--color-border);
+  }
+  
+  .data-explanation-section h3 {
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+  
+  .data-explanation-section > p {
+    color: var(--color-text-secondary);
+  }
+  
+  .data-list li {
+    background-color: #1a1a1a;
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+  
+  .data-list strong {
+    color: var(--color-text);
   }
   
   .deletion-form-section {
     background-color: var(--color-background);
+    border-color: var(--color-border);
+  }
+  
+  .deletion-form-section h3 {
+    color: var(--color-text);
+  }
+  
+  .deletion-form-section > p {
+    color: var(--color-text-secondary);
+  }
+  
+  #deleteAccountForm label {
+    color: var(--color-text);
   }
   
   input[type="email"],
   input[type="password"] {
-    background-color: var(--color-background-alt);
+    background-color: #1a1a1a;
     color: var(--color-text);
+    border-color: var(--color-border);
+  }
+  
+  input[type="email"]::placeholder,
+  input[type="password"]::placeholder {
+    color: #666666;
+  }
+  
+  input[type="email"]:focus,
+  input[type="password"]:focus {
+    background-color: #1e1e1e;
+    border-color: var(--color-primary-light);
   }
   
   .checkbox-label {
+    background-color: #1a1a1a;
+    border-color: var(--color-border);
+  }
+  
+  .checkbox-label:hover {
     background-color: var(--color-background-alt);
+  }
+  
+  .checkbox-text {
+    color: var(--color-text);
+  }
+  
+  .loading-spinner {
+    background-color: var(--color-background-alt);
+    border-color: var(--color-border);
+  }
+  
+  .loading-text {
+    color: var(--color-text);
+  }
+  
+  .status-message.success {
+    background-color: #1b5e20;
+    color: #a5d6a7;
+  }
+  
+  .status-message.error {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger-text);
+  }
+  
+  .status-message.warning {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning-text);
+  }
+  
+  .status-message.info {
+    background-color: #0d47a1;
+    color: #90caf9;
   }
 }
