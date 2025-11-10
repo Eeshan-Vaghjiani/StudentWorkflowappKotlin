@@ -1,5 +1,6 @@
 package com.example.loginandregistration
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ProgressBar
@@ -190,8 +191,9 @@ class TaskDetailsActivity : AppCompatActivity() {
         btnMarkComplete.setOnClickListener { showMarkCompleteDialog() }
 
         btnEditTask.setOnClickListener {
-            // TODO: Navigate to edit task screen
-            Toast.makeText(this, "Edit functionality coming soon", Toast.LENGTH_SHORT).show()
+            val intent = Intent(this, EditTaskActivity::class.java)
+            intent.putExtra(EditTaskActivity.EXTRA_TASK_ID, taskId)
+            startActivityForResult(intent, EDIT_TASK_REQUEST_CODE)
         }
 
         btnDeleteTask.setOnClickListener { showDeleteConfirmationDialog() }
@@ -298,7 +300,21 @@ class TaskDetailsActivity : AppCompatActivity() {
         btnDeleteTask.isEnabled = !show
     }
 
+    override fun onActivityResult(
+            requestCode: Int,
+            resultCode: Int,
+            data: android.content.Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == EDIT_TASK_REQUEST_CODE && resultCode == RESULT_OK) {
+            // Reload task details after edit
+            loadTaskDetails()
+            setResult(RESULT_OK)
+        }
+    }
+
     companion object {
         const val EXTRA_TASK_ID = "extra_task_id"
+        private const val EDIT_TASK_REQUEST_CODE = 100
     }
 }

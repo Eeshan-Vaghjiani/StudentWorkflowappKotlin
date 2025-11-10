@@ -87,6 +87,9 @@
     <string name="my_tasks">My Tasks</string>
     <string name="list_view">List View</string>
     <string name="kanban_view">Kanban View</string>
+    <string name="kanban_board">Kanban Board</string>
+    <string name="pending">Pending</string>
+    <string name="in_progress">In Progress</string>
     <string name="quick_actions">Quick Actions</string>
     <string name="new_task">New Task</string>
     <string name="ai_assistant">AI Assistant</string>

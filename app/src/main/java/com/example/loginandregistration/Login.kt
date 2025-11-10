@@ -10,7 +10,6 @@ import android.util.Patterns
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.loginandregistration.monitoring.ProductionMonitor
@@ -125,7 +124,7 @@ class Login : AppCompatActivity() {
         tvRegister.setOnClickListener { startActivity(Intent(this, Register::class.java)) }
 
         tvForgotPassword.setOnClickListener {
-            Toast.makeText(this, "Forgot password feature coming soon", Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, ForgotPasswordActivity::class.java))
         }
 
         btnGoogleLogin.setOnClickListener { signInWithGoogle() }

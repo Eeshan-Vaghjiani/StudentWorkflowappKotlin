@@ -1,5 +1,5 @@
 {
-    "kiroAgent.configureMCP": "Disabled",
     "markdown.validate.enabled": true,
-    "html.autoClosingTags": false
+    "html.autoClosingTags": false,
+    "git.ignoreLimitWarning": true
 }

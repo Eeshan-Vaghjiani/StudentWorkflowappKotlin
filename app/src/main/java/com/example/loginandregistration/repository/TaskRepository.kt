@@ -6,6 +6,7 @@ import com.example.loginandregistration.utils.TaskReminderScheduler
 import com.example.loginandregistration.utils.safeFirestoreCall
 import com.example.loginandregistration.validation.FirestoreDataValidator
 import com.example.loginandregistration.validation.ValidationException
+import com.example.loginandregistration.validation.ValidationResult
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -206,6 +207,71 @@ class TaskRepository(private val context: Context? = null) {
                             "Task created successfully with ID: $taskId in ${duration}ms"
                     )
                     taskId
+                }
+            }
+
+    suspend fun updateTask(task: FirebaseTask): Result<Unit> =
+            withContext(Dispatchers.IO) {
+                try {
+                    val taskId = task.id
+                    if (taskId.isEmpty()) {
+                        return@withContext Result.failure(Exception("Task ID is required"))
+                    }
+
+                    // Update the task with current timestamp
+                    val updatedTask = task.copy(updatedAt = Timestamp.now())
+
+                    // Validate basic fields (skip timestamp validation for updates)
+                    // Only validate required fields and constraints
+                    val errors = mutableListOf<String>()
+                    
+                    if (updatedTask.title.isBlank()) {
+                        errors.add("Task title is required")
+                    } else if (updatedTask.title.length > 500) {
+                        errors.add("Task title must not exceed 500 characters")
+                    }
+                    
+                    if (updatedTask.userId.isBlank()) {
+                        errors.add("User ID is required")
+                    }
+                    
+                    if (updatedTask.assignedTo.isEmpty()) {
+                        errors.add("At least one assignee is required")
+                    } else if (updatedTask.assignedTo.size > 50) {
+                        errors.add("Maximum 50 assignees allowed")
+                    }
+                    
+                    if (updatedTask.description.length > 5000) {
+                        errors.add("Task description must not exceed 5000 characters")
+                    }
+                    
+                    if (errors.isNotEmpty()) {
+                        return@withContext Result.failure(
+                            ValidationException(ValidationResult.failure(errors))
+                        )
+                    }
+
+                    // Perform the update using safeFirestoreCall
+                    val result: Result<Unit> =
+                            safeFirestoreCall("updateTask") {
+                                tasksCollection.document(taskId).set(updatedTask).await()
+                                Unit
+                            }
+
+                    // Reschedule reminder if needed
+                    if (result.isSuccess) {
+                        context?.let {
+                            if (updatedTask.status == "completed") {
+                                TaskReminderScheduler.cancelReminder(it, taskId)
+                            } else {
+                                TaskReminderScheduler.rescheduleReminder(it, updatedTask)
+                            }
+                        }
+                    }
+
+                    return@withContext result
+                } catch (e: Exception) {
+                    Result.failure(e)
                 }
             }
 

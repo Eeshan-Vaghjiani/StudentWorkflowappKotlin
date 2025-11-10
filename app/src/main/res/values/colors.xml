@@ -82,6 +82,13 @@
     <color name="medium_priority_color">#FF9800</color>
     <color name="low_priority_color">#4CAF50</color>
     
+    <!-- Kanban Status Colors -->
+    <color name="pending_color">#FF9500</color>
+    <color name="in_progress_color">#007AFF</color>
+    
+    <!-- Card Stroke Color -->
+    <color name="card_stroke">#E5E5EA</color>
+    
     <!-- Divider Color -->
     <color name="divider_color">#E5E5EA</color>
     
