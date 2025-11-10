@@ -78,7 +78,14 @@
             android:name=".TaskDetailsActivity"
             android:exported="false" />
         <activity
+            android:name=".EditTaskActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
             android:name=".TasksActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ForgotPasswordActivity"
             android:exported="false" />
         <activity
             android:name=".GroupsActivity"

@@ -25,7 +25,17 @@
             android:layout_height="wrap_content"
             android:textColor="@color/text_primary"
             android:textSize="16sp"
+            android:textIsSelectable="true"
+            android:lineSpacingExtra="4dp"
             tools:text="I'll help you create that assignment. What's the due date?" />
+
+        <!-- Container for code blocks -->
+        <LinearLayout
+            android:id="@+id/codeBlocksContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
 
         <!-- Action Button (for create assignment action) -->
         <com.google.android.material.button.MaterialButton

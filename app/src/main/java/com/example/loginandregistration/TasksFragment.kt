@@ -5,6 +5,8 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -32,7 +34,7 @@ class TasksFragment : Fragment() {
         }
 
         private var _binding: FragmentTasksBinding? = null
-        private val binding: FragmentTasksBinding?
+        private val binding
                 get() = _binding
 
         private val viewModel: TasksViewModel by viewModels()
@@ -43,6 +45,16 @@ class TasksFragment : Fragment() {
         private val taskValidator = TaskCreationValidator()
         private val auth = FirebaseAuth.getInstance()
         private var currentFilter: String = "all"
+        private var isKanbanView: Boolean = false
+        private var taskMapping = mutableMapOf<String, FirebaseTask>()
+
+        // Kanban adapters
+        private lateinit var pendingAdapter:
+                com.example.loginandregistration.adapters.KanbanTaskAdapter
+        private lateinit var inProgressAdapter:
+                com.example.loginandregistration.adapters.KanbanTaskAdapter
+        private lateinit var completedAdapter:
+                com.example.loginandregistration.adapters.KanbanTaskAdapter
 
         override fun onCreateView(
                 inflater: LayoutInflater,
@@ -56,10 +68,26 @@ class TasksFragment : Fragment() {
                         com.example.loginandregistration.utils.ErrorStateManager(requireContext())
                 setupViews()
                 setupRecyclerView()
+                setupKanbanAdapters()
                 setupClickListeners()
                 observeViewModel()
 
-                return _binding!!.root
+                return binding!!.root
+        }
+
+        private fun setupKanbanAdapters() {
+                pendingAdapter =
+                        com.example.loginandregistration.adapters.KanbanTaskAdapter { task ->
+                                openTaskDetails(task)
+                        }
+                inProgressAdapter =
+                        com.example.loginandregistration.adapters.KanbanTaskAdapter { task ->
+                                openTaskDetails(task)
+                        }
+                completedAdapter =
+                        com.example.loginandregistration.adapters.KanbanTaskAdapter { task ->
+                                openTaskDetails(task)
+                        }
         }
 
         override fun onDestroyView() {
@@ -68,17 +96,19 @@ class TasksFragment : Fragment() {
         }
 
         private fun setupViews() {
-                val binding = _binding ?: return
-
-                // Setup swipe refresh
-                binding.swipeRefreshLayout.setOnRefreshListener { refreshData() }
+                binding?.swipeRefreshLayout?.setOnRefreshListener { refreshData() }
         }
 
         private fun setupRecyclerView() {
-                val binding = _binding ?: return
+                val binding = binding ?: return
 
                 taskAdapter = TaskAdapter { task ->
-                        Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
+                        val firebaseTask = taskMapping[task.title]
+                        if (firebaseTask != null) {
+                                openTaskDetails(firebaseTask)
+                        } else {
+                                Toast.makeText(context, "Task not found", Toast.LENGTH_SHORT).show()
+                        }
                 }
 
                 binding.recyclerTasks.apply {
@@ -86,12 +116,9 @@ class TasksFragment : Fragment() {
                         adapter = taskAdapter
                 }
         }
-
         private fun observeViewModel() {
-                // Observe tasks from ViewModel
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.tasks.collect { firebaseTasks ->
-                                // Only update UI if view exists
                                 if (_binding == null || !isAdded) {
                                         Log.d(TAG, "View destroyed, skipping tasks UI update")
                                         return@collect
@@ -99,7 +126,6 @@ class TasksFragment : Fragment() {
 
                                 Log.d(TAG, "Received ${firebaseTasks.size} tasks from ViewModel")
 
-                                // Filter tasks based on current filter
                                 val filteredTasks =
                                         when (currentFilter) {
                                                 "personal" ->
@@ -117,30 +143,29 @@ class TasksFragment : Fragment() {
                                                 else -> firebaseTasks
                                         }
 
-                                updateTasksList(filteredTasks)
-                                showEmptyStateIfNeeded(filteredTasks.isEmpty())
-                                _binding?.swipeRefreshLayout?.isRefreshing = false
+                                if (isKanbanView) {
+                                        updateKanbanView(firebaseTasks)
+                                } else {
+                                        updateTasksList(filteredTasks)
+                                        showEmptyStateIfNeeded(filteredTasks.isEmpty())
+                                        _binding?.swipeRefreshLayout?.isRefreshing = false
+                                }
                         }
                 }
 
-                // Observe loading state
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.isLoading.collect { isLoading ->
-                                // Only update UI if view exists
                                 if (_binding == null || !isAdded) {
                                         Log.d(TAG, "View destroyed, skipping loading state update")
                                         return@collect
                                 }
-
                                 _binding?.swipeRefreshLayout?.isRefreshing = isLoading
                         }
                 }
 
-                // Observe errors
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.error.collect { error ->
                                 error?.let {
-                                        // Only show error if view exists
                                         if (_binding != null && isAdded) {
                                                 showError(it)
                                         } else {
@@ -154,11 +179,9 @@ class TasksFragment : Fragment() {
                         }
                 }
 
-                // Observe success messages
                 viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.successMessage.collect { message ->
                                 message?.let {
-                                        // Only show success if view exists
                                         if (_binding != null && isAdded) {
                                                 showSuccess(it)
                                         } else {
@@ -172,11 +195,8 @@ class TasksFragment : Fragment() {
                         }
                 }
 
-                // Real-time listener for task statistics (still using repository directly for
-                // stats)
                 taskRepository.getTaskStatsFlow().collectWithLifecycle(viewLifecycleOwner) { stats
                         ->
-                        // Only update UI if view exists
                         val binding = _binding
                         if (binding == null || !isAdded) {
                                 Log.d(TAG, "View destroyed, skipping stats UI update")
@@ -192,7 +212,6 @@ class TasksFragment : Fragment() {
                         binding.tvCompletedCount.text = stats.completed.toString()
                 }
         }
-
         private fun showError(error: ErrorHandler.AppError) {
                 val binding =
                         _binding
@@ -201,11 +220,9 @@ class TasksFragment : Fragment() {
                                         return
                                 }
 
-                // Convert ErrorHandler.AppError to exception for ErrorStateManager
                 val exception =
                         Exception(
                                 when (error) {
-                                        // New error types
                                         is ErrorHandler.AppError.Permission ->
                                                 "You don't have permission to ${error.operation}"
                                         is ErrorHandler.AppError.Network ->
@@ -215,7 +232,6 @@ class TasksFragment : Fragment() {
                                         is ErrorHandler.AppError.NotFound ->
                                                 "${error.resource} not found"
                                         is ErrorHandler.AppError.Unknown -> error.message
-                                        // Legacy error types
                                         is ErrorHandler.AppError.PermissionError -> error.message
                                         is ErrorHandler.AppError.NetworkError -> error.message
                                         is ErrorHandler.AppError.FirestoreError -> error.message
@@ -226,7 +242,6 @@ class TasksFragment : Fragment() {
                                 }
                         )
 
-                // Use ErrorStateManager for consistent error handling
                 val errorState = errorStateManager.categorizeError(exception)
                 errorStateManager.showError(errorState, binding.root) { viewModel.loadUserTasks() }
         }
@@ -238,7 +253,6 @@ class TasksFragment : Fragment() {
                                         Log.d(TAG, "Cannot show success: view is destroyed")
                                         return
                                 }
-
                 Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
         }
 
@@ -253,7 +267,6 @@ class TasksFragment : Fragment() {
         }
 
         private fun refreshData() {
-                // Trigger a manual refresh through the ViewModel
                 viewModel.loadUserTasks()
         }
 
@@ -265,27 +278,35 @@ class TasksFragment : Fragment() {
                                         return
                                 }
 
+                taskMapping.clear()
+
                 val displayTasks =
                         firebaseTasks.map { firebaseTask ->
-                                Task(
-                                        id = firebaseTask.id.hashCode(),
-                                        title = firebaseTask.title,
-                                        subtitle =
-                                                "${firebaseTask.subject} • ${formatDueDate(firebaseTask.dueDate)}",
-                                        status =
-                                                firebaseTask.status.replaceFirstChar {
-                                                        it.uppercase()
-                                                },
-                                        iconColor = getStatusColor(firebaseTask.status),
-                                        statusColor = getStatusColor(firebaseTask.status)
-                                )
+                                val displayTask =
+                                        Task(
+                                                id = firebaseTask.id.hashCode(),
+                                                title = firebaseTask.title,
+                                                subtitle =
+                                                        "${firebaseTask.subject} • ${formatDueDate(firebaseTask.dueDate)}",
+                                                status =
+                                                        firebaseTask.status.replaceFirstChar {
+                                                                it.uppercase()
+                                                        },
+                                                iconColor = getStatusColor(firebaseTask.status),
+                                                statusColor = getStatusColor(firebaseTask.status)
+                                        )
+                                taskMapping[firebaseTask.title] = firebaseTask
+                                displayTask
                         }
 
-                taskAdapter = TaskAdapter { task ->
-                        Toast.makeText(context, "Clicked: ${task.title}", Toast.LENGTH_SHORT).show()
-                }
                 taskAdapter.submitList(displayTasks)
-                binding.recyclerTasks.adapter = taskAdapter
+        }
+
+        private fun openTaskDetails(task: FirebaseTask) {
+                val intent =
+                        android.content.Intent(requireContext(), TaskDetailsActivity::class.java)
+                intent.putExtra(TaskDetailsActivity.EXTRA_TASK_ID, task.id)
+                startActivity(intent)
         }
 
         private fun showEmptyStateIfNeeded(isEmpty: Boolean) {
@@ -313,11 +334,9 @@ class TasksFragment : Fragment() {
                         binding.recyclerTasks.visibility = View.VISIBLE
                 }
         }
-
         private fun setupClickListeners() {
-                val binding = _binding ?: return
+                val binding = binding ?: return
 
-                // Header buttons
                 binding.btnFilter.setOnClickListener {
                         Toast.makeText(
                                         context,
@@ -338,10 +357,8 @@ class TasksFragment : Fragment() {
 
                 binding.btnAddTask.setOnClickListener { showCreateTaskDialog() }
 
-                // Category buttons
                 binding.btnAllTasks.setOnClickListener {
                         currentFilter = "all"
-                        // Trigger UI update with current tasks
                         val currentTasks = viewModel.tasks.value
                         updateTasksList(currentTasks)
                         showEmptyStateIfNeeded(currentTasks.isEmpty())
@@ -355,7 +372,6 @@ class TasksFragment : Fragment() {
 
                 binding.btnPersonal.setOnClickListener {
                         currentFilter = "personal"
-                        // Trigger UI update with filtered tasks
                         val filteredTasks =
                                 viewModel.tasks.value.filter { it.category == "personal" }
                         updateTasksList(filteredTasks)
@@ -370,7 +386,6 @@ class TasksFragment : Fragment() {
 
                 binding.btnGroup.setOnClickListener {
                         currentFilter = "group"
-                        // Trigger UI update with filtered tasks
                         val filteredTasks = viewModel.tasks.value.filter { it.category == "group" }
                         updateTasksList(filteredTasks)
                         showEmptyStateIfNeeded(filteredTasks.isEmpty())
@@ -384,7 +399,6 @@ class TasksFragment : Fragment() {
 
                 binding.btnAssignments.setOnClickListener {
                         currentFilter = "assignment"
-                        // Trigger UI update with filtered tasks
                         val filteredTasks =
                                 viewModel.tasks.value.filter { it.category == "assignment" }
                         updateTasksList(filteredTasks)
@@ -397,39 +411,27 @@ class TasksFragment : Fragment() {
                                 .show()
                 }
 
-                // View toggle buttons
                 binding.btnListView.setOnClickListener {
-                        Toast.makeText(
-                                        context,
-                                        getString(R.string.view_changed, "List"),
-                                        Toast.LENGTH_SHORT
-                                )
-                                .show()
+                        if (isKanbanView) {
+                                switchToListView()
+                        }
                 }
 
                 binding.btnKanbanView.setOnClickListener {
-                        Toast.makeText(
-                                        context,
-                                        getString(R.string.view_changed, "Kanban"),
-                                        Toast.LENGTH_SHORT
-                                )
-                                .show()
+                        if (!isKanbanView) {
+                                switchToKanbanView()
+                        }
                 }
 
-                // Quick action buttons
                 binding.btnNewTask.setOnClickListener { showCreateTaskDialog() }
 
                 binding.btnKanbanViewAction.setOnClickListener {
-                        Toast.makeText(
-                                        context,
-                                        getString(R.string.view_changed, "Kanban"),
-                                        Toast.LENGTH_SHORT
-                                )
-                                .show()
+                        if (!isKanbanView) {
+                                switchToKanbanView()
+                        }
                 }
 
                 binding.btnAiAssistant.setOnClickListener {
-                        // Launch AI Assistant Activity
                         val intent =
                                 android.content.Intent(
                                         requireContext(),
@@ -461,7 +463,6 @@ class TasksFragment : Fragment() {
                         else -> "Due in ${diff / (24 * 60 * 60 * 1000)} days"
                 }
         }
-
         private fun showCreateTaskDialog() {
                 val dialogView =
                         LayoutInflater.from(context).inflate(R.layout.dialog_create_task, null)
@@ -502,10 +503,6 @@ class TasksFragment : Fragment() {
                         dialogView.findViewById<com.google.android.material.chip.ChipGroup>(
                                 R.id.chip_group_priority
                         )
-                val chipGroupTask =
-                        dialogView.findViewById<com.google.android.material.chip.Chip>(
-                                R.id.chip_group_task
-                        )
                 val layoutGroupSelection =
                         dialogView.findViewById<
                                 com.google.android.material.textfield.TextInputLayout>(
@@ -521,11 +518,9 @@ class TasksFragment : Fragment() {
                 val btnCreateWithAI =
                         dialogView.findViewById<MaterialButton>(R.id.btn_create_with_ai)
 
-                // Get current user ID and auto-add to assignees
                 val currentUserId = auth.currentUser?.uid ?: ""
                 val assignedToList = mutableListOf(currentUserId)
 
-                // Real-time validation function
                 fun validateAndUpdateUI() {
                         val title = etTaskTitle.text.toString().trim()
                         val description = etTaskDescription.text.toString().trim()
@@ -544,33 +539,25 @@ class TasksFragment : Fragment() {
                                         else -> "medium"
                                 }
 
-                        // Validate individual fields for inline error messages
                         val titleError = taskValidator.validateTitle(title)
                         val descriptionError = taskValidator.validateDescription(description)
-                        val assigneeError =
-                                taskValidator.validateAssignees(assignedToList, currentUserId)
 
-                        // Show inline errors
                         tilTaskTitle.error = titleError
                         tilTaskDescription.error = descriptionError
 
-                        // Validate all fields to determine if Create button should be enabled
                         val validation =
                                 taskValidator.validateTaskCreation(
                                         title = title,
                                         description = description,
                                         assignedTo = assignedToList,
                                         creatorId = currentUserId,
-                                        dueDate = null, // Due date is optional
+                                        dueDate = null,
                                         priority = priority,
                                         category = category
                                 )
 
-                        // Enable/disable Create button based on validation
                         btnCreate.isEnabled = validation is TaskValidationResult.Valid
                 }
-
-                // Add real-time validation listeners
                 etTaskTitle.addTextChangedListener(
                         object : android.text.TextWatcher {
                                 override fun beforeTextChanged(
@@ -623,10 +610,8 @@ class TasksFragment : Fragment() {
 
                 chipGroupPriority.setOnCheckedStateChangeListener { _, _ -> validateAndUpdateUI() }
 
-                // Initial validation (will disable button if empty)
                 validateAndUpdateUI()
 
-                // Load user's groups for selection
                 lifecycleScope.launch {
                         try {
                                 val groupRepository =
@@ -647,7 +632,6 @@ class TasksFragment : Fragment() {
                         }
                 }
 
-                // Setup due date picker
                 etDueDate.setOnClickListener {
                         val calendar = java.util.Calendar.getInstance()
                         val datePickerDialog =
@@ -674,7 +658,6 @@ class TasksFragment : Fragment() {
 
                 btnCancel.setOnClickListener { dialog.dismiss() }
 
-                // Handle "Create with AI" button
                 btnCreateWithAI.setOnClickListener {
                         if (!viewModel.isAIServiceAvailable()) {
                                 Toast.makeText(
@@ -685,18 +668,14 @@ class TasksFragment : Fragment() {
                                         .show()
                                 return@setOnClickListener
                         }
-
-                        // Show AI prompt dialog
                         showAIPromptDialog(dialog)
                 }
-
                 btnCreate.setOnClickListener {
                         val title = etTaskTitle.text.toString().trim()
                         val description = etTaskDescription.text.toString().trim()
                         val subject = etTaskSubject.text.toString().trim()
                         val dueDateText = etDueDate.text.toString().trim()
 
-                        // Get selected category
                         val category =
                                 when (chipGroupCategory.checkedChipId) {
                                         R.id.chip_personal -> "personal"
@@ -705,7 +684,6 @@ class TasksFragment : Fragment() {
                                         else -> "personal"
                                 }
 
-                        // Get selected priority
                         val priority =
                                 when (chipGroupPriority.checkedChipId) {
                                         R.id.chip_low -> "low"
@@ -714,7 +692,6 @@ class TasksFragment : Fragment() {
                                         else -> "medium"
                                 }
 
-                        // Parse due date
                         var dueDate: com.google.firebase.Timestamp? = null
                         if (dueDateText.isNotEmpty()) {
                                 try {
@@ -732,7 +709,6 @@ class TasksFragment : Fragment() {
                                 }
                         }
 
-                        // Final validation before creating task
                         val validation =
                                 taskValidator.validateTaskCreation(
                                         title = title,
@@ -746,7 +722,6 @@ class TasksFragment : Fragment() {
 
                         when (validation) {
                                 is TaskValidationResult.Valid -> {
-                                        // Create task using ViewModel
                                         val task =
                                                 com.example.loginandregistration.models
                                                         .FirebaseTask(
@@ -760,14 +735,10 @@ class TasksFragment : Fragment() {
                                                                 userId = currentUserId,
                                                                 assignedTo = assignedToList
                                                         )
-
                                         viewModel.createTask(task)
                                         dialog.dismiss()
-                                        // Success/error messages will be shown via ViewModel
-                                        // observers
                                 }
                                 is TaskValidationResult.Invalid -> {
-                                        // Show validation errors
                                         val errorMessage = validation.errors.joinToString("\n")
                                         Toast.makeText(context, errorMessage, Toast.LENGTH_LONG)
                                                 .show()
@@ -777,8 +748,6 @@ class TasksFragment : Fragment() {
 
                 dialog.show()
         }
-
-        /** Show AI prompt dialog for creating tasks with AI assistance */
         private fun showAIPromptDialog(parentDialog: android.app.AlertDialog) {
                 val aiDialogView =
                         LayoutInflater.from(context).inflate(R.layout.dialog_ai_prompt, null)
@@ -801,7 +770,6 @@ class TasksFragment : Fragment() {
 
                 btnAICreate.setOnClickListener {
                         val prompt = etAIPrompt.text.toString().trim()
-
                         if (prompt.isEmpty()) {
                                 Toast.makeText(
                                                 context,
@@ -812,21 +780,16 @@ class TasksFragment : Fragment() {
                                 return@setOnClickListener
                         }
 
-                        // Show loading state
                         progressBar.visibility = android.view.View.VISIBLE
                         btnAICreate.isEnabled = false
                         btnAICancel.isEnabled = false
                         etAIPrompt.isEnabled = false
 
-                        // Create task from AI
                         viewModel.createTaskFromAI(prompt)
 
-                        // Observe the result
                         viewLifecycleOwner.lifecycleScope.launch {
-                                // Wait a bit for the operation to complete
                                 kotlinx.coroutines.delay(500)
 
-                                // Check if loading is done
                                 viewModel.isLoading.collect { isLoading ->
                                         if (!isLoading) {
                                                 progressBar.visibility = android.view.View.GONE
@@ -834,7 +797,6 @@ class TasksFragment : Fragment() {
                                                 btnAICancel.isEnabled = true
                                                 etAIPrompt.isEnabled = true
 
-                                                // Close both dialogs on success
                                                 if (viewModel.successMessage.value != null) {
                                                         aiDialog.dismiss()
                                                         parentDialog.dismiss()
@@ -845,5 +807,111 @@ class TasksFragment : Fragment() {
                 }
 
                 aiDialog.show()
+        }
+        private fun switchToKanbanView() {
+                isKanbanView = true
+
+                val kanbanView =
+                        LayoutInflater.from(context).inflate(R.layout.fragment_tasks_kanban, null)
+
+                val parent = _binding?.root as? ViewGroup
+                parent?.removeAllViews()
+                parent?.addView(kanbanView)
+
+                setupKanbanView(kanbanView)
+
+                val currentTasks = viewModel.tasks.value
+                updateKanbanView(currentTasks)
+        }
+
+        private fun switchToListView() {
+                isKanbanView = false
+                parentFragmentManager.beginTransaction().detach(this).attach(this).commit()
+        }
+
+        private fun setupKanbanView(kanbanView: View) {
+                val recyclerPending =
+                        kanbanView.findViewById<androidx.recyclerview.widget.RecyclerView>(
+                                R.id.recycler_pending
+                        )
+                val recyclerInProgress =
+                        kanbanView.findViewById<androidx.recyclerview.widget.RecyclerView>(
+                                R.id.recycler_in_progress
+                        )
+                val recyclerCompleted =
+                        kanbanView.findViewById<androidx.recyclerview.widget.RecyclerView>(
+                                R.id.recycler_completed
+                        )
+
+                recyclerPending.apply {
+                        layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+                        adapter = pendingAdapter
+                }
+
+                recyclerInProgress.apply {
+                        layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+                        adapter = inProgressAdapter
+                }
+
+                recyclerCompleted.apply {
+                        layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+                        adapter = completedAdapter
+                }
+
+                val swipeRefresh =
+                        kanbanView.findViewById<
+                                androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(
+                                R.id.swipeRefreshLayout
+                        )
+                swipeRefresh.setOnRefreshListener { refreshData() }
+
+                val btnListView = kanbanView.findViewById<ImageButton>(R.id.btn_list_view)
+                btnListView.setOnClickListener { switchToListView() }
+
+                val btnFilter = kanbanView.findViewById<ImageButton>(R.id.btn_filter)
+                btnFilter.setOnClickListener {
+                        Toast.makeText(context, "Filter clicked", Toast.LENGTH_SHORT).show()
+                }
+        }
+        private fun updateKanbanView(firebaseTasks: List<FirebaseTask>) {
+                if (!isKanbanView) return
+
+                val filteredTasks =
+                        when (currentFilter) {
+                                "personal" -> firebaseTasks.filter { it.category == "personal" }
+                                "group" -> firebaseTasks.filter { it.category == "group" }
+                                "assignment" -> firebaseTasks.filter { it.category == "assignment" }
+                                else -> firebaseTasks
+                        }
+
+                val pendingTasks = filteredTasks.filter { it.status == "pending" }
+                val inProgressTasks = filteredTasks.filter { it.status == "in_progress" }
+                val completedTasks = filteredTasks.filter { it.status == "completed" }
+
+                pendingAdapter.submitList(pendingTasks)
+                inProgressAdapter.submitList(inProgressTasks)
+                completedAdapter.submitList(completedTasks)
+
+                val rootView = (_binding?.root as? ViewGroup)?.getChildAt(0)
+                rootView?.let { view ->
+                        view.findViewById<TextView>(R.id.tv_pending_count)?.text =
+                                pendingTasks.size.toString()
+                        view.findViewById<TextView>(R.id.tv_in_progress_count)?.text =
+                                inProgressTasks.size.toString()
+                        view.findViewById<TextView>(R.id.tv_completed_count)?.text =
+                                completedTasks.size.toString()
+
+                        view.findViewById<View>(R.id.empty_pending)?.visibility =
+                                if (pendingTasks.isEmpty()) View.VISIBLE else View.GONE
+                        view.findViewById<View>(R.id.empty_in_progress)?.visibility =
+                                if (inProgressTasks.isEmpty()) View.VISIBLE else View.GONE
+                        view.findViewById<View>(R.id.empty_completed)?.visibility =
+                                if (completedTasks.isEmpty()) View.VISIBLE else View.GONE
+
+                        view.findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(
+                                        R.id.swipeRefreshLayout
+                                )
+                                ?.isRefreshing = false
+                }
         }
 }
